@@ -4,7 +4,7 @@ User approved Phases 0–3 with `go` on 2026-10-13. Shared DTOs in crates/studio
 
 Tauri invoke commands (frontend wrappers in src/lib/bridge.ts):
 - create_project({path,name,demo}) -> Project; path is chosen .mymovie destination
-- open_project({path}) -> Project
+- open_project({path,allowUpgrade?}) -> Project
 - get_project() -> Project
 - save_project({project,expectedRevision}) -> Project (new revision)
 - import_asset({path}) -> Project
@@ -14,6 +14,10 @@ Tauri invoke commands (frontend wrappers in src/lib/bridge.ts):
 - save_credential({connectionId,secret}) -> opaque ref (Keychain)
 - list_jobs() -> Job[]
 - submit_job({frameId,workflowId,connectionId}) -> Job
+- preview_job_draft({draft}) -> JSON (pure preflight, no upload)
+- start_job_draft({draftId}) -> Job[]
+- list_job_runs() -> JobRun[]
+- control_job_run({runId,action}) -> JobRun (pause/resume/cancel)
 - refresh_jobs() -> Job[]
 - cancel_job({jobId}) -> Job
 - connection_health({connectionId}) -> JSON health/capabilities

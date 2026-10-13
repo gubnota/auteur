@@ -100,3 +100,23 @@ Context: User requires GitLab CI artifacts/tags and deployment of the Linux clie
 Decision: Validate cross-package version parity before tag builds; publish checksums and immutable GitLab packages/Release links. Retain GitHub draft-release support. Notebook bootstrap verifies the prebuilt Linux artifact and isolates worker GPU/port/node identities.
 Consequences: A GitLab project/eligible macOS runner and live authenticated relay remain external setup. Ad-hoc signing is development distribution only. No credentials or hosted resources are created by these changes.
 Related files: .gitlab-ci.yml, .github/workflows/, scripts/gitlab-release.py, scripts/notebook-bootstrap.py, docs/CI_RELEASES.md.
+
+# ADR-0011: Saved exact-input batches and endpoint lanes
+
+Date: 2026-10-14
+Status: Accepted
+
+Context: User wants configurable Jobs, queued on one ComfyUI and parallel across instances.
+Decision: Persist ordered independent drafts/runs, preserve exact typed overrides and invalid raw edits, freeze each attempt before dispatch. Normalize ComfyUI URL as a single-slot lane; relay URL+node identifies a worker; RunningHub capacity belongs to the account. Provider I/O occurs outside the global lock, scoped to the originating session.
+Consequences: Unknown outcomes retain their slot; reopening unsent work pauses it. No result-handoff chains. Schema v2 upgrade requires UI acknowledgement and backed-up v1 SQLite/manifest before migration.
+Related files: crates/job-core/src/runs.rs, crates/project-core/migrations/0002_job_runs.sql, apps/desktop/src-tauri/src/service/jobs.rs, apps/desktop/src/features/Jobs.tsx.
+
+# ADR-0012: RunPod is the primary agent artifact target
+
+Date: 2026-10-14
+Status: Accepted
+
+Context: User clarified that RunningHub tests workflows, while private RunPod ComfyUI is the main execution path.
+Decision: Name CI artifacts for the Linux x86_64 ComfyUI agent, reject non-ELF/non-x86_64 package inputs, ship checksums and a RunPod guide. Keep outbound authenticated relay transport and independent GPU workers.
+Consequences: No exposed ComfyUI port or public pod IP is required. CI builds do not provision cloud resources. Actual RunPod/relay/S3 acceptance and automatic LoRA/runtime sync remain pending.
+Related files: .gitlab-ci.yml, .github/workflows/checks.yml, scripts/package-agent.py, deploy/runpod/README.md, docs/CI_RELEASES.md.

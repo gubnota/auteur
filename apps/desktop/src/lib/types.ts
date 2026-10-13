@@ -70,7 +70,11 @@ export interface Workflow {
   mediaKind?: "image" | "video" | "other";
   editorGraph?: Record<string, unknown>;
   editorHash?: string;
-  deployments?: { connectionId: string; deploymentId: string; apiFamily: string }[];
+  deployments?: {
+    connectionId: string;
+    deploymentId: string;
+    apiFamily: string;
+  }[];
 }
 export interface Project {
   id: string;
@@ -83,6 +87,7 @@ export interface Project {
   characters: Character[];
   assets: Asset[];
   workflows: Workflow[];
+  jobDrafts?: JobDraft[];
 }
 export interface Connection {
   id: string;
@@ -108,6 +113,8 @@ export interface Job {
   error: string | null;
   createdAt: string;
   updatedAt: string;
+  runId?: string;
+  itemId?: string;
 }
 export interface Diagnostic {
   id: string;
@@ -172,4 +179,31 @@ export function moveFrame(
     moved,
   );
   return p;
+}
+
+export interface JobItem {
+  id: string;
+  workflowId: string;
+  connectionId: string;
+  values: Record<string, unknown>;
+  inputText?: Record<string, string>;
+  inputErrors?: Record<string, string>;
+  assets: Record<string, string>;
+  bindings?: Binding[] | null;
+  deploymentId?: string | null;
+  apiFamily?: string | null;
+}
+export interface JobDraft {
+  id: string;
+  name: string;
+  frameId: string;
+  items: JobItem[];
+}
+export interface JobRun {
+  id: string;
+  name: string;
+  draftId: string;
+  jobIds: string[];
+  state: string;
+  createdAt: string;
 }

@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use project_core::{ProjectStore, Result, atomic_json, confined, id};
 use serde_json::{Value, json};
 use studio_contracts::*;
+pub mod runs;
 /// The provider explicitly refused creation; unlike transport failure this frees admission.
 #[derive(Debug)]
 pub struct SubmissionRejected(pub String);
@@ -76,6 +77,8 @@ pub fn prepare(
         error: None,
         created_at: now.clone(),
         updated_at: now,
+        run_id: None,
+        item_id: None,
     };
     atomic_json(
         &confined(store.path(), &format!("jobs/submissions/{}.json", job.id))?,
@@ -106,6 +109,7 @@ pub fn transition(job: &mut Job, state: &str) -> Result<()> {
         "canceled",
         "unknown",
         "paused",
+        "waiting",
     ]
     .contains(&state)
     {
@@ -117,6 +121,10 @@ pub fn transition(job: &mut Job, state: &str) -> Result<()> {
 }
 pub fn recover(store: &ProjectStore) -> Result<()> {
     for mut j in list(store)? {
+        if matches!(j.state.as_str(), "waiting" | "staging") {
+            transition(&mut j, "paused")?;
+            persist(store, &j)?;
+        }
         if matches!(j.state.as_str(), "ready" | "submitted") && j.remote_id.is_none() {
             transition(&mut j, "unknown")?;
             j.error = Some(
@@ -124,6 +132,12 @@ pub fn recover(store: &ProjectStore) -> Result<()> {
                     .into(),
             );
             persist(store, &j)?;
+        }
+    }
+    for mut run in runs::list(store)? {
+        if run.state == "active" {
+            run.state = "paused".into();
+            runs::persist(store, &run)?;
         }
     }
     Ok(())

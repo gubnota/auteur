@@ -9,6 +9,7 @@ import {
   Image,
   Workflow as WorkflowIcon,
   Clapperboard,
+  ListChecks,
   Server,
   Settings,
   Bell,
@@ -41,12 +42,14 @@ import { AppSymbol } from "./components/AppSymbol";
 import { fileDropPoint } from "./lib/file-drop";
 import { Board } from "./features/Board";
 import { Characters, Library, Workflows, Renders } from "./features/Library";
+import { Jobs, newJobDraft } from "./features/Jobs";
 import { Connections, Preferences } from "./features/Connections";
 const routes = [
   ["Keyframes", Layers],
   ["Characters", Users],
   ["Library", Image],
   ["Workflows", WorkflowIcon],
+  ["Jobs", ListChecks],
   ["Renders", Clapperboard],
   ["Connections", Server],
   ["Settings", Settings],
@@ -74,6 +77,7 @@ export default function App() {
     [toasts, setToasts] = useState<{ id: string; message: string }[]>([]),
     [height, setHeight] = useState(180),
     [expanded, setExpanded] = useState(true);
+  const [jobDraftId, setJobDraftId] = useState("");
   const [importing, setImporting] = useState(false);
   const [importMode, setImportMode] = useState("copy");
   const importingRef = useRef(false);
@@ -143,6 +147,41 @@ export default function App() {
     void run(async () => setJobs(await call<Job[]>("list_jobs")));
     if (native) void run(async () => setRecent(await call("recent_projects")));
   };
+  const openMovie = async (path: string): Promise<Project> => {
+    try {
+      return await call<Project>("open_project", { path });
+    } catch (e) {
+      if (!String(e).startsWith("UPGRADE_REQUIRED:")) throw e;
+      const upgrade = await new Promise<boolean>((resolve) =>
+        setModal(
+          <Modal
+            title="Upgrade this movie for Jobs"
+            onClose={() => {
+              setModal(null);
+              resolve(false);
+            }}
+          >
+            <p>{String(e).replace("UPGRADE_REQUIRED:", "")}</p>
+            <p>
+              The saved backup can restore this movie for the previous app.
+              Originals stay in the document.
+            </p>
+            <button
+              className="primary"
+              onClick={() => {
+                setModal(null);
+                resolve(true);
+              }}
+            >
+              Back up & open movie
+            </button>
+          </Modal>,
+        ),
+      );
+      if (!upgrade) throw new Error("Movie upgrade canceled");
+      return call<Project>("open_project", { path, allowUpgrade: true });
+    }
+  };
   useEffect(() => {
     void run(async () => {
       const s = await call<AppSettings>("get_settings");
@@ -153,18 +192,11 @@ export default function App() {
     if (!native) return;
     const unsub = listen<string[]>("opened-projects", (event) => {
       const path = event.payload[0];
-      if (path)
-        void run(async () =>
-          loaded(await call<Project>("open_project", { path }), path),
-        );
+      if (path) void run(async () => loaded(await openMovie(path), path));
     });
     void run(async () => {
       const paths = await call<string[]>("take_opened_projects");
-      if (paths[0])
-        loaded(
-          await call<Project>("open_project", { path: paths[0] }),
-          paths[0],
-        );
+      if (paths[0]) loaded(await openMovie(paths[0]), paths[0]);
     });
     return () => {
       void unsub.then((fn) => fn());
@@ -233,7 +265,7 @@ export default function App() {
     void run(async () => {
       await pending.current;
       const path = await pickFile("project");
-      if (path) loaded(await call<Project>("open_project", { path }), path);
+      if (path) loaded(await openMovie(path), path);
     });
   const create = (name: string, demo: boolean) =>
     void run(async () => {
@@ -317,24 +349,13 @@ export default function App() {
   };
   const chooseJob = (frameId: string, workflowId?: string) => {
     if (!p) return;
-    setModal(
-      <SubmitDialog
-        workflowId={workflowId}
-        project={p}
-        frameId={frameId}
-        settings={settings}
-        onClose={() => setModal(null)}
-        submit={(workflowId, connectionId, values) => {
-          setModal(null);
-          void queueActions("submit_job", {
-            frameId,
-            workflowId,
-            connectionId,
-            values,
-          });
-        }}
-      />,
-    );
+    const draft = newJobDraft(p, settings, frameId, workflowId);
+    update((p) => {
+      (p.jobDrafts ??= []).push(draft);
+    });
+    setJobDraftId(draft.id);
+    setModal(null);
+    setRoute("Jobs");
   };
   const importFile = (kind: "media" | "workflow") =>
     void run(async () => {
@@ -493,10 +514,7 @@ export default function App() {
                   key={r.path}
                   onClick={() =>
                     void run(async () =>
-                      loaded(
-                        await call<Project>("open_project", { path: r.path }),
-                        r.path,
-                      ),
+                      loaded(await openMovie(r.path), r.path),
                     )
                   }
                 >
@@ -734,6 +752,19 @@ export default function App() {
                   onGenerate={chooseJob}
                 />
               )}{" "}
+              {route === "Jobs" && (
+                <Jobs
+                  project={p}
+                  settings={settings}
+                  jobs={jobs}
+                  update={update}
+                  selectedId={jobDraftId}
+                  select={setJobDraftId}
+                  flush={() => pending.current}
+                  onJobs={setJobs}
+                  notify={notify}
+                />
+              )}
               {route === "Renders" && (
                 <Renders jobs={jobs} root={root} project={p} />
               )}{" "}
@@ -1124,160 +1155,6 @@ function ReconcileDialog({
         }}
       >
         {busy ? "Checking…" : "Resolve submission"}
-      </button>
-    </Modal>
-  );
-}
-function SubmitDialog({
-  workflowId,
-  project,
-  frameId,
-  settings,
-  onClose,
-  submit,
-}: {
-  workflowId?: string;
-  project: Project;
-  frameId: string;
-  settings: AppSettings;
-  onClose: () => void;
-  submit: (w: string, c: string, values: Record<string, unknown>) => void;
-}) {
-  const [w, setW] = useState(workflowId ?? project.workflows[0]?.id ?? ""),
-    [c, setC] = useState(
-      settings.connections.find((c) =>
-        ["comfyui", "runninghub", "relay"].includes(c.kind),
-      )?.id ?? "",
-    ),
-    [values, setValues] = useState<Record<string, unknown>>({});
-  const scene = project.episodes
-    .flatMap((e) => e.scenes)
-    .find((s) => s.shots.some((sh) => sh.frames.some((f) => f.id === frameId)));
-  const frame = scene?.shots
-    .flatMap((sh) => sh.frames)
-    .find((f) => f.id === frameId);
-  const assigned = new Set([
-    ...(scene?.characterIds ?? []),
-    ...(frame?.characterIds ?? []),
-  ]);
-  const references = [
-    ...new Set(
-      project.characters
-        .filter((c) => assigned.has(c.id))
-        .flatMap((c) => c.assetIds),
-    ),
-  ]
-    .map((id) => project.assets.find((a) => a.id === id))
-    .filter((a): a is NonNullable<typeof a> => !!a && a.kind === "image");
-  const workflow = project.workflows.find((x) => x.id === w);
-  const selectedConnection = settings.connections.find((x) => x.id === c);
-  const deployment = workflow?.deployments?.find((d) => d.connectionId === c);
-  const deploymentId =
-    deployment?.deploymentId ?? selectedConnection?.deploymentId ?? "";
-  const apiFamily = deployment?.apiFamily ?? selectedConnection?.apiFamily;
-  const blocked =
-    selectedConnection?.kind === "runninghub"
-      ? !selectedConnection.credentialRef
-        ? "Add this account’s API key in Connections."
-        : !/^\d+$/.test(deploymentId) ||
-            !["workflow", "ai-app"].includes(apiFamily ?? "")
-          ? "Open Workflows, select this graph, and set its RunningHub Workflow / AI App ID and API family for this account. Importing JSON alone does not create a hosted deployment."
-          : !workflow?.bindings.length
-            ? "Open Workflows and bind the inputs that match this hosted deployment (for example, its prompt node)."
-            : ""
-      : "";
-  const fields =
-    workflow?.bindings.filter(
-      (b) =>
-        !["positivePrompt", "negativePrompt", "image"].includes(b.semantic),
-    ) ?? [];
-  return (
-    <Modal title="Generate this keyframe" onClose={onClose}>
-      <p>
-        Submits the composed prompt and imported workflow to the selected
-        account. Provider jobs may incur charges.
-      </p>
-      <Picker
-        title="Workflow"
-        value={w}
-        options={project.workflows.map((w) => ({
-          id: w.id,
-          label: w.name,
-          description: w.version.slice(0, 12),
-        }))}
-        onChange={(id) => {
-          setW(id);
-          setValues({});
-        }}
-      />
-      <Picker
-        title="Connection"
-        value={c}
-        options={settings.connections
-          .filter((c) => ["comfyui", "runninghub", "relay"].includes(c.kind))
-          .map((c) => ({
-            id: c.id,
-            label: c.name,
-            description: c.kind,
-          }))}
-        onChange={setC}
-      />
-      {fields.map((b) =>
-        /^characterReference[1-4]$/.test(b.semantic) ? (
-          <Picker
-            key={b.semantic}
-            title={`${b.semantic} · ${b.nodeId}.${b.input}`}
-            value={String(
-              values[b.semantic] ??
-                references[Number(b.semantic.slice(-1)) - 1]?.id ??
-                "",
-            )}
-            options={references.map((a) => ({ id: a.id, label: a.name }))}
-            onChange={(id) => setValues({ ...values, [b.semantic]: id })}
-          />
-        ) : (
-          <Field
-            key={b.semantic}
-            label={`${b.semantic} · ${b.nodeId}.${b.input}`}
-            value={String(
-              values[b.semantic] ??
-                workflow?.graph[b.nodeId]?.inputs[b.input] ??
-                "",
-            )}
-            multiline={b.valueType === "json"}
-            type={b.valueType === "number" ? "number" : "text"}
-            onChange={(v) =>
-              setValues({
-                ...values,
-                [b.semantic]:
-                  b.valueType === "number"
-                    ? Number(v)
-                    : b.valueType === "boolean"
-                      ? v === "true"
-                      : v,
-              })
-            }
-          />
-        ),
-      )}
-      <p className="muted">
-        Dimensions and duration use the imported workflow values unless
-        explicitly changed here. Every submitted value is saved with the
-        attempt.
-      </p>
-      {selectedConnection?.kind === "runninghub" && !blocked && (
-        <p className="muted">
-          {apiFamily === "ai-app" ? "AI App" : "Hosted workflow"} {deploymentId}{" "}
-          · {selectedConnection.name}
-        </p>
-      )}
-      {blocked && <p role="alert">{blocked}</p>}
-      <button
-        className="primary"
-        disabled={!w || !c || !native || !!blocked}
-        onClick={() => submit(w, c, values)}
-      >
-        Validate & submit job
       </button>
     </Modal>
   );

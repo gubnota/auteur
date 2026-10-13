@@ -1,5 +1,7 @@
+mod jobs;
 use integration_core::SettingsStore;
 use job_core::ExecutionBackend;
+pub use jobs::*;
 use project_core::{ProjectStore, Result};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -12,19 +14,23 @@ use tauri::{Emitter, State};
 pub struct Studio {
     pub inner: tokio::sync::Mutex<Inner>,
     pub opened: Arc<Mutex<Vec<String>>>,
+    pub inflight: Mutex<std::collections::HashSet<(u64, String)>>,
 }
 pub struct Inner {
     pub project: Option<ProjectStore>,
     pub settings: SettingsStore,
+    pub session: u64,
 }
 impl Studio {
     pub fn new(dir: &Path, opened: Arc<Mutex<Vec<String>>>) -> Result<Self> {
         Ok(Self {
             inner: tokio::sync::Mutex::new(Inner {
                 project: None,
+                session: 0,
                 settings: SettingsStore::open(&dir.join("app.sqlite"))?,
             }),
             opened,
+            inflight: Mutex::new(Default::default()),
         })
     }
 }
@@ -83,6 +89,7 @@ fn select(_app: &tauri::AppHandle, i: &mut Inner, new: ProjectStore) -> Result<P
     let p = new.read()?;
     job_core::recover(&new)?;
     i.settings.recent(&new.path().to_string_lossy(), &p.name)?;
+    i.session += 1;
     i.project = Some(new);
     Ok(p)
 }
@@ -99,19 +106,32 @@ pub async fn create_project(
     select(&app, &mut i, new).map_err(err)
 }
 #[tauri::command]
-pub async fn open_project(app: tauri::AppHandle, state: S<'_>, path: String) -> Reply<Project> {
+pub async fn open_project(
+    app: tauri::AppHandle,
+    state: S<'_>,
+    path: String,
+    allow_upgrade: Option<bool>,
+) -> Reply<Project> {
     let mut i = state.inner.lock().await;
     if let Some(s) = &i.project {
         if std::fs::canonicalize(&path).ok().as_ref() == Some(&s.path().to_path_buf()) {
             return s.read().map_err(err);
         }
     }
+    let manifest = project_core::confined(Path::new(&path), "manifest.json").map_err(err)?;
+    let format: Value =
+        serde_json::from_slice(&std::fs::read(manifest).map_err(err)?).map_err(err)?;
+    if format["schemaVersion"] == 1 && !allow_upgrade.unwrap_or(false) {
+        return Err("UPGRADE_REQUIRED: Jobs needs document format 2. A consistent SQLite and manifest backup will be saved inside backups/ first. MyMovie Studio 0.1.2 cannot open the upgraded document.".into());
+    }
     let new = ProjectStore::open(path).map_err(err)?;
     select(&app, &mut i, new).map_err(err)
 }
 #[tauri::command]
 pub async fn close_project(state: S<'_>) -> Reply<()> {
-    state.inner.lock().await.project.take();
+    let mut i = state.inner.lock().await;
+    i.session += 1;
+    i.project.take();
     Ok(())
 }
 #[tauri::command]
@@ -287,6 +307,7 @@ pub async fn connection_health(state: S<'_>, connection_id: String) -> Reply<Val
 }
 #[tauri::command]
 pub async fn submit_job(
+    app: tauri::AppHandle,
     state: S<'_>,
     frame_id: String,
     workflow_id: String,
@@ -294,257 +315,38 @@ pub async fn submit_job(
     values: Value,
 ) -> Reply<Vec<Job>> {
     let mut i = state.inner.lock().await;
-    let result = submit(&mut i, &frame_id, &workflow_id, &connection_id, values).await;
-    result.map_err(err)
-}
-async fn submit(
-    i: &mut Inner,
-    frame_id: &str,
-    workflow_id: &str,
-    connection_id: &str,
-    values: Value,
-) -> Result<Vec<Job>> {
-    let c = connection(i, connection_id)?;
-    let p = store(i)?.read()?;
-    let (scene, frame) = p
-        .episodes
-        .iter()
-        .flat_map(|e| &e.scenes)
-        .flat_map(|s| {
-            s.shots
-                .iter()
-                .flat_map(move |sh| sh.frames.iter().map(move |f| (s, f)))
-        })
-        .find(|(_, f)| f.id == frame_id)
-        .ok_or("Frame missing")?;
-    let w = p
-        .workflows
-        .iter()
-        .find(|w| w.id == workflow_id)
-        .ok_or("Workflow missing")?;
-    let c = workflow_core::deployment(w, &c)?;
-    if c.kind == "runninghub" && c.deployment_id.as_deref().is_none_or(str::is_empty) {
-        return Err(
-            "Open Workflows and set this account’s hosted RunningHub Workflow / AI App ID".into(),
-        );
-    }
-    let b = backend(&c)?;
-    let seed = u64::from_le_bytes(uuid::Uuid::new_v4().as_bytes()[..8].try_into()?) % (1u64 << 53);
-    let mut semantic = json!({"positivePrompt":workflow_core::composed(&p.positive_prompt,scene.positive_prompt.as_deref(),&frame.positive_prompt,frame.include_common),"negativePrompt":workflow_core::composed(&p.negative_prompt,scene.negative_prompt.as_deref(),&frame.negative_prompt,frame.include_common),"seed":seed});
-    for binding in &w.bindings {
-        if binding.semantic.starts_with("characterReference")
-            || matches!(
-                binding.semantic.as_str(),
-                "positivePrompt" | "negativePrompt" | "image"
-            )
-        {
-            continue;
-        }
-        if let Some(value) = values.get(&binding.semantic) {
-            semantic[&binding.semantic] = value.clone();
-        } else if semantic.get(&binding.semantic).is_none() {
-            semantic[&binding.semantic] =
-                w.graph[&binding.node_id]["inputs"][&binding.input].clone();
-        }
-    }
-    if c.kind == "runninghub" && w.bindings.is_empty() {
-        return Err("Configure verified provider bindings first".into());
-    }
-    if job_core::list(store(i)?)?
-        .iter()
-        .filter(|j| j.connection_id == c.id && !job_core::terminal(&j.state))
-        .count()
-        >= c.concurrency.max(1) as usize
-    {
-        return Err("Connection admission limit reached".into());
-    }
-    let reference_inputs =
-        workflow_core::character_reference_inputs(&p, scene, frame, &w.bindings, &values)?;
-    // Check all selected references before performing the first provider upload.
-    let reference_paths = reference_inputs
-        .iter()
-        .map(|(_, a)| asset_core::source(store(i)?.path(), a, true))
-        .collect::<Result<Vec<_>>>()?;
-    for ((key, a), path) in reference_inputs.iter().zip(reference_paths) {
-        semantic[key] = json!(b.stage_asset(&a.name, std::fs::read(path)?).await?);
-    }
-    if w.bindings.iter().any(|b| b.semantic == "image") {
-        let a = p
-            .assets
-            .iter()
-            .find(|a| frame.asset_id.as_ref() == Some(&a.id))
-            .ok_or("Select a frame image before generation")?;
-        let bytes = std::fs::read(asset_core::source(store(i)?.path(), a, true)?)?;
-        let name = b.stage_asset(&a.name, bytes).await?;
-        semantic["image"] = json!(name);
-    }
-    let mut graph = workflow_core::bind(&w.graph, &w.bindings, &semantic)?;
-    b.validate_job(&graph).await?;
-    let mut j = job_core::prepare(store(i)?, frame, w, &c, graph.clone(), semantic)?;
-    j.snapshot["characters"] = serde_json::to_value(
-        p.characters
-            .iter()
-            .filter(|ch| {
-                frame.character_ids.contains(&ch.id) || scene.character_ids.contains(&ch.id)
-            })
-            .collect::<Vec<_>>(),
-    )?;
-    j.snapshot["characterReferences"] =
-        serde_json::to_value(workflow_core::character_references(&p, scene, frame))?;
-    j.snapshot["sceneId"] = json!(scene.id);
-    j.snapshot["connection"] = json!({"id":c.id,"kind":c.kind,"url":c.url,"deploymentId":c.deployment_id,"apiFamily":c.api_family});
-    if c.kind == "runninghub" {
-        graph["_mymovieNodeInfo"] = json!(w.bindings.iter().map(|b|json!({"nodeId":b.node_id,"fieldName":b.input,"fieldValue":graph[&b.node_id]["inputs"][&b.input]})).collect::<Vec<_>>());
-    }
-    j.snapshot["providerPayload"] = graph.clone();
-    project_core::atomic_json(
-        &project_core::confined(store(i)?.path(), &format!("jobs/submissions/{}.json", j.id))?,
-        &j,
-    )?;
-    // Persist ambiguity BEFORE POST. Failed requests are never automatically resubmitted.
-    job_core::transition(&mut j, "unknown")?;
-    job_core::persist(store(i)?, &j)?;
-    match b.submit(&j.id, &graph).await {
-        Ok(remote) => {
-            j.remote_id = Some(remote);
-            job_core::transition(&mut j, "submitted")?;
-        }
-        Err(e) => {
-            j.error = Some(e.to_string());
-            if e.downcast_ref::<job_core::SubmissionRejected>().is_some() {
-                job_core::transition(&mut j, "failed")?;
-            } else {
-                j.error = Some(format!(
-                    "{}. Submission outcome unknown; check this account’s task history before retrying.",
-                    e
-                ));
-            }
-        }
-    }
-    job_core::persist(store(i)?, &j)?;
-    i.settings
-        .diagnostic("info", "Generation attempt recorded")?;
-    job_core::list(store(i)?)
+    let draft_id = project_core::id();
+    let draft = JobDraft {
+        id: draft_id.clone(),
+        name: "Generation".into(),
+        frame_id,
+        items: vec![JobItem {
+            id: project_core::id(),
+            workflow_id,
+            connection_id,
+            values,
+            input_text: Default::default(),
+            input_errors: Default::default(),
+            assets: Default::default(),
+            bindings: None,
+            deployment_id: None,
+            api_family: None,
+        }],
+    };
+    let s = i.project.as_mut().ok_or("No movie open")?;
+    let mut p = s.read().map_err(err)?;
+    p.job_drafts.push(draft);
+    let rev = p.revision;
+    s.save(p, rev).map_err(err)?;
+    drop(i);
+    start_job_draft(app, state, draft_id).await
 }
 #[tauri::command]
 pub async fn refresh_jobs(app: tauri::AppHandle, state: S<'_>) -> Reply<Vec<Job>> {
     refresh(&state, &app).await.map_err(err)
 }
 pub async fn refresh(state: &Arc<Studio>, app: &tauri::AppHandle) -> Result<Vec<Job>> {
-    let mut i = state.inner.lock().await;
-    if i.project.is_none() {
-        return Ok(vec![]);
-    }
-    let existing = job_core::list(store(&i)?)?;
-    for mut j in existing {
-        if job_core::terminal(&j.state) || j.remote_id.is_none() {
-            continue;
-        }
-        let c = match connection(&i, &j.connection_id) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-        let c = workflow_core::frozen_connection(&j, &c)?;
-        let b = match backend(&c) {
-            Ok(b) => b,
-            Err(_) => continue,
-        };
-        let status = match b.status(j.remote_id.as_deref().unwrap()).await {
-            Ok(s) => s,
-            Err(_) => continue,
-        };
-        let before = j.state.clone();
-        if status.state == "collecting" {
-            if status.outputs.is_empty() {
-                j.error = Some("Execution completed without collectable output".into());
-                job_core::transition(&mut j, "failed")?;
-            } else {
-                job_core::transition(&mut j, "collecting")?;
-                job_core::persist(store(&i)?, &j)?;
-                let mut collected = vec![];
-                let mut error = None;
-                for o in status.outputs {
-                    match b.collect(&o).await {
-                        Ok((name, bytes)) => {
-                            let actual = format!("{:x}", Sha256::digest(&bytes));
-                            if o.get("sha256")
-                                .and_then(Value::as_str)
-                                .is_some_and(|h| h != actual)
-                                || o.get("size")
-                                    .and_then(Value::as_u64)
-                                    .is_some_and(|n| n != bytes.len() as u64)
-                            {
-                                error = Some("Output integrity mismatch".to_string());
-                                break;
-                            }
-                            let ext = Path::new(&name)
-                                .extension()
-                                .and_then(|e| e.to_str())
-                                .unwrap_or("png");
-                            let dir = tempfile::tempdir()?;
-                            let tmp = dir.path().join(format!("result.{ext}"));
-                            std::fs::write(&tmp, &bytes)?;
-                            let asset = asset_core::import(store(&i)?.path(), &tmp)?;
-                            collected.push(asset);
-                        }
-                        Err(_) => {
-                            error =
-                                Some("Result collection failed; refresh to retry download".into());
-                            break;
-                        }
-                    }
-                }
-                if let Some(error) = error {
-                    j.error = Some(error);
-                } else {
-                    let s = i.project.as_mut().unwrap();
-                    let mut p = s.read()?;
-                    for a in collected {
-                        let a = if let Some(old) = p.assets.iter().find(|old| old.path == a.path) {
-                            old.clone()
-                        } else {
-                            p.assets.push(a.clone());
-                            a
-                        };
-                        j.results.push(a);
-                    }
-                    let revision = p.revision;
-                    s.save(p, revision)?;
-                    j.error = None;
-                    job_core::transition(&mut j, "completed")?;
-                }
-            }
-        } else {
-            job_core::transition(&mut j, &status.state)?;
-            j.error = status.error;
-        }
-        job_core::persist(store(&i)?, &j)?;
-        if before != j.state && job_core::terminal(&j.state) {
-            i.settings.diagnostic(
-                if j.state == "completed" {
-                    "success"
-                } else {
-                    "error"
-                },
-                &format!("Render {}: {}", &j.id[..8], j.state),
-            )?;
-            use tauri_plugin_notification::NotificationExt;
-            let _ = app
-                .notification()
-                .builder()
-                .title("MyMovie Studio")
-                .body(format!("Render {}", j.state))
-                .show();
-            let _ = app.emit("project-changed", store(&i)?.read()?);
-        }
-    }
-    let jobs = job_core::list(store(&i)?)?;
-    let active = jobs
-        .iter()
-        .filter(|j| !job_core::terminal(&j.state))
-        .count();
-    dock(app, active);
-    Ok(jobs)
+    jobs::drive(state, app).await
 }
 fn dock(app: &tauri::AppHandle, active: usize) {
     #[cfg(target_os = "macos")]
@@ -574,52 +376,81 @@ pub async fn reconcile_job(
     confirmed_absent: bool,
 ) -> Reply<Vec<Job>> {
     let i = state.inner.lock().await;
+    let epoch = i.session;
+    if state
+        .inflight
+        .lock()
+        .unwrap()
+        .contains(&(epoch, job_id.clone()))
+    {
+        return Err(
+            "This attempt is still contacting the provider; wait before reconciling".into(),
+        );
+    }
     let attempts = job_core::list(store(&i).map_err(err)?).map_err(err)?;
     let mut j = attempts
         .iter()
-        .cloned()
-        .into_iter()
         .find(|j| j.id == job_id)
+        .cloned()
         .ok_or("Attempt missing")?;
     if j.state != "unknown" || j.remote_id.is_some() {
         return Err("Only an unknown submission without a task ID can be reconciled".into());
     }
-    if let Some(remote) = remote_id.filter(|s| !s.trim().is_empty()) {
-        if confirmed_absent {
-            return Err("Choose either an existing task or a confirmed absent task".into());
-        }
+    let remote = remote_id
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.trim().to_owned());
+    if remote.is_some() && confirmed_absent {
+        return Err("Choose either an existing task or a confirmed absent task".into());
+    }
+    let b = if remote.is_some() {
         if attempts.iter().any(|other| {
-            other.id != j.id
-                && other.connection_id == j.connection_id
-                && other.remote_id.as_deref() == Some(remote.trim())
+            other.id != j.id && other.connection_id == j.connection_id && other.remote_id == remote
         }) {
-            return Err("This provider task is already attached to another attempt".into());
+            return Err("This task is already attached to another attempt".into());
         }
-        let c =
-            workflow_core::frozen_connection(&j, &connection(&i, &j.connection_id).map_err(err)?)
-                .map_err(err)?;
-        let remote = remote.trim();
-        let status = backend(&c)
-            .map_err(err)?
-            .status(remote)
-            .await
-            .map_err(err)?;
+        Some(
+            backend(
+                &workflow_core::frozen_connection(
+                    &j,
+                    &connection(&i, &j.connection_id).map_err(err)?,
+                )
+                .map_err(err)?,
+            )
+            .map_err(err)?,
+        )
+    } else {
+        None
+    };
+    drop(i);
+    if let Some(remote) = remote {
+        let status = b.unwrap().status(&remote).await.map_err(err)?;
         if status.state == "unknown" {
             return Err("The selected account could not verify this task ID".into());
         }
-        j.remote_id = Some(remote.into());
+        j.remote_id = Some(remote.clone());
         j.snapshot["reconciliation"] = json!({"action":"attached-task","remoteId":remote});
         j.error = None;
         job_core::transition(&mut j, "submitted").map_err(err)?;
     } else if confirmed_absent {
         j.snapshot["reconciliation"] = json!({"action":"user-confirmed-no-task"});
-        j.error =
-            Some("User checked the provider history and confirmed no task was created".into());
+        j.error = Some("User checked provider history and confirmed no task was created".into());
         job_core::transition(&mut j, "failed").map_err(err)?;
     } else {
         return Err(
-            "Provide a verified task ID or confirm no task exists in the provider history".into(),
+            "Provide a verified task ID or confirm no task exists in provider history".into(),
         );
+    }
+    let i = state.inner.lock().await;
+    if i.session != epoch {
+        return Err("Project changed during reconciliation".into());
+    }
+    let latest = job_core::list(store(&i).map_err(err)?)
+        .map_err(err)?
+        .into_iter()
+        .find(|x| x.id == j.id)
+        .ok_or("Attempt missing")?;
+    if latest.state != "unknown" || latest.remote_id.is_some() {
+        return Err("Attempt changed during reconciliation; refresh first".into());
     }
     job_core::persist(store(&i).map_err(err)?, &j).map_err(err)?;
     job_core::list(store(&i).map_err(err)?).map_err(err)
@@ -627,32 +458,51 @@ pub async fn reconcile_job(
 #[tauri::command]
 pub async fn cancel_job(state: S<'_>, job_id: String) -> Reply<Vec<Job>> {
     let i = state.inner.lock().await;
+    let epoch = i.session;
     let mut j = job_core::list(store(&i).map_err(err)?)
         .map_err(err)?
         .into_iter()
         .find(|j| j.id == job_id)
         .ok_or("Attempt missing")?;
+    if job_core::terminal(&j.state) {
+        return job_core::list(store(&i).map_err(err)?).map_err(err);
+    }
+    if matches!(j.state.as_str(), "waiting" | "paused" | "staging") {
+        job_core::transition(&mut j, "canceled").map_err(err)?;
+        job_core::persist(store(&i).map_err(err)?, &j).map_err(err)?;
+        return job_core::list(store(&i).map_err(err)?).map_err(err);
+    }
     let remote = j
         .remote_id
-        .as_deref()
+        .clone()
         .ok_or("Unknown submission needs manual reconciliation")?;
     let c = workflow_core::frozen_connection(&j, &connection(&i, &j.connection_id).map_err(err)?)
         .map_err(err)?;
-    backend(&c)
+    let b = backend(&c).map_err(err)?;
+    drop(i);
+    b.cancel(&remote).await.map_err(err)?;
+    let i = state.inner.lock().await;
+    if i.session != epoch {
+        return Err("Project changed during cancellation".into());
+    }
+    let latest = job_core::list(store(&i).map_err(err)?)
         .map_err(err)?
-        .cancel(remote)
-        .await
+        .into_iter()
+        .find(|x| x.id == j.id)
+        .ok_or("Attempt missing")?;
+    if !job_core::terminal(&latest.state) {
+        j = latest;
+        job_core::transition(
+            &mut j,
+            if c.kind == "comfyui" {
+                "canceled"
+            } else {
+                "cancel_requested"
+            },
+        )
         .map_err(err)?;
-    job_core::transition(
-        &mut j,
-        if c.kind == "comfyui" {
-            "canceled"
-        } else {
-            "cancel_requested"
-        },
-    )
-    .map_err(err)?;
-    job_core::persist(store(&i).map_err(err)?, &j).map_err(err)?;
+        job_core::persist(store(&i).map_err(err)?, &j).map_err(err)?;
+    }
     job_core::list(store(&i).map_err(err)?).map_err(err)
 }
 #[tauri::command]

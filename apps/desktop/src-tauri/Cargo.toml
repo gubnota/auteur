@@ -21,6 +21,7 @@ provider-relay= {path="../../../crates/provider-relay"}
 provision-core= {path="../../../crates/provision-core"}
 storage-s3= {path="../../../crates/storage-s3"}
 serde_json.workspace=true
+chrono.workspace=true
 sha2.workspace=true
 tokio.workspace=true
 reqwest.workspace=true
@@ -33,3 +34,5 @@ keyring = { version = "3", features = ["apple-native"] }
 objc2="0.6"
 objc2-app-kit= {version="0.3",features= ["NSApplication", "NSDockTile"] }
 objc2-foundation= {version="0.3",features= ["NSString"] }
+[dev-dependencies]
+async-trait.workspace=true

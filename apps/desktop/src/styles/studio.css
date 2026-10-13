@@ -1285,3 +1285,150 @@ dd {
   object-fit: cover;
   border-radius: 0.5rem;
 }
+
+/* Jobs: comfortable desktop targets, rem-based rhythm and contained previews. */
+.jobs-workspace {
+  display: grid;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  min-width: 0;
+}
+.jobs-workspace h1,
+.jobs-workspace h2 {
+  margin: 0;
+}
+.jobs-layout {
+  display: grid;
+  grid-template-columns: minmax(12rem, 17rem) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.jobs-drafts,
+.jobs-editor,
+.jobs-history {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+  min-width: 0;
+}
+.jobs-toolbar {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.jobs-toolbar > .field,
+.jobs-toolbar > h2,
+.jobs-toolbar > div:first-child {
+  flex: 1;
+  min-width: 9rem;
+}
+.jobs-toolbar button {
+  min-height: 2.6rem;
+}
+.jobs-two-columns,
+.jobs-deployment {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+.jobs-deployment > p {
+  grid-column: 1 / -1;
+}
+.jobs-item-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.85rem 0;
+  border-block: 1px solid var(--line);
+}
+.jobs-inputs {
+  display: grid;
+  gap: 1rem;
+}
+.jobs-input {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  min-width: 0;
+}
+.jobs-input small,
+.jobs-run small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.jobs-composed {
+  white-space: pre-wrap;
+  padding: 0.9rem;
+  background: var(--paper);
+  border-radius: 0.65rem;
+  margin: 0;
+}
+.jobs-issues {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  color: #a3432b;
+}
+.jobs-issues p {
+  margin: 0.3rem 0;
+}
+.jobs-preview {
+  max-height: 52vh;
+  overflow: auto;
+  font-size: 0.8rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.jobs-run {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+}
+.jobs-run-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.job-state {
+  display: inline-block;
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.55rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+.state-failed,
+.state-unknown {
+  color: #a3432b;
+}
+@media (max-width: 65rem) {
+  .jobs-layout {
+    grid-template-columns: 1fr;
+  }
+  .jobs-drafts {
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  }
+  .jobs-drafts h2 {
+    grid-column: 1/-1;
+  }
+}
+
+.jobs-workspace .section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.jobs-item-strip .selected {
+  background: var(--pale);
+  border-color: var(--ink);
+}

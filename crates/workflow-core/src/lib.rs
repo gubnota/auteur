@@ -174,20 +174,43 @@ pub fn bind(graph: &Value, bindings: &[Binding], values: &Value) -> Result<Value
             "string" if value.is_string() => {}
             "number" if value.is_number() => {}
             "boolean" if value.is_boolean() => {}
-            "json" => {
-                let _: Value = serde_json::from_str(
-                    value.as_str().ok_or("JSON binding needs serialized JSON")?,
-                )?;
-            }
+            "json" => {}
             _ => return Err("Binding value type mismatch".into()),
         }
-        if input.is_array() {
+        if input
+            .as_array()
+            .is_some_and(|a| a.len() == 2 && a[0].is_string() && a[1].is_number())
+        {
             return Err("Cannot overwrite a graph link".into());
         }
-        *input = value.clone();
+        *input = if b.value_type == "json" && input.is_string() {
+            // Custom nodes with serialized JSON widgets retain that wire format.
+            if let Some(s) = value.as_str() {
+                let _: Value = serde_json::from_str(s)?;
+                value.clone()
+            } else {
+                Value::String(serde_json::to_string(value)?)
+            }
+        } else {
+            value.clone()
+        };
     }
     validate_graph(&graph)?;
     Ok(graph)
+}
+/// Job drafts store parsed JSON values, including JSON strings and null.
+/// Legacy bind callers may still provide serialized JSON widget text.
+pub fn bind_exact(graph: &Value, bindings: &[Binding], values: &Value) -> Result<Value> {
+    let mut wire = values.clone();
+    for b in bindings {
+        if b.value_type == "json" && graph[&b.node_id]["inputs"][&b.input].is_string() {
+            let value = values
+                .get(&b.semantic)
+                .ok_or("Bound semantic input missing")?;
+            wire[&b.semantic] = Value::String(serde_json::to_string(value)?);
+        }
+    }
+    bind(graph, bindings, &wire)
 }
 pub fn composed(project: &str, scene: Option<&str>, frame: &str, include: bool) -> String {
     [
@@ -375,5 +398,218 @@ mod tests {
         bindings[0].value_type = "string".into();
         bindings[0].semantic = "characterReference2".into();
         assert!(character_reference_inputs(&p, scene, frame, &bindings, &json!({})).is_err());
+    }
+}
+
+/// Pure resolution: media placeholders are previews, never provider filenames.
+pub fn resolve_item(
+    p: &studio_contracts::Project,
+    draft: &studio_contracts::JobDraft,
+    item: &studio_contracts::JobItem,
+) -> Result<Value> {
+    use serde_json::json;
+    if !item.input_errors.is_empty() {
+        return Err(format!(
+            "Repair invalid draft inputs: {}",
+            item.input_errors
+                .values()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join("; ")
+        )
+        .into());
+    }
+    let (scene, frame) = p
+        .episodes
+        .iter()
+        .flat_map(|e| &e.scenes)
+        .flat_map(|s| {
+            s.shots
+                .iter()
+                .flat_map(move |sh| sh.frames.iter().map(move |f| (s, f)))
+        })
+        .find(|(_, f)| f.id == draft.frame_id)
+        .ok_or("Target keyframe missing")?;
+    let w = p
+        .workflows
+        .iter()
+        .find(|w| w.id == item.workflow_id)
+        .ok_or("Workflow missing")?;
+    validate_graph(&w.graph)?;
+    let bindings = item.bindings.as_ref().unwrap_or(&w.bindings);
+    let mut seen = std::collections::HashSet::new();
+    let mut fields = std::collections::HashSet::new();
+    let mut semantic = json!({});
+    let mut media = serde_json::Map::new();
+    let references = character_references(p, scene, frame);
+    for b in bindings {
+        if b.semantic.trim().is_empty()
+            || !seen.insert(&b.semantic)
+            || !fields.insert((&b.node_id, &b.input))
+        {
+            return Err("Bindings need unique semantic names and node inputs".into());
+        }
+        let default = w
+            .graph
+            .get(&b.node_id)
+            .and_then(|n| n["inputs"].get(&b.input))
+            .ok_or("Binding input missing")?;
+        let is_media = matches!(b.semantic.as_str(), "image" | "mask")
+            || b.semantic.starts_with("characterReference");
+        if is_media {
+            if b.value_type != "string" {
+                return Err("Media input must bind a string filename".into());
+            }
+            let asset = if let Some(id) = item.assets.get(&b.semantic) {
+                p.assets.iter().find(|a| &a.id == id)
+            } else if b.semantic == "image" {
+                p.assets
+                    .iter()
+                    .find(|a| frame.asset_id.as_ref() == Some(&a.id))
+            } else if b.semantic.starts_with("characterReference") {
+                let slot = b
+                    .semantic
+                    .strip_prefix("characterReference")
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .filter(|n| (1..=4).contains(n))
+                    .ok_or("Unknown character reference slot")?;
+                references.get(slot - 1).copied()
+            } else {
+                None
+            }
+            .ok_or_else(|| format!("Select an image for {} before generation", b.semantic))?;
+            if asset.kind != "image" {
+                return Err("Image slots require image assets".into());
+            }
+            if b.semantic.starts_with("characterReference")
+                && !references.iter().any(|a| a.id == asset.id)
+            {
+                return Err(
+                    "Character reference must belong to the assigned scene/keyframe cast".into(),
+                );
+            }
+            media.insert(b.semantic.clone(), serde_json::to_value(asset)?);
+            semantic[&b.semantic] =
+                json!(format!("asset:{} (provider filename pending)", asset.id));
+        } else {
+            semantic[&b.semantic] = if let Some(value) = item.values.get(&b.semantic) {
+                value.clone()
+            } else if b.semantic == "positivePrompt" {
+                json!(composed(
+                    &p.positive_prompt,
+                    scene.positive_prompt.as_deref(),
+                    &frame.positive_prompt,
+                    frame.include_common
+                ))
+            } else if b.semantic == "negativePrompt" {
+                json!(composed(
+                    &p.negative_prompt,
+                    scene.negative_prompt.as_deref(),
+                    &frame.negative_prompt,
+                    frame.include_common
+                ))
+            } else if b.value_type == "json" && default.is_string() {
+                serde_json::from_str(default.as_str().unwrap())?
+            } else {
+                default.clone()
+            };
+        }
+    }
+    let graph = bind_exact(&w.graph, bindings, &semantic)?;
+    Ok(
+        json!({"graph":graph,"originalGraph":w.graph,"semantic":semantic,"media":media,
+        "frame":frame,"sceneId":scene.id,"bindings":bindings,
+        "characters":p.characters.iter().filter(|c| frame.character_ids.contains(&c.id) || scene.character_ids.contains(&c.id)).collect::<Vec<_>>() }),
+    )
+}
+
+#[cfg(test)]
+mod jobs_tests {
+    use super::*;
+    use studio_contracts::{Binding, JobDraft, JobItem};
+    #[test]
+    fn exact_json_literals_prompts_and_repairable_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut store =
+            project_core::ProjectStore::create(tmp.path().join("draft.mymovie"), "Draft", true)
+                .unwrap();
+        let mut p = store.read().unwrap();
+        let graph = serde_json::json!({"1":{"class_type":"Example","inputs":{"text":"original","seed":4,"enabled":true,"context":"{}","next":["2",0]}},"2":{"class_type":"Input","inputs":{}}});
+        let mut w = import("Exact", graph.clone()).unwrap();
+        w.bindings = vec![
+            Binding {
+                semantic: "positivePrompt".into(),
+                node_id: "1".into(),
+                input: "text".into(),
+                value_type: "string".into(),
+            },
+            Binding {
+                semantic: "context".into(),
+                node_id: "1".into(),
+                input: "context".into(),
+                value_type: "json".into(),
+            },
+            Binding {
+                semantic: "seed".into(),
+                node_id: "1".into(),
+                input: "seed".into(),
+                value_type: "number".into(),
+            },
+            Binding {
+                semantic: "enabled".into(),
+                node_id: "1".into(),
+                input: "enabled".into(),
+                value_type: "boolean".into(),
+            },
+        ];
+        let frame = p.episodes[0].scenes[0].shots[0].frames[0].id.clone();
+        let item:JobItem=serde_json::from_value(serde_json::json!({"id":project_core::id(),"workflowId":w.id,"connectionId":"local","values":{"positivePrompt":"","context":"literal string","seed":0,"enabled":false}})).unwrap();
+        let mut d = JobDraft {
+            id: project_core::id(),
+            name: "Exact".into(),
+            frame_id: frame,
+            items: vec![item.clone()],
+        };
+        p.workflows.push(w);
+        p.job_drafts.push(d.clone());
+        let preview = resolve_item(&p, &d, &item).unwrap();
+        assert_eq!(preview["graph"]["1"]["inputs"]["text"], "");
+        assert_eq!(
+            preview["graph"]["1"]["inputs"]["context"],
+            "\"literal string\""
+        );
+        assert_eq!(preview["graph"]["1"]["inputs"]["enabled"], false);
+        assert_eq!(
+            preview["graph"]["1"]["inputs"]["next"],
+            serde_json::json!(["2", 0])
+        );
+        assert_eq!(p.workflows[0].graph, graph);
+        let mut invalid = item.clone();
+        invalid
+            .input_errors
+            .insert("seed".into(), "Enter a finite number".into());
+        invalid.input_text.insert("seed".into(), "oops".into());
+        d.items[0] = invalid.clone();
+        p.job_drafts[0] = d.clone();
+        assert!(resolve_item(&p, &d, &invalid).is_err());
+        store.save(p, 0).unwrap();
+        drop(store);
+        let reopened = project_core::ProjectStore::open(tmp.path().join("draft.mymovie"))
+            .unwrap()
+            .read()
+            .unwrap();
+        assert_eq!(reopened.job_drafts[0].items[0].input_text["seed"], "oops");
+        assert!(resolve_item(&reopened, &d, &invalid).is_err());
+        let mut wrong = item.clone();
+        wrong.values["seed"] = serde_json::json!("3");
+        assert!(resolve_item(&reopened, &d, &wrong).is_err());
+        let mut media = item.clone();
+        media.bindings = Some(vec![Binding {
+            semantic: "image".into(),
+            node_id: "1".into(),
+            input: "text".into(),
+            value_type: "string".into(),
+        }]);
+        assert!(resolve_item(&reopened, &d, &media).is_err());
     }
 }

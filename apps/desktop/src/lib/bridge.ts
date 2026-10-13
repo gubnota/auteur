@@ -28,7 +28,7 @@ export async function call<T>(
     };
     return previewProject as T;
   }
-  if (command === "list_jobs" || command === "refresh_jobs") return [] as T;
+  if (command === "list_jobs" || command === "refresh_jobs" || command === "list_job_runs") return [] as T;
   if (command === "clear_diagnostics") {
     settings = { ...settings, [args.kind as string]: [] };
     return settings as T;

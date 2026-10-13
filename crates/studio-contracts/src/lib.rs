@@ -14,6 +14,8 @@ pub struct Project {
     pub characters: Vec<Character>,
     pub assets: Vec<Asset>,
     pub workflows: Vec<Workflow>,
+    #[serde(default)]
+    pub job_drafts: Vec<JobDraft>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -145,6 +147,52 @@ pub struct Job {
     pub error: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub item_id: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobDraft {
+    pub id: String,
+    pub name: String,
+    pub frame_id: String,
+    pub items: Vec<JobItem>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobItem {
+    pub id: String,
+    pub workflow_id: String,
+    pub connection_id: String,
+    #[serde(default)]
+    pub values: Value,
+    /// Preserve invalid editor text across draft switches and document reopening.
+    #[serde(default)]
+    pub input_text: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    pub input_errors: std::collections::BTreeMap<String, String>,
+    /// Semantic -> asset ID; omitted media uses the frame/assigned cast.
+    #[serde(default)]
+    pub assets: std::collections::BTreeMap<String, String>,
+    /// None inherits workflow bindings; Some freezes a per-item binding set.
+    #[serde(default)]
+    pub bindings: Option<Vec<Binding>>,
+    #[serde(default)]
+    pub deployment_id: Option<String>,
+    #[serde(default)]
+    pub api_family: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobRun {
+    pub id: String,
+    pub name: String,
+    pub draft_id: String,
+    pub job_ids: Vec<String>,
+    pub state: String,
+    pub created_at: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

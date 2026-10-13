@@ -79,6 +79,7 @@ impl ProjectStore {
             characters: vec![],
             assets: vec![],
             workflows: vec![],
+            job_drafts: vec![],
         };
         if demo {
             project.characters = ["Mira", "Old Sal", "The Keeper"]
@@ -173,10 +174,27 @@ impl ProjectStore {
         let db = Connection::open(root.join("project.sqlite"))?;
         db.pragma_update(None, "journal_mode", "WAL")?;
         let version: i64 = db.pragma_query_value(None, "user_version", |r| r.get(0))?;
-        if version > 1 {
+        if version > 2 {
             return Err("Project requires a newer MyMovie Studio".into());
         }
-        db.execute_batch(include_str!("../migrations/0001_initial.sql"))?;
+        if version == 0 {
+            db.execute_batch(include_str!("../migrations/0001_initial.sql"))?;
+        }
+        if version == 1 {
+            // SQLite creates a consistent backup including WAL data before migration.
+            let backup = confined(&root, &format!("backups/pre-jobs-v1-{}.sqlite", id()))?;
+            fs::create_dir_all(backup.parent().unwrap())?;
+            db.execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])?;
+            atomic_json(
+                &confined(&root, "backups/pre-jobs-manifest.json")?,
+                &serde_json::from_slice::<serde_json::Value>(&fs::read(
+                    root.join("manifest.json"),
+                )?)?,
+            )?;
+        }
+        if version < 2 {
+            db.execute_batch(include_str!("../migrations/0002_job_runs.sql"))?;
+        }
         Ok(Self {
             root,
             db,
@@ -259,7 +277,7 @@ impl ProjectStore {
         // Journal remains pending on failure; opening repairs from authoritative SQLite.
         atomic_json(
             &confined(&self.root, "manifest.json")?,
-            &serde_json::json!({"schemaVersion":1,"id":p.id,"name":p.name,"revision":p.revision,"application":"MyMovie Studio"}),
+            &serde_json::json!({"schemaVersion":2,"id":p.id,"name":p.name,"revision":p.revision,"application":"MyMovie Studio"}),
         )?;
         for ep in &p.episodes {
             for scene in &ep.scenes {
@@ -293,6 +311,7 @@ impl ProjectStore {
                 w,
             )?;
         }
+        atomic_json(&confined(&self.root, "jobs/drafts.json")?, &p.job_drafts)?;
         self.db
             .execute("UPDATE projections SET pending=0 WHERE id=1", [])?;
         Ok(())
@@ -333,6 +352,15 @@ pub fn validate(p: &Project) -> Result<()> {
         Ok(())
     };
     check(&p.id)?;
+    for draft in &p.job_drafts {
+        check(&draft.id)?;
+        if draft.name.trim().is_empty() {
+            return Err("Job draft name required".into());
+        }
+        for item in &draft.items {
+            check(&item.id)?;
+        }
+    }
     for a in &p.assets {
         check(&a.id)?;
         if a.source_path
@@ -446,5 +474,113 @@ mod tests {
             std::os::unix::fs::symlink(other.path(), tmp.path().join("media")).unwrap();
             assert!(confined(tmp.path(), "media/originals/image.png").is_err());
         }
+    }
+}
+
+#[cfg(test)]
+mod jobs_migration_tests {
+    use super::*;
+    #[test]
+    fn v1_upgrade_preserves_revision_jobs_and_creates_a_restorable_backup() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("old.mymovie");
+        let mut store = ProjectStore::create(&path, "Legacy film", true).unwrap();
+        let mut p = store.read().unwrap();
+        p.name = "Saved revision".into();
+        let p = store.save(p, 0).unwrap();
+        let mut legacy = serde_json::to_value(&p).unwrap();
+        legacy.as_object_mut().unwrap().remove("jobDrafts");
+        store
+            .db
+            .execute("UPDATE project SET json=?1", [legacy.to_string()])
+            .unwrap();
+        store
+            .db
+            .execute(
+                "INSERT INTO jobs VALUES('legacy-attempt',?1)",
+                [r#"{"state":"unknown","remoteId":null}"#],
+            )
+            .unwrap();
+        store
+            .db
+            .execute_batch("DROP TABLE job_runs; PRAGMA user_version=1;")
+            .unwrap();
+        atomic_json(
+            &path.join("manifest.json"),
+            &serde_json::json!({"schemaVersion":1}),
+        )
+        .unwrap();
+        drop(store);
+        let upgraded = ProjectStore::open(&path).unwrap();
+        assert_eq!(upgraded.read().unwrap().name, "Saved revision");
+        assert_eq!(upgraded.read().unwrap().revision, p.revision);
+        assert!(upgraded.read().unwrap().job_drafts.is_empty());
+        assert_eq!(
+            upgraded
+                .db
+                .query_row("SELECT count(*) FROM jobs", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            upgraded
+                .db
+                .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
+        let backups = || {
+            fs::read_dir(path.join("backups"))
+                .unwrap()
+                .filter_map(|e| {
+                    let p = e.unwrap().path();
+                    (p.extension().and_then(|s| s.to_str()) == Some("sqlite")).then_some(p)
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(backups().len(), 1);
+        let backup = Connection::open(&backups()[0]).unwrap();
+        assert_eq!(
+            backup
+                .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            backup
+                .query_row("SELECT revision FROM project", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            p.revision as i64
+        );
+        assert_eq!(
+            backup
+                .query_row("SELECT count(*) FROM jobs", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        assert!(path.join("backups/pre-jobs-manifest.json").exists());
+        drop(upgraded);
+        ProjectStore::open(&path).unwrap();
+        assert_eq!(backups().len(), 1);
+    }
+    #[test]
+    fn backup_failure_leaves_version_one_untouched() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("old.mymovie");
+        let store = ProjectStore::create(&path, "Legacy", false).unwrap();
+        store
+            .db
+            .execute_batch("DROP TABLE job_runs; PRAGMA user_version=1;")
+            .unwrap();
+        drop(store);
+        fs::write(path.join("backups"), "cannot create a directory here").unwrap();
+        assert!(ProjectStore::open(&path).is_err());
+        let db = Connection::open(path.join("project.sqlite")).unwrap();
+        assert_eq!(
+            db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        assert!(db.prepare("SELECT * FROM job_runs").is_err());
     }
 }

@@ -740,6 +740,18 @@ export function Renders({
           <dl>
             <dt>Attempt</dt>
             <dd>{selected.id}</dd>
+            {selected.runId && (
+              <>
+                <dt>Batch run</dt>
+                <dd>{selected.runId}</dd>
+              </>
+            )}
+            {selected.itemId && (
+              <>
+                <dt>Batch item</dt>
+                <dd>{selected.itemId}</dd>
+              </>
+            )}
             <dt>Remote task</dt>
             <dd>{selected.remoteId}</dd>
             <dt>Workflow SHA256</dt>
