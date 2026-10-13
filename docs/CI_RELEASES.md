@@ -29,6 +29,8 @@ macOS artifacts are ad-hoc signed and are not Apple-notarized. Distribution sign
 
 GitHub branch builds expose **comfyui-agent-linux-x86_64**, independent of the desktop build matrix after shared checks pass. GitLab exposes **comfyui-agent-linux-x86_64-<branch>**. Both contain `mymovie-agent-linux-x86_64.tar.gz`, metadata, checksums and the [RunPod setup guide](../deploy/runpod/README.md). Packaging rejects non-ELF or non-x86_64 binaries. The archive includes the agent and guide; the relay is built but must be deployed separately. RunPod connects outbound over authenticated HTTPS, without a public ComfyUI port. No live pod or relay is provisioned by CI.
 
+Hosted acceptance: [GitHub run 38474310778](https://github.com/gubnota/auteur/actions/runs/38474310778), commit `ab71e49`, passed source checks and the Linux agent build/smoke test. The [Linux agent artifact](https://github.com/gubnota/auteur/actions/runs/38474310778/artifacts/11853018891) is 2,440,831 bytes, with GitHub artifact digest `sha256:a7c535c70ee0326c2832dabb9f141e84fe7b0d9749b2e041193983808240ab55`. This digest identifies the uploaded artifact container; use the included checksums/metadata to verify the agent archive and bootstrap. Branch downloads expire after 14 days; version-tag releases provide durable distribution links. Cloud GPU execution is a separate acceptance step.
+
 ## Colab/Kaggle deployment
 
 Download the Linux client archive, its metadata/checksums, `notebook-bootstrap.py` and the appropriate notebook from one verified release. Confirm the archive and bootstrap SHA-256 values before execution. The notebook asks for an authenticated HTTPS relay and reads its token from notebook Secrets; do not paste credentials into cells or movie packages.
