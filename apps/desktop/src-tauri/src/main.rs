@@ -55,6 +55,7 @@ fn main() {
             refresh_jobs,
             assistant_request,
             cancel_job,
+            reconcile_job,
             connection_health,
             plan_deployment,
             runner_action,

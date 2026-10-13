@@ -2,6 +2,15 @@ use async_trait::async_trait;
 use project_core::{ProjectStore, Result, atomic_json, confined, id};
 use serde_json::{Value, json};
 use studio_contracts::*;
+/// The provider explicitly refused creation; unlike transport failure this frees admission.
+#[derive(Debug)]
+pub struct SubmissionRejected(pub String);
+impl std::fmt::Display for SubmissionRejected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for SubmissionRejected {}
 #[derive(Debug, Clone)]
 pub struct RemoteStatus {
     pub state: String,
@@ -139,6 +148,7 @@ mod tests {
             deployment_id: None,
             api_family: None,
             concurrency: 1,
+            hosting: None,
         };
         let w = Workflow {
             id: id(),
@@ -146,6 +156,10 @@ mod tests {
             version: "a".repeat(64),
             graph: json!({}),
             bindings: vec![],
+            media_kind: "other".into(),
+            editor_graph: None,
+            editor_hash: None,
+            deployments: vec![],
         };
         let graph = json!({"frozen":"graph"});
         let j = prepare(&s, frame, &w, &c, graph.clone(), json!({"seed":17})).unwrap();

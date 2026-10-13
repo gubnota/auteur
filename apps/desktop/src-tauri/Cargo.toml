@@ -9,7 +9,6 @@ tauri-build= {version="2",features= [] }
 tauri= {version="2",features= [] }
 tauri-plugin-dialog="2"
 tauri-plugin-notification="2"
-keyring= {version="3",features= ["apple-native"] }
 studio-contracts.workspace=true
 project-core.workspace=true
 asset-core.workspace=true
@@ -27,7 +26,10 @@ tokio.workspace=true
 reqwest.workspace=true
 uuid.workspace=true
 tempfile.workspace=true
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 [target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
 objc2="0.6"
 objc2-app-kit= {version="0.3",features= ["NSApplication", "NSDockTile"] }
 objc2-foundation= {version="0.3",features= ["NSString"] }

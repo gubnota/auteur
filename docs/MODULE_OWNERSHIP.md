@@ -13,9 +13,10 @@
 | storage-s3 | Manifest-based transfers, size/hash verification, resumable download |
 | desktop native | Command orchestration, Keychain, document lifecycle, native progress |
 | desktop React | UI state, serialized saves, modal/drop interaction; no direct filesystem/network |
-| relay | Authenticated single-node jobs, leases, event replay, private asset endpoints |
+| relay | Authenticated node-scoped jobs, leases, event replay, private asset endpoints |
 | agent | Outbound claims/reports, typed operations, ComfyUI execution and local receipts |
-| deploy/scripts | Reproducible local test environment and acceptance tooling |
+| deploy/scripts | Local acceptance, verified notebook artifacts, isolated GPU workers |
+| CI/release scripts | Platform builds, version checks, immutable packages and release links |
 
 ## Dependency rules
 - Contracts sit below domain crates; project-core supplies package primitives.
@@ -37,3 +38,6 @@
 - Job module: frozen attempts, admission and ambiguous outcome recovery.
 - Frontend: native coordinate conversion; native interaction acceptance via actual app.
 - Providers/infrastructure: local CPU canary; cloud/GPU acceptance remains separately gated.
+
+- workflow-core owns account deployment resolution and frozen job destination; providers cannot infer hosted IDs from graphs.
+- CI tests use fixtures; release scripts never submit generation jobs or embed credentials.

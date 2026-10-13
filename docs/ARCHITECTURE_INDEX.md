@@ -53,3 +53,14 @@
 - DESIGN_HANDOFF.md / WORKFLOW_AUDIT.md / BRIDGE_CONTRACT.md: design/workflow/boundary notes.
 - drafts/: ignored Base44 references; never stage these.
 - Sibling astrofenki, homer_studio, unipuni, whatsapp-sender: read-only references.
+
+## CI and notebooks
+- .gitlab-ci.yml: checks, macOS/Linux packages, version-tag registry/Release publication.
+- .github/workflows/: shared native build matrix and draft tag release.
+- scripts/ci-setup.sh, check-release-version.py, gitlab-release.py: toolchains and immutable release files.
+- scripts/package-agent.py: Linux binary archive, notebooks and checksums.
+- scripts/notebook-bootstrap.py / generate-notebooks.py: verified artifact and GPU worker setup.
+- deploy/colab/, deploy/kaggle/: generated notebooks; scripts/tests/: bootstrap/release regression.
+- examples/workflows/: CPU, text-to-image, masked-edit API/editor fixtures; actual UI exchange pending.
+- playwright.config.ts / e2e/: mocked native RunningHub job creation/mapping acceptance.
+- docs/CI_RELEASES.md: runner requirements, tag and notebook artifact usage.

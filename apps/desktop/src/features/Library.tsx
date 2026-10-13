@@ -8,6 +8,7 @@ import {
   type Job,
   type Binding,
   type Asset,
+  type AppSettings,
 } from "../lib/types";
 import type { Update } from "../App";
 export function PageTitle({
@@ -407,18 +408,24 @@ export function Library({
 }
 export function Workflows({
   project: p,
+  settings,
   update,
   onImport,
+  onGenerate,
 }: {
   project: Project;
+  settings: AppSettings;
   update: Update;
   onImport: () => void;
+  onGenerate: (frameId: string, workflowId: string) => void;
 }) {
   const [selected, setSelected] = useState(""),
     [nodeId, setNode] = useState(""),
     [input, setInput] = useState(""),
     [semantic, setSemantic] = useState("positivePrompt"),
-    [valueType, setType] = useState("string");
+    [valueType, setType] = useState("string"),
+    [frameId, setFrameId] = useState(""),
+    [mediaKind, setMediaKind] = useState("all");
   const w = p.workflows.find((w) => w.id === selected);
   const add = () => {
     if (!w) return;
@@ -441,6 +448,17 @@ export function Workflows({
           </button>
         }
       />
+      <Picker
+        title="Workflow category"
+        value={mediaKind}
+        options={[
+          { id: "all", label: "All workflows" },
+          { id: "image", label: "Image workflows" },
+          { id: "video", label: "Video workflows" },
+          { id: "other", label: "Other workflows" },
+        ]}
+        onChange={setMediaKind}
+      />
       {p.workflows.length === 0 ? (
         <Empty
           title="Bring your workflow"
@@ -453,25 +471,123 @@ export function Workflows({
         </Empty>
       ) : (
         <div className="asset-grid">
-          {p.workflows.map((w) => (
-            <button
-              className="panel workflow-card"
-              key={w.id}
-              onClick={() => setSelected(w.id)}
-            >
-              <WorkflowIcon size={28} />
-              <strong>{w.name}</strong>
-              <small>
-                {Object.keys(w.graph).length} nodes · {w.bindings.length}{" "}
-                bindings
-              </small>
-              <code>{w.version.slice(0, 16)}</code>
-            </button>
-          ))}
+          {p.workflows
+            .filter(
+              (w) =>
+                mediaKind === "all" || (w.mediaKind ?? "other") === mediaKind,
+            )
+            .map((w) => (
+              <button
+                className="panel workflow-card"
+                key={w.id}
+                onClick={() => setSelected(w.id)}
+              >
+                <WorkflowIcon size={28} />
+                <strong>{w.name}</strong>
+                <small>
+                  {Object.keys(w.graph).length} nodes · {w.bindings.length}{" "}
+                  bindings
+                </small>
+                <code>{w.version.slice(0, 16)}</code>
+              </button>
+            ))}
         </div>
       )}
       {w && (
         <Modal title={w.name} onClose={() => setSelected("")}>
+          <h3>Generate a keyframe</h3>
+          <Picker
+            title="Target keyframe"
+            value={frameId}
+            options={p.episodes.flatMap((e) =>
+              e.scenes.flatMap((s) =>
+                s.shots.flatMap((sh) =>
+                  sh.frames.map((f) => ({
+                    id: f.id,
+                    label: `${e.name} / ${s.name} / ${f.name}`,
+                  })),
+                ),
+              ),
+            )}
+            onChange={setFrameId}
+          />
+          <button
+            className="primary"
+            disabled={!frameId}
+            onClick={() => {
+              setSelected("");
+              onGenerate(frameId, w.id);
+            }}
+          >
+            Create generation job
+          </button>
+          <p className="muted">
+            Choose a keyframe, then review the account and job inputs before
+            submission.
+          </p>
+          <h3>RunningHub deployments</h3>
+          <p className="muted">
+            An API export contains the graph, not its hosted deployment ID. Use
+            the Workflow ID from RunningHub for this same graph, or an AI App ID
+            with matching published inputs. Each account can use a different
+            deployment.
+          </p>
+          {settings.connections.filter((c) => c.kind === "runninghub")
+            .length === 0 && (
+            <p>
+              Add a RunningHub account and its API key in Connections first.
+            </p>
+          )}
+          {settings.connections
+            .filter((c) => c.kind === "runninghub")
+            .map((c) => {
+              const d = w.deployments?.find((d) => d.connectionId === c.id);
+              const setDeployment = (change: {
+                deploymentId?: string;
+                apiFamily?: string;
+              }) =>
+                update((p) => {
+                  const x = p.workflows.find((x) => x.id === w.id)!;
+                  const next = {
+                    connectionId: c.id,
+                    deploymentId: d?.deploymentId ?? c.deploymentId ?? "",
+                    apiFamily: d?.apiFamily ?? c.apiFamily ?? "workflow",
+                    ...change,
+                  };
+                  x.deployments = [
+                    ...(x.deployments ?? []).filter(
+                      (d) => d.connectionId !== c.id,
+                    ),
+                    next,
+                  ];
+                });
+              return (
+                <section className="panel" key={c.id}>
+                  <h4>{c.name}</h4>
+                  <Picker
+                    title="RunningHub API family"
+                    value={d?.apiFamily ?? c.apiFamily ?? "workflow"}
+                    options={[
+                      { id: "workflow", label: "Hosted ComfyUI workflow" },
+                      { id: "ai-app", label: "Published AI App (v2)" },
+                    ]}
+                    onChange={(apiFamily) => setDeployment({ apiFamily })}
+                  />
+                  <Field
+                    label="Workflow / AI App ID"
+                    value={d?.deploymentId ?? c.deploymentId ?? ""}
+                    onChange={(deploymentId) =>
+                      setDeployment({ deploymentId: deploymentId.trim() })
+                    }
+                  />
+                  <p className="muted">
+                    Saved in this movie. The API key stays in the system
+                    credential store.
+                  </p>
+                </section>
+              );
+            })}
+          <h3>Job input bindings</h3>
           <p className="muted">
             Explicit semantic bindings edit a copy of this immutable graph for
             each job. Image paths require staged references; unsupported inputs

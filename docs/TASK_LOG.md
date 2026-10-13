@@ -88,6 +88,18 @@
 - Final format/diff checks passed; generated schemas, drafts, personal packages and root cpu-canary.png excluded from commits.
 - Bundled font license texts included; historical scaffolding script removed from runtime source.
 
+## 2026-10-13 — ComfyUI/image/Linux extension planning
+
+- User requests continued work on main, desktop macOS/Linux x86_64 CI/CD, ComfyUI Desktop exchange, image workflows and multiple RunningHub accounts.
+- main matches origin/main at 9e89e90; untracked cpu-canary.png left untouched.
+- Read-only discovery: ComfyUI 0.3.76 on localhost:8188 is CPU; core image nodes exist, but checkpoint registry is empty. Existing local checkpoint presence verified without altering weights.
+- Extension plan: docs/IMPLEMENTATION_PLAN_COMFY_IMAGES_CI.md; scope subsequently approved by user "давай"; implementation continues on main.
+- Only planning documentation changed; no source/configuration edits or jobs submitted.
+
+- Desktop discovery: localhost:8189 reports ComfyUI 0.39.2/MPS and exposes the existing test checkpoint; no weighted job submitted.
+- User added Colab artifact deployment and Kaggle ComfyUI support. Plan now includes both notebooks, shared verified Linux agent bootstrap, secret readers, hosting presets and session-loss acceptance.
+- Live notebook deployment awaits a running eligible notebook and a reachable authenticated relay. Colab free-worker restrictions verified against Google FAQ.
+
 ## 2026-10-14 — Saved-document startup hotfix, 0.1.1
 
 - Reproduced the supplied macOS abort with 0.1.0 and a previously saved temporary movie.
@@ -101,3 +113,16 @@
 - Current working-tree checks: Rust workspace 17 tests passed; frontend 2 tests passed; notebook bootstrap 10 tests passed; production TypeScript/Vite build passed. Existing relay test has an unused-result warning, separate from this hotfix.
 - Approved ComfyUI/images/notebook/CI extension remains in progress in the working tree; hotfix staged separately. No live RunningHub/Colab/Kaggle or weighted GPU job acceptance claimed. Drafts and root cpu-canary.png untouched.
 - Isolated staged hotfix snapshot compiled successfully; cold-launch regression passed independently of the unfinished integration changes.
+
+## 2026-10-14 — RunningHub job entry, CI artifacts and notebooks, 0.1.2
+
+- Added visible Workflows → Target keyframe → Create generation job, per-workflow/account deployment/family mapping and actionable submission readiness. Definitive provider refusals fail safely; unknown attempts have explicit task-history reconciliation. Frozen destinations preserve routing after settings changes.
+- Hardened RunningHub Workflow/v2 AI App payloads, typed values, uploads, status/results parsing and official .ai/.cn endpoint validation. No chat credentials used and no paid task submitted.
+- User supplied https://www.runninghub.ai/workflow/2110044532631932930: Workflow family/ID inferred from the supplied URL; public page did not expose enough graph details to identify the matching LTX/MINIMAX export. Matching file and live account acceptance remain pending.
+- Added compatible workflow/editor/deployment contracts and image preset fixtures. Editor-pair/export controls, preset UI and weighted Desktop exchange are still unfinished; backend helpers/fixtures alone do not establish user-facing completion.
+- Added node-scoped relay leases/report/health and lost-session handling, agent version/heartbeat support, verified prebuilt Linux client bootstrap and generated Colab/Kaggle notebooks. Two GPU mode starts independent ComfyUI/agent processes on separate device/port/node identities; live notebooks need an authenticated relay/runtime.
+- Added GitLab branch/MR/tag checks, macOS ARM/Intel DMGs, Linux desktop/client artifacts, version parity, checksum publication and immutable package/Release links. GitHub matrix and draft tag releases included. GitLab project/macOS runner, hosted pipeline runs and notarization remain pending; no tag or hosted resources created.
+- Version 0.1.2 production ARM64 .app built, ad-hoc signed and installed at /Applications/MyMovie Studio.app; strict signature/version checks passed. Previous 0.1.1 app preserved at /private/tmp/MyMovie Studio-0.1.1-backup.app.
+- Installed app reopened a saved temporary movie, imported a 7-node API graph, selected its keyframe and opened the new submission review. Native screenshot: docs/screenshots/workflow-job-0.1.2.png. Personal movies untouched; sample screenshot is not a real RunningHub generation.
+- Validation: Rust workspace 23 tests plus doc tests passed; frontend typecheck and 2 unit tests passed; 2 mocked end-to-end RunningHub tests passed; Python 14 tests passed. Release-version parity, CI YAML parsing, shell syntax and diff checks passed. Mocked job-review screenshot saved separately.
+- EN/RU/FR README updated. Drafts, private settings/keys, root cpu-canary.png and generated build output excluded from staging. Full ComfyUI/image milestone and real cloud/GPU/S3 roundtrip remain open.

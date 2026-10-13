@@ -4,6 +4,7 @@ use project_core::{Result, atomic_json};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 #[derive(Parser)]
+#[command(version)]
 struct Args {
     #[arg(value_parser=["doctor","inventory","bootstrap","provision","serve"])]
     command: String,
@@ -99,8 +100,14 @@ async fn main() -> Result<()> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .build()?;
+    let mut last_heartbeat = std::time::Instant::now() - std::time::Duration::from_secs(15);
     loop {
-        let _=post(&client,&format!("{relay}/v1/agent/heartbeat"),&token,json!({"nodeId":args.node_id,"connected":true,"transport":"outbound HTTPS","comfy":comfy.health().await.ok()})).await;
+        if last_heartbeat.elapsed().as_secs() >= 15 {
+            let health = comfy.health().await.ok();
+            let _ = post(&client, &format!("{relay}/v1/agent/heartbeat"), &token,
+                json!({"nodeId":args.node_id,"connected":health.is_some(),"transport":"outbound HTTPS","comfy":health})).await;
+            last_heartbeat = std::time::Instant::now();
+        }
         let job = match post(
             &client,
             &format!("{relay}/v1/agent/claim"),
@@ -121,7 +128,8 @@ async fn main() -> Result<()> {
         }
         let id = job["id"].as_str().ok_or("Missing job ID")?;
         let report_url = format!("{relay}/v1/agent/jobs/{id}");
-        let mut receipt = json!({"leaseToken":job["leaseToken"],"state":"running"});
+        let mut receipt =
+            json!({"nodeId":args.node_id,"leaseToken":job["leaseToken"],"state":"running"});
         let receipt_path = args.data.join(format!("receipts/{id}.json"));
         if job["kind"] == "drain" {
             receipt["state"] = json!("completed");

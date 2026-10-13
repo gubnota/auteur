@@ -36,7 +36,7 @@ import {
   type AppSettings,
   type Job,
 } from "./lib/types";
-import { Modal, Field, Picker, Empty } from "./components/Controls";
+import { Modal, Field, Picker, Empty, Toggle } from "./components/Controls";
 import { AppSymbol } from "./components/AppSymbol";
 import { fileDropPoint } from "./lib/file-drop";
 import { Board } from "./features/Board";
@@ -315,10 +315,11 @@ export default function App() {
       setJobs(await call<Job[]>("list_jobs"));
     });
   };
-  const chooseJob = (frameId: string) => {
+  const chooseJob = (frameId: string, workflowId?: string) => {
     if (!p) return;
     setModal(
       <SubmitDialog
+        workflowId={workflowId}
         project={p}
         frameId={frameId}
         settings={settings}
@@ -727,8 +728,10 @@ export default function App() {
               {route === "Workflows" && (
                 <Workflows
                   project={p}
+                  settings={settings}
                   update={update}
                   onImport={() => importFile("workflow")}
+                  onGenerate={chooseJob}
                 />
               )}{" "}
               {route === "Renders" && (
@@ -890,16 +893,43 @@ export default function App() {
                           {j.state}
                         </span>
                         {j.error && <span className="error">{j.error}</span>}
-                        {!["completed", "failed", "canceled"].includes(
-                          j.state,
-                        ) && (
+                        {j.state === "unknown" && !j.remoteId ? (
                           <button
                             onClick={() =>
-                              void queueActions("cancel_job", { jobId: j.id })
+                              setModal(
+                                <ReconcileDialog
+                                  job={j}
+                                  onClose={() => setModal(null)}
+                                  reconcile={async (
+                                    remoteId,
+                                    confirmedAbsent,
+                                  ) => {
+                                    await pending.current;
+                                    await call("reconcile_job", {
+                                      jobId: j.id,
+                                      remoteId,
+                                      confirmedAbsent,
+                                    });
+                                    setJobs(await call<Job[]>("list_jobs"));
+                                  }}
+                                />,
+                              )
                             }
                           >
-                            Cancel
+                            Resolve submission
                           </button>
+                        ) : (
+                          !["completed", "failed", "canceled"].includes(
+                            j.state,
+                          ) && (
+                            <button
+                              onClick={() =>
+                                void queueActions("cancel_job", { jobId: j.id })
+                              }
+                            >
+                              Cancel
+                            </button>
+                          )
                         )}
                       </article>
                     ))
@@ -1037,20 +1067,83 @@ function EpisodeDialog({
     </Modal>
   );
 }
+function ReconcileDialog({
+  job,
+  onClose,
+  reconcile,
+}: {
+  job: Job;
+  onClose: () => void;
+  reconcile: (
+    remoteId: string | null,
+    confirmedAbsent: boolean,
+  ) => Promise<void>;
+}) {
+  const [remote, setRemote] = useState("");
+  const [absent, setAbsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return (
+    <Modal title="Resolve unknown submission" onClose={onClose}>
+      <p>
+        Check the selected account’s task history for this attempt (
+        {job.createdAt}). Attaching a task continues tracking; this action never
+        submits a new job.
+      </p>
+      <Field
+        label="Existing provider task ID"
+        value={remote}
+        onChange={(v) => {
+          setRemote(v);
+          setAbsent(false);
+        }}
+      />
+      <Toggle
+        label="I checked the provider history and confirm that no task was created"
+        checked={absent}
+        onChange={(v) => {
+          setAbsent(v);
+          if (v) setRemote("");
+        }}
+      />
+      {error && <p role="alert">{error}</p>}
+      <button
+        className="primary"
+        disabled={busy || (!remote.trim() && !absent)}
+        onClick={async () => {
+          setBusy(true);
+          setError("");
+          try {
+            await reconcile(remote.trim() || null, absent);
+            onClose();
+          } catch (e) {
+            setError(String(e));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? "Checking…" : "Resolve submission"}
+      </button>
+    </Modal>
+  );
+}
 function SubmitDialog({
+  workflowId,
   project,
   frameId,
   settings,
   onClose,
   submit,
 }: {
+  workflowId?: string;
   project: Project;
   frameId: string;
   settings: AppSettings;
   onClose: () => void;
   submit: (w: string, c: string, values: Record<string, unknown>) => void;
 }) {
-  const [w, setW] = useState(project.workflows[0]?.id ?? ""),
+  const [w, setW] = useState(workflowId ?? project.workflows[0]?.id ?? ""),
     [c, setC] = useState(
       settings.connections.find((c) =>
         ["comfyui", "runninghub", "relay"].includes(c.kind),
@@ -1077,6 +1170,22 @@ function SubmitDialog({
     .map((id) => project.assets.find((a) => a.id === id))
     .filter((a): a is NonNullable<typeof a> => !!a && a.kind === "image");
   const workflow = project.workflows.find((x) => x.id === w);
+  const selectedConnection = settings.connections.find((x) => x.id === c);
+  const deployment = workflow?.deployments?.find((d) => d.connectionId === c);
+  const deploymentId =
+    deployment?.deploymentId ?? selectedConnection?.deploymentId ?? "";
+  const apiFamily = deployment?.apiFamily ?? selectedConnection?.apiFamily;
+  const blocked =
+    selectedConnection?.kind === "runninghub"
+      ? !selectedConnection.credentialRef
+        ? "Add this account’s API key in Connections."
+        : !/^\d+$/.test(deploymentId) ||
+            !["workflow", "ai-app"].includes(apiFamily ?? "")
+          ? "Open Workflows, select this graph, and set its RunningHub Workflow / AI App ID and API family for this account. Importing JSON alone does not create a hosted deployment."
+          : !workflow?.bindings.length
+            ? "Open Workflows and bind the inputs that match this hosted deployment (for example, its prompt node)."
+            : ""
+      : "";
   const fields =
     workflow?.bindings.filter(
       (b) =>
@@ -1156,9 +1265,16 @@ function SubmitDialog({
         explicitly changed here. Every submitted value is saved with the
         attempt.
       </p>
+      {selectedConnection?.kind === "runninghub" && !blocked && (
+        <p className="muted">
+          {apiFamily === "ai-app" ? "AI App" : "Hosted workflow"} {deploymentId}{" "}
+          · {selectedConnection.name}
+        </p>
+      )}
+      {blocked && <p role="alert">{blocked}</p>}
       <button
         className="primary"
-        disabled={!w || !c || !native}
+        disabled={!w || !c || !native || !!blocked}
         onClick={() => submit(w, c, values)}
       >
         Validate & submit job

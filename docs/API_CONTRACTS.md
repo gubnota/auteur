@@ -33,6 +33,10 @@
 - Selected reference must belong to scene/frame cast; unresolved refs fail before submission.
 - Import graph preserves node IDs/types; binding names/types are explicitly edited.
 - Workflow id is local UUID; version is graph hash; deployment/account identity is separate.
+- Workflow.deployments defaults empty: {connectionId,deploymentId,apiFamily}; one mapping per account.
+- RunningHub family is workflow or ai-app; numeric deployment ID must identify this graph/published input schema.
+- Workflow.mediaKind defaults other; optional editorGraph/editorHash preserve paired editor export.
+- Backend resolves mapped deployment before submission; frozen receipts preserve destination when account settings change.
 
 ## Jobs and integrations
 - ExecutionBackend: health, validate_job, stage_asset, submit, status, cancel, collect.
@@ -40,6 +44,10 @@
 - Durable submission/receipt written before provider request; no blind retry of unknown outcome.
 - States include ready/submitted/queued/running/collecting/completed/failed/cancel_requested/canceled/unknown.
 - Active/unknown attempts consume per-connection concurrency admission.
+- SubmissionRejected denotes definitive provider refusal; transport/ambiguous outcomes stay unknown.
+- reconcile_job(jobId,remoteId?,confirmedAbsent): unknown/no-ID only; verify task in original account or explicitly confirm absent in provider history. Duplicate task attachment is rejected.
+- RunningHub endpoint allowlist: https://www.runninghub.ai or https://www.runninghub.cn; no arbitrary credential forwarding.
+- Legacy workflow create + v2 AI App run use typed nodeInfoList; usePersonalQueue is JSON boolean.
 - Desktop refresh polls every five seconds; ComfyUI transport also exposes WS support.
 - Relay /v1/events: authenticated SSE, monotonic id and Last-Event-ID replay.
 - Relay typed operations: doctor/inventory/drain/bootstrap/provision; no remote shell.
@@ -60,3 +68,9 @@
 - A shared, deduplicated path inbox exists before the native app is built.
 - Studio receives that same inbox during setup; event callbacks never read unregistered managed state.
 - Existing opened-projects event / take_opened_projects frontend contract stays unchanged.
+
+## Notebook node contract
+- Agent node ID is allowlisted by relay; claims/reports/heartbeats are scoped to that node.
+- One agent per GPU worker, CUDA visibility and ComfyUI port isolated; receipt before remote submission.
+- Runtime loss -> offline node/unknown attempt, never automatic replay.
+- Verified Linux x86_64 artifact + authenticated HTTPS relay + notebook Secrets required.

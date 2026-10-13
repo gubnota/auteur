@@ -67,6 +67,10 @@ export interface Workflow {
     }
   >;
   bindings: Binding[];
+  mediaKind?: "image" | "video" | "other";
+  editorGraph?: Record<string, unknown>;
+  editorHash?: string;
+  deployments?: { connectionId: string; deploymentId: string; apiFamily: string }[];
 }
 export interface Project {
   id: string;
@@ -89,6 +93,7 @@ export interface Connection {
   deploymentId: string | null;
   apiFamily: string | null;
   concurrency: number;
+  hosting?: "colab" | "kaggle" | null;
 }
 export interface Job {
   id: string;

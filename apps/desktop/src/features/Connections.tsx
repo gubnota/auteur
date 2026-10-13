@@ -42,6 +42,34 @@ export function Connections({
   notify: (s: string) => void;
 }) {
   const [filter, setFilter] = useState("all");
+  const [notebook, setNotebook] = useState(false);
+  const [host, setHost] = useState<"colab" | "kaggle">("colab");
+  const [nodeIds, setNodeIds] = useState("");
+  const [relayUrl, setRelayUrl] = useState("https://");
+  const [notebookSecret, setNotebookSecret] = useState("");
+  const [savingNotebook, setSavingNotebook] = useState(false);
+  const addNotebook = async () => {
+    const ids = nodeIds.split(",").map(id => id.trim()).filter(Boolean);
+    if (!ids.length || ids.length > (host === "kaggle" ? 2 : 1) || new Set(ids).size !== ids.length || ids.some(id => !/^[a-zA-Z0-9_-]{1,96}$/.test(id))) {
+      notify("Paste the notebook's node IDs: one for Colab, one or two for Kaggle."); return;
+    }
+    try {
+      const url = new URL(relayUrl);
+      if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || url.hostname.endsWith("trycloudflare.com")) throw new Error("Use a stable HTTPS relay URL without credentials. Quick Tunnels do not support SSE.");
+      if (notebookSecret.length < 24) throw new Error("Enter the studio relay token (24+ characters). The agent uses a separate notebook Secret.");
+      setSavingNotebook(true);
+      const connections: Connection[] = [];
+      for (const [i, nodeId] of ids.entries()) {
+        const id = uid();
+        const credentialRef = await call<string>("save_credential", { connectionId: id, secret: notebookSecret });
+        connections.push({ id, name: `${host === "colab" ? "Colab" : "Kaggle"} · GPU ${i}`, kind: "relay", url: relayUrl.replace(/\/$/, ""), credentialRef, deploymentId: nodeId, apiFamily: null, concurrency: 1, hosting: host });
+      }
+      await save({ ...settings, connections: [...settings.connections, ...connections] });
+      setNotebookSecret(""); setNotebook(false);
+      notify(`Added ${connections.length} independent notebook GPU node${connections.length === 1 ? "" : "s"}. Check connection after starting the notebook client.`);
+    } catch (e) { notify(String(e)); }
+    finally { setSavingNotebook(false); }
+  };
   const [assistant, setAssistant] = useState<Connection | null>(null);
   const [editing, setEditing] = useState<Connection | null>(null),
     [secret, setSecret] = useState(""),
@@ -110,10 +138,10 @@ export function Connections({
         title="Connections"
         description="Local ComfyUI, isolated RunningHub accounts and private outbound runners."
         action={
-          <button className="primary" onClick={add}>
-            <Plus size={18} />
-            Add connection
-          </button>
+          <div className="row">
+            <button onClick={() => setNotebook(true)}><Cloud size={18} />Colab / Kaggle</button>
+            <button className="primary" onClick={add}><Plus size={18} />Add connection</button>
+          </div>
         }
       />
       <div className="filters" aria-label="Filter connections">
@@ -134,13 +162,13 @@ export function Connections({
                 </span>
                 <div>
                   <h2>{c.name}</h2>
-                  <span className="badge">{connectionTypes[c.kind]?.label ?? c.kind}</span>
+                  <span className="badge">{c.hosting ? `${c.hosting === "kaggle" ? "Kaggle" : "Colab"} · private runner` : connectionTypes[c.kind]?.label ?? c.kind}</span>
                 </div>
               </header>
               <p className="mono">{c.url}</p>
               <small>
                 {c.credentialRef
-                  ? "Credential stored in Keychain"
+                  ? "Credential stored in system vault"
                   : "No credential configured"}{" "}
                 · {c.concurrency} concurrent job{c.concurrency !== 1 ? "s" : ""}
               </small>
@@ -234,6 +262,16 @@ export function Connections({
           </p>
         </div>
       </article>
+      {notebook && <Modal title="Connect notebook GPUs" onClose={() => { if (!savingNotebook) { setNotebook(false); setNotebookSecret(""); } }}>
+        <Picker title="Notebook host" value={host} options={[{id:"colab",label:"Google Colab",description:"One GPU worker"},{id:"kaggle",label:"Kaggle",description:"One or two independent GPU workers"}]} onChange={v => setHost(v as "colab" | "kaggle")} />
+        <p>Open the bundled {host === "colab" ? "deploy/colab" : "deploy/kaggle"}/MyMovie_ComfyUI.ipynb notebook. Install the verified Linux client artifact, then copy its generated node IDs here and into the relay allowlist.</p>
+        <Field label="Authenticated HTTPS relay" value={relayUrl} onChange={setRelayUrl} />
+        <Field label={host === "kaggle" ? "Node IDs (comma separated · one per GPU)" : "Notebook node ID"} value={nodeIds} onChange={setNodeIds} />
+        <Field label="Studio relay token · stored in system vault" type="password" value={notebookSecret} onChange={setNotebookSecret} />
+        <p className="muted">The notebook reads its separate MYMOVIE_AGENT_TOKEN from Secrets. ComfyUI stays on loopback. Two Kaggle nodes have separate queues and concurrency 1; send one lightweight job to each for parallel execution. Their GPU memory is not combined.</p>
+        <p className="muted">A fresh notebook session gets new node IDs. Collect results before stopping. A stale heartbeat is shown as offline; expired running jobs require reconciliation.</p>
+        <button className="primary" disabled={!native || savingNotebook || !nodeIds.trim() || !notebookSecret} onClick={() => void addNotebook()}>{savingNotebook ? "Saving…" : "Add GPU connections"}</button>
+      </Modal>}
       {assistant && <AssistantDialog connection={assistant} close={() => setAssistant(null)} />}
       {editing && (
         <Modal
@@ -286,7 +324,7 @@ export function Connections({
                 label={
                   editing.kind === "relay"
                     ? "Runner node ID"
-                    : "Authorized deployment ID"
+                    : "Default deployment ID (optional)"
                 }
                 value={editing.deploymentId ?? ""}
                 onChange={(v) =>
@@ -294,8 +332,9 @@ export function Connections({
                 }
               />
               <p className="muted">
-                Workflow and AI App IDs are separate. Configure bindings from
-                the account’s verified API schema before submitting.
+                {editing.kind === "relay"
+                  ? "Use the node ID printed by your authenticated runner."
+                  : "Set per-workflow RunningHub deployments in Workflows. Workflow and AI App IDs are separate; use the matching API input schema."}
               </p>
             </>
           )}
@@ -321,7 +360,7 @@ export function Connections({
             onChange={setSecret}
           />
           <p className="muted">
-            Credentials are stored in macOS Keychain and never inside movie
+            Credentials are stored in the system credential vault and never inside movie
             documents.
           </p>
           <div className="row">

@@ -97,6 +97,24 @@ pub struct Workflow {
     pub version: String,
     pub graph: Value,
     pub bindings: Vec<Binding>,
+    #[serde(default = "other_media")]
+    pub media_kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub editor_graph: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub editor_hash: Option<String>,
+    #[serde(default)]
+    pub deployments: Vec<WorkflowDeployment>,
+}
+fn other_media() -> String {
+    "other".into()
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowDeployment {
+    pub connection_id: String,
+    pub deployment_id: String,
+    pub api_family: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -109,6 +127,8 @@ pub struct Connection {
     pub deployment_id: Option<String>,
     pub api_family: Option<String>,
     pub concurrency: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hosting: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

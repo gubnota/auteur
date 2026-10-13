@@ -33,7 +33,131 @@ pub fn import(name: &str, graph: Value) -> Result<Workflow> {
         version,
         graph,
         bindings: vec![],
+        media_kind: "other".into(),
+        editor_graph: None,
+        editor_hash: None,
+        deployments: vec![],
     })
+}
+pub fn preset(kind: &str) -> Result<Workflow> {
+    let (name, api, editor) = match kind {
+        "text-to-image" => (
+            "Text to image",
+            include_str!("../../../examples/workflows/text-to-image_api.json"),
+            include_str!("../../../examples/workflows/text-to-image_editor.json"),
+        ),
+        "masked-edit" => (
+            "Masked clothing-region edit",
+            include_str!("../../../examples/workflows/masked-edit_api.json"),
+            include_str!("../../../examples/workflows/masked-edit_editor.json"),
+        ),
+        "cpu-canary" => (
+            "CPU connection canary",
+            include_str!("../../../examples/workflows/cpu-canary_api.json"),
+            include_str!("../../../examples/workflows/cpu-canary_editor.json"),
+        ),
+        _ => return Err("Unknown image preset".into()),
+    };
+    let mut w = import(name, serde_json::from_str(api)?)?;
+    attach_editor(&mut w, serde_json::from_str(editor)?)?;
+    w.media_kind = "image".into();
+    let fields = match kind {
+        "text-to-image" => vec![
+            ("positivePrompt", "2", "text", "string"),
+            ("negativePrompt", "3", "text", "string"),
+            ("seed", "5", "seed", "number"),
+            ("width", "4", "width", "number"),
+            ("height", "4", "height", "number"),
+        ],
+        "masked-edit" => vec![
+            ("positivePrompt", "2", "text", "string"),
+            ("negativePrompt", "3", "text", "string"),
+            ("seed", "5", "seed", "number"),
+            ("image", "8", "image", "string"),
+            ("mask", "9", "image", "string"),
+        ],
+        _ => vec![],
+    };
+    w.bindings = fields
+        .into_iter()
+        .map(|(s, n, i, t)| Binding {
+            semantic: s.into(),
+            node_id: n.into(),
+            input: i.into(),
+            value_type: t.into(),
+        })
+        .collect();
+    Ok(w)
+}
+/// Preserve the supplied editor document; never infer custom-node widget ordering.
+pub fn attach_editor(workflow: &mut Workflow, editor: Value) -> Result<()> {
+    if workflow.editor_graph.is_some() {
+        return Err("Editor original is already attached; import a new workflow version".into());
+    }
+    let nodes = editor["nodes"]
+        .as_array()
+        .ok_or("Choose a ComfyUI editor-format export")?;
+    for (id, api) in workflow.graph.as_object().ok_or("Invalid API graph")? {
+        if !nodes.iter().any(|n| {
+            n["id"]
+                .as_str()
+                .map(str::to_owned)
+                .or_else(|| n["id"].as_u64().map(|x| x.to_string()))
+                .as_deref()
+                == Some(id)
+                && n["type"] == api["class_type"]
+        }) {
+            return Err(format!(
+                "Editor/API mismatch at node {id}; export both from the same workflow"
+            )
+            .into());
+        }
+    }
+    workflow.editor_hash = Some(format!(
+        "{:x}",
+        Sha256::digest(serde_json::to_vec(&editor)?)
+    ));
+    workflow.editor_graph = Some(editor);
+    Ok(())
+}
+pub fn deployment(
+    workflow: &Workflow,
+    connection: &studio_contracts::Connection,
+) -> Result<studio_contracts::Connection> {
+    let mut c = connection.clone();
+    if c.kind == "runninghub" {
+        if let Some(d) = workflow
+            .deployments
+            .iter()
+            .find(|d| d.connection_id == c.id)
+        {
+            if d.deployment_id.is_empty()
+                || !d.deployment_id.bytes().all(|b| b.is_ascii_digit())
+                || !["workflow", "ai-app"].contains(&d.api_family.as_str())
+            {
+                return Err("Invalid workflow account mapping".into());
+            }
+            c.deployment_id = Some(d.deployment_id.clone());
+            c.api_family = Some(d.api_family.clone());
+        }
+    }
+    Ok(c)
+}
+/// Credentials come from the current vault identity; the destination comes from the receipt.
+pub fn frozen_connection(
+    job: &studio_contracts::Job,
+    current: &studio_contracts::Connection,
+) -> Result<studio_contracts::Connection> {
+    let v = &job.snapshot["connection"];
+    if v["id"].as_str() != Some(&current.id) {
+        return Err("Connection receipt identity mismatch".into());
+    }
+    let mut c = current.clone();
+    c.kind = v["kind"].as_str().ok_or("Receipt kind missing")?.into();
+    c.url = v["url"].as_str().ok_or("Receipt endpoint missing")?.into();
+    c.deployment_id = v["deploymentId"].as_str().map(str::to_owned);
+    c.api_family = v["apiFamily"].as_str().map(str::to_owned);
+    Ok(c)
 }
 pub fn bind(graph: &Value, bindings: &[Binding], values: &Value) -> Result<Value> {
     let mut graph = graph.clone();
@@ -143,6 +267,29 @@ pub fn character_references<'a>(
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn account_mapping_and_receipt_destination_survive_connection_edits() {
+        let mut w = import("fixture", json!({"1":{"class_type":"Output","inputs":{}}})).unwrap();
+        let c: studio_contracts::Connection = serde_json::from_value(json!({"id":"account","name":"RH","kind":"runninghub","url":"https://www.runninghub.ai","credentialRef":"connection:account","deploymentId":"111","apiFamily":"workflow","concurrency":1})).unwrap();
+        w.deployments.push(studio_contracts::WorkflowDeployment {
+            connection_id: "account".into(),
+            deployment_id: "222".into(),
+            api_family: "ai-app".into(),
+        });
+        let selected = deployment(&w, &c).unwrap();
+        assert_eq!(selected.deployment_id.as_deref(), Some("222"));
+        assert_eq!(c.deployment_id.as_deref(), Some("111"));
+        let j: studio_contracts::Job = serde_json::from_value(json!({"id":"job","frameId":"f","workflowId":w.id,"workflowVersion":w.version,"connectionId":"account","state":"submitted","remoteId":"remote","snapshot":{"connection":{"id":"account","kind":"runninghub","url":"https://www.runninghub.ai","deploymentId":"222","apiFamily":"ai-app"}},"results":[],"error":null,"createdAt":"now","updatedAt":"now"})).unwrap();
+        let frozen = frozen_connection(&j, &c).unwrap();
+        assert_eq!(frozen.deployment_id, selected.deployment_id);
+        assert_eq!(frozen.api_family, selected.api_family);
+        assert_eq!(frozen.credential_ref, c.credential_ref);
+        let mut wrong = c.clone();
+        wrong.id = "other-account".into();
+        assert!(frozen_connection(&j, &wrong).is_err());
+        w.deployments[0].deployment_id = "invalid".into();
+        assert!(deployment(&w, &c).is_err());
+    }
     #[test]
     fn imports_preserve_unknown_metadata_and_serialized_motion_json() {
         let raw = json!({"1":{"class_type":"Motion","inputs":{"context":"{\"tracks\":[{\"duration\":5}]}"},"_meta":{"privateExtension":"preserve"}},"2":{"class_type":"Output","inputs":{"image":["1",0]}}});

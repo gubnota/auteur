@@ -231,11 +231,13 @@ impl ProjectStore {
             }
         }
         for w in &old.workflows {
-            if !project
-                .workflows
-                .iter()
-                .any(|x| x.id == w.id && x.version == w.version && x.graph == w.graph)
-            {
+            if !project.workflows.iter().any(|x| {
+                x.id == w.id
+                    && x.version == w.version
+                    && x.graph == w.graph
+                    && (w.editor_graph.is_none()
+                        || (x.editor_graph == w.editor_graph && x.editor_hash == w.editor_hash))
+            }) {
                 return Err("Imported workflow versions are immutable".into());
             }
         }

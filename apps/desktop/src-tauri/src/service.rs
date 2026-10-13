@@ -52,10 +52,11 @@ fn credential(c: &Connection) -> Result<String> {
 fn backend(c: &Connection) -> Result<Box<dyn ExecutionBackend>> {
     Ok(match c.kind.as_str() {
         "comfyui" => Box::new(provider_comfyui::ComfyUi::new(&c.url)?),
-        "runninghub" => Box::new(provider_runninghub::RunningHub::new(
+        "runninghub" => Box::new(provider_runninghub::RunningHub::at(
             credential(c)?,
-            c.deployment_id.as_deref().ok_or("Deployment ID required")?,
-            c.api_family.as_deref().ok_or("API family required")?,
+            c.deployment_id.as_deref().unwrap_or(""),
+            c.api_family.as_deref().unwrap_or("workflow"),
+            &c.url,
         )?),
         "relay" => Box::new(relay(c)?),
         _ => return Err("Unknown backend".into()),
@@ -304,7 +305,6 @@ async fn submit(
     values: Value,
 ) -> Result<Vec<Job>> {
     let c = connection(i, connection_id)?;
-    let b = backend(&c)?;
     let p = store(i)?.read()?;
     let (scene, frame) = p
         .episodes
@@ -322,6 +322,13 @@ async fn submit(
         .iter()
         .find(|w| w.id == workflow_id)
         .ok_or("Workflow missing")?;
+    let c = workflow_core::deployment(w, &c)?;
+    if c.kind == "runninghub" && c.deployment_id.as_deref().is_none_or(str::is_empty) {
+        return Err(
+            "Open Workflows and set this account’s hosted RunningHub Workflow / AI App ID".into(),
+        );
+    }
+    let b = backend(&c)?;
     let seed = u64::from_le_bytes(uuid::Uuid::new_v4().as_bytes()[..8].try_into()?) % (1u64 << 53);
     let mut semantic = json!({"positivePrompt":workflow_core::composed(&p.positive_prompt,scene.positive_prompt.as_deref(),&frame.positive_prompt,frame.include_common),"negativePrompt":workflow_core::composed(&p.negative_prompt,scene.negative_prompt.as_deref(),&frame.negative_prompt,frame.include_common),"seed":seed});
     for binding in &w.bindings {
@@ -402,10 +409,16 @@ async fn submit(
             j.remote_id = Some(remote);
             job_core::transition(&mut j, "submitted")?;
         }
-        Err(_) => {
-            j.error = Some(
-                "Submission outcome unknown. Reconcile with this account before retrying.".into(),
-            );
+        Err(e) => {
+            j.error = Some(e.to_string());
+            if e.downcast_ref::<job_core::SubmissionRejected>().is_some() {
+                job_core::transition(&mut j, "failed")?;
+            } else {
+                j.error = Some(format!(
+                    "{}. Submission outcome unknown; check this account’s task history before retrying.",
+                    e
+                ));
+            }
         }
     }
     job_core::persist(store(i)?, &j)?;
@@ -431,11 +444,7 @@ pub async fn refresh(state: &Arc<Studio>, app: &tauri::AppHandle) -> Result<Vec<
             Ok(c) => c,
             Err(_) => continue,
         };
-        if j.snapshot["connection"]
-            != json!({"id":c.id,"kind":c.kind,"url":c.url,"deploymentId":c.deployment_id,"apiFamily":c.api_family})
-        {
-            continue;
-        }
+        let c = workflow_core::frozen_connection(&j, &c)?;
         let b = match backend(&c) {
             Ok(b) => b,
             Err(_) => continue,
@@ -558,6 +567,64 @@ fn dock(app: &tauri::AppHandle, active: usize) {
     }
 }
 #[tauri::command]
+pub async fn reconcile_job(
+    state: S<'_>,
+    job_id: String,
+    remote_id: Option<String>,
+    confirmed_absent: bool,
+) -> Reply<Vec<Job>> {
+    let i = state.inner.lock().await;
+    let attempts = job_core::list(store(&i).map_err(err)?).map_err(err)?;
+    let mut j = attempts
+        .iter()
+        .cloned()
+        .into_iter()
+        .find(|j| j.id == job_id)
+        .ok_or("Attempt missing")?;
+    if j.state != "unknown" || j.remote_id.is_some() {
+        return Err("Only an unknown submission without a task ID can be reconciled".into());
+    }
+    if let Some(remote) = remote_id.filter(|s| !s.trim().is_empty()) {
+        if confirmed_absent {
+            return Err("Choose either an existing task or a confirmed absent task".into());
+        }
+        if attempts.iter().any(|other| {
+            other.id != j.id
+                && other.connection_id == j.connection_id
+                && other.remote_id.as_deref() == Some(remote.trim())
+        }) {
+            return Err("This provider task is already attached to another attempt".into());
+        }
+        let c =
+            workflow_core::frozen_connection(&j, &connection(&i, &j.connection_id).map_err(err)?)
+                .map_err(err)?;
+        let remote = remote.trim();
+        let status = backend(&c)
+            .map_err(err)?
+            .status(remote)
+            .await
+            .map_err(err)?;
+        if status.state == "unknown" {
+            return Err("The selected account could not verify this task ID".into());
+        }
+        j.remote_id = Some(remote.into());
+        j.snapshot["reconciliation"] = json!({"action":"attached-task","remoteId":remote});
+        j.error = None;
+        job_core::transition(&mut j, "submitted").map_err(err)?;
+    } else if confirmed_absent {
+        j.snapshot["reconciliation"] = json!({"action":"user-confirmed-no-task"});
+        j.error =
+            Some("User checked the provider history and confirmed no task was created".into());
+        job_core::transition(&mut j, "failed").map_err(err)?;
+    } else {
+        return Err(
+            "Provide a verified task ID or confirm no task exists in the provider history".into(),
+        );
+    }
+    job_core::persist(store(&i).map_err(err)?, &j).map_err(err)?;
+    job_core::list(store(&i).map_err(err)?).map_err(err)
+}
+#[tauri::command]
 pub async fn cancel_job(state: S<'_>, job_id: String) -> Reply<Vec<Job>> {
     let i = state.inner.lock().await;
     let mut j = job_core::list(store(&i).map_err(err)?)
@@ -569,12 +636,13 @@ pub async fn cancel_job(state: S<'_>, job_id: String) -> Reply<Vec<Job>> {
         .remote_id
         .as_deref()
         .ok_or("Unknown submission needs manual reconciliation")?;
-    backend(&connection(&i, &j.connection_id).map_err(err)?)
+    let c = workflow_core::frozen_connection(&j, &connection(&i, &j.connection_id).map_err(err)?)
+        .map_err(err)?;
+    backend(&c)
         .map_err(err)?
         .cancel(remote)
         .await
         .map_err(err)?;
-    let c = connection(&i, &j.connection_id).map_err(err)?;
     job_core::transition(
         &mut j,
         if c.kind == "comfyui" {

@@ -80,3 +80,23 @@ Context: Finder cold launch delivers Opened before setup registers Studio; state
 Decision: Create a shared path inbox before Builder, inject it into Studio, and enqueue/deduplicate without accessing managed state in lifecycle callbacks. Recover poisoned inbox locks at this native callback boundary.
 Consequences: Existing saved packages open after initialization without migration. Post-setup frontend event and polling contracts stay unchanged.
 Related files: apps/desktop/src-tauri/src/main.rs, apps/desktop/src-tauri/src/service.rs.
+
+# ADR-0009: Per-workflow RunningHub deployments and explicit recovery
+
+Date: 2026-10-14
+Status: Accepted
+
+Context: Imported API graphs do not contain an authorized hosted deployment, and account defaults cannot describe multiple workflows. Provider refusals were hidden as ambiguous failures.
+Decision: Persist per-workflow/account ID and API family, expose job creation from Workflows, freeze the resolved destination in receipts. Definitive refusals fail safely; uncertain outcomes require provider history reconciliation with no blind retry.
+Consequences: Graphs stay immutable and old documents default to empty mappings. Hosted IDs/input schema still need real verification. Account credentials stay outside documents.
+Related files: crates/workflow-core/src/lib.rs, crates/provider-runninghub/src/lib.rs, apps/desktop/src/features/Library.tsx, apps/desktop/src-tauri/src/service.rs.
+
+# ADR-0010: Versioned CI artifacts for desktop and notebook workers
+
+Date: 2026-10-14
+Status: Accepted
+
+Context: User requires GitLab CI artifacts/tags and deployment of the Linux client to Colab/Kaggle, including two independent GPUs.
+Decision: Validate cross-package version parity before tag builds; publish checksums and immutable GitLab packages/Release links. Retain GitHub draft-release support. Notebook bootstrap verifies the prebuilt Linux artifact and isolates worker GPU/port/node identities.
+Consequences: A GitLab project/eligible macOS runner and live authenticated relay remain external setup. Ad-hoc signing is development distribution only. No credentials or hosted resources are created by these changes.
+Related files: .gitlab-ci.yml, .github/workflows/, scripts/gitlab-release.py, scripts/notebook-bootstrap.py, docs/CI_RELEASES.md.

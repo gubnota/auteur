@@ -10,8 +10,8 @@
 ## Current milestone
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
 - Native local-studio foundation implemented; remote hardening remains open.
-- Version 0.1.1: ARM64 native debug and release .app builds pass.
-- Installed release: /Applications/MyMovie Studio.app (local ad-hoc signature).
+- Version 0.1.2: ARM64 native debug and release .app builds pass.
+- Installed release: 0.1.2 at /Applications/MyMovie Studio.app (local ad-hoc signature).
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.
 - Real SQLite package persistence; browser preview is memory-only.
 - Native picker import, linked character reference and collection verified.
@@ -67,6 +67,8 @@
 - Google, DeepSeek and OpenRouter optional prompt assistance implemented.
 - fal/custom API generation adapters remain configuration-only.
 - Imported graphs require explicit semantic bindings; no guessed graph IDs.
+- Workflows expose keyframe job creation and per-account RunningHub deployment/family maps.
+- Provider rejections become failed; ambiguous submissions require history reconciliation.
 - Durable jobs/receipts/results; unknown submission blocks blind retry.
 - Per-connection concurrency admission, cancel and result collection implemented.
 - Desktop polls providers; relay offers authenticated replayable SSE.
@@ -75,7 +77,8 @@
 - Notifications and Logs histories have clear controls.
 
 ## Private runner and storage
-- Authenticated single-node relay and outbound agent are initial implementations.
+- Authenticated node-scoped relay and outbound agent are initial implementations.
+- Independent Kaggle workers isolate GPU/port/node identity; live deployment pending.
 - Agent exposes typed doctor/inventory/drain/bootstrap/provision operations.
 - Generation receipts precede ComfyUI submission; stale leases become unknown.
 - Storage transfer manifests support hash/size verification and resumed download.
@@ -101,8 +104,10 @@
 - Latest exact check evidence and gaps: docs/TASK_LOG.md.
 - OrbStack engine must run for Docker; its GUI window may be closed.
 - LTX/MINIMAX graphs were inspected, not GPU-executed.
+- Supplied RunningHub Workflow ID: 2110044532631932930; graph association/live acceptance pending.
 - Live bindings/AI App schema and RunPod image/relay/storage choices still needed.
-- Release signing/notarization, DMG, CI and full access audit remain open.
+- GitLab/GitHub CI configure native packages, Linux client and version-tag release artifacts.
+- CI execution on hosted runners, signing/notarization and full access audit remain open.
 - Browser profiles, remote training and Homer interoperability are later work.
 
 ## Agent workflow

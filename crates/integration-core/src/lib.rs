@@ -51,6 +51,14 @@ impl SettingsStore {
             {
                 return Err("Unknown connection type".into());
             }
+            if c.hosting
+                .as_deref()
+                .is_some_and(|h| !["colab", "kaggle"].contains(&h) || c.kind != "relay")
+            {
+                return Err(
+                    "Notebook hosting requires a supported private relay connection".into(),
+                );
+            }
             let url = reqwest::Url::parse(&c.url)?;
             if !url.username().is_empty()
                 || url.password().is_some()
@@ -80,7 +88,9 @@ impl SettingsStore {
                 "openrouter" => Some("openrouter.ai"),
                 _ => None,
             };
-            if known.is_some_and(|h| url.host_str() != Some(h)) {
+            let runninghub_cn =
+                c.kind == "runninghub" && url.host_str() == Some("www.runninghub.cn");
+            if known.is_some_and(|h| url.host_str() != Some(h)) && !runninghub_cn {
                 return Err("Provider endpoint does not match its official host".into());
             }
         }
