@@ -1,0 +1,33 @@
+[package]
+name="mymovie-studio"
+version.workspace=true
+edition.workspace=true
+license.workspace=true
+[build-dependencies]
+tauri-build= {version="2",features= [] }
+[dependencies]
+tauri= {version="2",features= [] }
+tauri-plugin-dialog="2"
+tauri-plugin-notification="2"
+keyring= {version="3",features= ["apple-native"] }
+studio-contracts.workspace=true
+project-core.workspace=true
+asset-core.workspace=true
+workflow-core.workspace=true
+job-core.workspace=true
+integration-core= {path="../../../crates/integration-core"}
+provider-comfyui= {path="../../../crates/provider-comfyui"}
+provider-runninghub= {path="../../../crates/provider-runninghub"}
+provider-relay= {path="../../../crates/provider-relay"}
+provision-core= {path="../../../crates/provision-core"}
+storage-s3= {path="../../../crates/storage-s3"}
+serde_json.workspace=true
+sha2.workspace=true
+tokio.workspace=true
+reqwest.workspace=true
+uuid.workspace=true
+tempfile.workspace=true
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2="0.6"
+objc2-app-kit= {version="0.3",features= ["NSApplication", "NSDockTile"] }
+objc2-foundation= {version="0.3",features= ["NSString"] }

@@ -1,0 +1,26 @@
+{
+  "name": "mymovie-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/desktop",
+    "packages/schema"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @mymovie/desktop",
+    "build": "npm run build -w @mymovie/desktop",
+    "typecheck": "npm run typecheck -w @mymovie/desktop",
+    "lint": "npm run typecheck",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "tauri:dev": "cd apps/desktop && tauri dev",
+    "tauri:build": "cd apps/desktop && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.0",
+    "vitest": "^5.0.4",
+    "@playwright/test": "^1.55.0",
+    "prettier": "^3.6.2"
+  }
+}

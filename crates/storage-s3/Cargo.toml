@@ -1,0 +1,13 @@
+[package]
+name="storage-s3"
+version.workspace=true
+edition.workspace=true
+license.workspace=true
+[dependencies]
+project-core.workspace=true
+serde.workspace=true
+serde_json.workspace=true
+reqwest.workspace=true
+sha2.workspace=true
+tokio.workspace=true
+tokio-util = { version = "0.7", features = ["io"] }

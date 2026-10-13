@@ -1,0 +1,12 @@
+[package]
+name="provider-relay"
+version.workspace=true
+edition.workspace=true
+license.workspace=true
+[dependencies]
+project-core.workspace=true
+job-core.workspace=true
+serde_json.workspace=true
+reqwest.workspace=true
+async-trait.workspace=true
+storage-s3={path="../storage-s3"}

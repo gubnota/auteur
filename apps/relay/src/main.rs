@@ -1,0 +1,342 @@
+use axum::{
+    Json, Router,
+    body::Bytes,
+    extract::{DefaultBodyLimit, Path, State},
+    http::{HeaderMap, StatusCode},
+    response::sse::{Event, KeepAlive, Sse},
+    routing::{get, post},
+};
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
+type Reply<T> = Result<T, (StatusCode, String)>;
+struct Data {
+    db: Mutex<rusqlite::Connection>,
+    root: PathBuf,
+    desktop: String,
+    agent: String,
+    node: String,
+}
+type Shared = Arc<Data>;
+fn failure(_: impl std::fmt::Display) -> (StatusCode, String) {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Relay persistence error".into(),
+    )
+}
+fn auth(s: &Data, h: &HeaderMap, agent: bool) -> Reply<()> {
+    let expected = if agent { &s.agent } else { &s.desktop };
+    let actual = h
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if actual != format!("Bearer {expected}") {
+        return Err((StatusCode::UNAUTHORIZED, "Invalid authentication".into()));
+    }
+    Ok(())
+}
+fn either(s: &Data, h: &HeaderMap) -> Reply<()> {
+    auth(s, h, false).or_else(|_| auth(s, h, true))
+}
+fn event(db: &rusqlite::Connection, id: &str, value: &Value) -> Reply<()> {
+    db.execute(
+        "INSERT INTO events(job,json) VALUES(?1,?2)",
+        rusqlite::params![id, value.to_string()],
+    )
+    .map_err(failure)?;
+    Ok(())
+}
+fn read(db: &rusqlite::Connection, id: &str) -> Reply<Value> {
+    let raw = db
+        .query_row("SELECT json FROM jobs WHERE id=?1", [id], |r| {
+            r.get::<_, String>(0)
+        })
+        .map_err(|_| (StatusCode::NOT_FOUND, "Job missing".into()))?;
+    serde_json::from_str(&raw).map_err(failure)
+}
+async fn health(
+    State(s): State<Shared>,
+    h: HeaderMap,
+    Path(node): Path<String>,
+) -> Reply<Json<Value>> {
+    auth(&s, &h, false)?;
+    if node != s.node {
+        return Err((StatusCode::NOT_FOUND, "Node missing".into()));
+    }
+    let db = s.db.lock().unwrap();
+    let record: Option<String> = db
+        .query_row("SELECT json FROM nodes WHERE id=?1", [node], |r| r.get(0))
+        .ok();
+    Ok(Json(
+        record
+            .and_then(|r| serde_json::from_str(&r).ok())
+            .unwrap_or(json!({"connected":false,"state":"awaiting-agent"})),
+    ))
+}
+async fn submit(
+    State(s): State<Shared>,
+    h: HeaderMap,
+    Json(mut v): Json<Value>,
+) -> Reply<Json<Value>> {
+    auth(&s, &h, false)?;
+    let id = v["id"]
+        .as_str()
+        .ok_or((StatusCode::BAD_REQUEST, "Attempt ID required".into()))?
+        .to_string();
+    uuid::Uuid::parse_str(&id)
+        .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid attempt ID".into()))?;
+    if v["nodeId"] != s.node
+        || !matches!(
+            v["kind"].as_str(),
+            Some("generation" | "doctor" | "inventory" | "drain" | "bootstrap" | "provision")
+        )
+    {
+        return Err((StatusCode::BAD_REQUEST, "Invalid target or action".into()));
+    }
+    let mut db = s.db.lock().unwrap();
+    let tx = db.transaction().map_err(failure)?;
+    if let Ok(old) = read(&tx, &id) {
+        if old["payload"] != v["payload"]
+            || old["kind"] != v["kind"]
+            || old["nodeId"] != v["nodeId"]
+        {
+            return Err((
+                StatusCode::CONFLICT,
+                "Idempotency key reused with different request".into(),
+            ));
+        }
+        return Ok(Json(old));
+    }
+    v["state"] = json!("queued");
+    v["outputs"] = json!([]);
+    tx.execute(
+        "INSERT INTO jobs VALUES(?1,?2,?3,0)",
+        rusqlite::params![id, s.node, v.to_string()],
+    )
+    .map_err(failure)?;
+    event(&tx, &id, &v)?;
+    tx.commit().map_err(failure)?;
+    Ok(Json(v))
+}
+async fn status(
+    State(s): State<Shared>,
+    h: HeaderMap,
+    Path(id): Path<String>,
+) -> Reply<Json<Value>> {
+    either(&s, &h)?;
+    Ok(Json(read(&s.db.lock().unwrap(), &id)?))
+}
+async fn cancel(
+    State(s): State<Shared>,
+    h: HeaderMap,
+    Path(id): Path<String>,
+) -> Reply<Json<Value>> {
+    auth(&s, &h, false)?;
+    let mut db = s.db.lock().unwrap();
+    let tx = db.transaction().map_err(failure)?;
+    let mut v = read(&tx, &id)?;
+    match v["state"].as_str() {
+        Some("queued") => v["state"] = json!("canceled"),
+        Some("running") => v["state"] = json!("cancel_requested"),
+        _ => return Err((StatusCode::CONFLICT, "Cannot cancel this state".into())),
+    };
+    tx.execute(
+        "UPDATE jobs SET json=?1 WHERE id=?2",
+        rusqlite::params![v.to_string(), id],
+    )
+    .map_err(failure)?;
+    event(&tx, &id, &v)?;
+    tx.commit().map_err(failure)?;
+    Ok(Json(v))
+}
+async fn claim(State(s): State<Shared>, h: HeaderMap, Json(v): Json<Value>) -> Reply<Json<Value>> {
+    auth(&s, &h, true)?;
+    if v["nodeId"] != s.node {
+        return Err((StatusCode::FORBIDDEN, "Wrong node".into()));
+    }
+    let mut db = s.db.lock().unwrap();
+    let tx = db.transaction().map_err(failure)?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let mut st = tx
+        .prepare("SELECT id,json FROM jobs WHERE lease>0 AND lease<?1")
+        .map_err(failure)?;
+    let expired = st
+        .query_map([now], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })
+        .map_err(failure)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(failure)?;
+    drop(st);
+    for (id, raw) in expired {
+        let mut j: Value = serde_json::from_str(&raw).map_err(failure)?;
+        if matches!(j["state"].as_str(), Some("running" | "cancel_requested")) {
+            j["state"] = json!("unknown");
+            j["error"] =
+                json!("Lease expired. Reconcile agent receipt; no automatic resubmission.");
+            tx.execute(
+                "UPDATE jobs SET json=?1,lease=0 WHERE id=?2",
+                rusqlite::params![j.to_string(), id],
+            )
+            .map_err(failure)?;
+            event(&tx, &id, &j)?;
+        }
+    }
+    let raw:Option<(String,String)>=tx.query_row("SELECT id,json FROM jobs WHERE json_extract(json,'$.state')='queued' AND node=?1 ORDER BY rowid LIMIT 1",[&s.node],|r|Ok((r.get(0)?,r.get(1)?))).ok();
+    let answer = if let Some((id, raw)) = raw {
+        let mut j: Value = serde_json::from_str(&raw).map_err(failure)?;
+        j["state"] = json!("running");
+        let lease = project_core::id();
+        j["leaseToken"] = json!(lease);
+        tx.execute(
+            "UPDATE jobs SET json=?1,lease=?2 WHERE id=?3",
+            rusqlite::params![j.to_string(), now + 120, id],
+        )
+        .map_err(failure)?;
+        event(&tx, &id, &j)?;
+        j
+    } else {
+        Value::Null
+    };
+    tx.commit().map_err(failure)?;
+    Ok(Json(answer))
+}
+async fn report(
+    State(s): State<Shared>,
+    h: HeaderMap,
+    Path(id): Path<String>,
+    Json(v): Json<Value>,
+) -> Reply<Json<Value>> {
+    auth(&s, &h, true)?;
+    let mut db = s.db.lock().unwrap();
+    let tx = db.transaction().map_err(failure)?;
+    let mut old = read(&tx, &id)?;
+    if old["nodeId"] != s.node
+        || old["leaseToken"] != v["leaseToken"]
+        || old["leaseToken"].is_null()
+    {
+        return Err((StatusCode::CONFLICT, "Lease identity mismatch".into()));
+    }
+    if matches!(
+        old["state"].as_str(),
+        Some("completed" | "failed" | "canceled")
+    ) {
+        return Ok(Json(old));
+    }
+    if !matches!(
+        v["state"].as_str(),
+        Some("running" | "collecting" | "completed" | "failed" | "canceled" | "unknown")
+    ) {
+        return Err((StatusCode::BAD_REQUEST, "Invalid state".into()));
+    }
+    let cancel = old["state"] == "cancel_requested";
+    old["state"] = if cancel && v["state"] == "running" {
+        json!("cancel_requested")
+    } else {
+        v["state"].clone()
+    };
+    for key in ["outputs", "error", "report", "remoteId"] {
+        if v.get(key).is_some() {
+            old[key] = v[key].clone();
+        }
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    tx.execute(
+        "UPDATE jobs SET json=?1,lease=?2 WHERE id=?3",
+        rusqlite::params![
+            old.to_string(),
+            if matches!(old["state"].as_str(), Some("running" | "cancel_requested")) {
+                now + 120
+            } else {
+                0
+            },
+            id
+        ],
+    )
+    .map_err(failure)?;
+    event(&tx, &id, &old)?;
+    tx.commit().map_err(failure)?;
+    Ok(Json(old))
+}
+async fn heartbeat(
+    State(s): State<Shared>,
+    h: HeaderMap,
+    Json(v): Json<Value>,
+) -> Reply<Json<Value>> {
+    auth(&s, &h, true)?;
+    if v["nodeId"] != s.node {
+        return Err((StatusCode::FORBIDDEN, "Wrong node".into()));
+    }
+    s.db.lock()
+        .unwrap()
+        .execute(
+            "INSERT INTO nodes VALUES(?1,?2) ON CONFLICT(id) DO UPDATE SET json=excluded.json",
+            rusqlite::params![s.node, v.to_string()],
+        )
+        .map_err(failure)?;
+    Ok(Json(json!({"accepted":true})))
+}
+async fn upload(State(s): State<Shared>, h: HeaderMap, bytes: Bytes) -> Reply<Json<Value>> {
+    either(&s, &h)?;
+    let name = h
+        .get("x-asset-name")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("result.png");
+    let id = project_core::id();
+    let metadata = json!({"id":id,"name":name,"size":bytes.len(),"sha256":format!("{:x}",Sha256::digest(&bytes))});
+    let dest = s.root.join("assets").join(&id);
+    tokio::fs::write(dest, &bytes).await.map_err(failure)?;
+    s.db.lock()
+        .unwrap()
+        .execute(
+            "INSERT INTO assets VALUES(?1,?2)",
+            rusqlite::params![id, metadata.to_string()],
+        )
+        .map_err(failure)?;
+    Ok(Json(metadata))
+}
+async fn asset(State(s): State<Shared>, h: HeaderMap, Path(id): Path<String>) -> Reply<Bytes> {
+    either(&s, &h)?;
+    uuid::Uuid::parse_str(&id).map_err(|_| (StatusCode::BAD_REQUEST, "Invalid asset ID".into()))?;
+    let data = tokio::fs::read(s.root.join("assets").join(id))
+        .await
+        .map_err(|_| (StatusCode::NOT_FOUND, "Asset missing".into()))?;
+    Ok(data.into())
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let root = PathBuf::from(std::env::var("MYMOVIE_RELAY_DATA").unwrap_or("relay-data".into()));
+    std::fs::create_dir_all(root.join("assets"))?;
+    let db = rusqlite::Connection::open(root.join("relay.sqlite"))?;
+    db.execute_batch("PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,node TEXT,json TEXT,lease INTEGER); CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,job TEXT,json TEXT); CREATE TABLE IF NOT EXISTS assets(id TEXT PRIMARY KEY,json TEXT); CREATE TABLE IF NOT EXISTS nodes(id TEXT PRIMARY KEY,json TEXT);")?;
+    let desktop = std::env::var("MYMOVIE_DESKTOP_TOKEN")?;
+    let agent = std::env::var("MYMOVIE_AGENT_TOKEN")?;
+    if desktop.len() < 24 || agent.len() < 24 || desktop == agent {
+        return Err("Set distinct 24+ character desktop and agent tokens".into());
+    }
+    let s = Arc::new(Data {
+        db: Mutex::new(db),
+        root,
+        desktop,
+        agent,
+        node: std::env::var("MYMOVIE_NODE_ID").unwrap_or("local-cpu".into()),
+    });
+    let router=Router::new().route("/v1/nodes/{node}",get(health)).route("/v1/jobs",post(submit)).route("/v1/jobs/{id}",get(status)).route("/v1/jobs/{id}/cancel",post(cancel)).route("/v1/agent/claim",post(claim)).route("/v1/agent/jobs/{id}",post(report)).route("/v1/agent/heartbeat",post(heartbeat)).route("/v1/assets",post(upload)).route("/v1/assets/{id}",get(asset)).route("/v1/events",get(|State(s):State<Shared>,h:HeaderMap|async move{
+ auth(&s,&h,false)?;let mut cursor=h.get("last-event-id").and_then(|v|v.to_str().ok()).and_then(|v|v.parse::<i64>().ok()).unwrap_or(0);
+ let stream=async_stream::stream!{loop{let rows={let db=s.db.lock().unwrap();let mut st=db.prepare("SELECT seq,json FROM events WHERE seq>?1 ORDER BY seq LIMIT 100").unwrap();st.query_map([cursor],|r|Ok((r.get::<_,i64>(0)?,r.get::<_,String>(1)?))).unwrap().collect::<Result<Vec<_>,_>>()};match rows{Ok(rows)=>for (seq,raw) in rows{cursor=seq;yield Ok::<_,std::convert::Infallible>(Event::default().id(seq.to_string()).event("job").data(raw));},Err(_)=>break}tokio::time::sleep(std::time::Duration::from_secs(1)).await;}};
+ Ok::<_,(StatusCode,String)>(Sse::new(stream).keep_alive(KeepAlive::default()))
+ })).layer(DefaultBodyLimit::max(1024*1024*1024)).with_state(s);
+    let addr = std::env::var("MYMOVIE_RELAY_BIND").unwrap_or("127.0.0.1:8787".into());
+    axum::serve(tokio::net::TcpListener::bind(addr).await?, router).await?;
+    Ok(())
+}

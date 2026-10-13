@@ -1,0 +1,16 @@
+[package]
+name="mymovie-agent"
+version.workspace=true
+edition.workspace=true
+license.workspace=true
+[dependencies]
+clap={version="4",features=["derive"]}
+tokio.workspace=true
+reqwest.workspace=true
+serde_json.workspace=true
+project-core.workspace=true
+job-core.workspace=true
+provider-comfyui={path="../../crates/provider-comfyui"}
+provision-core={path="../../crates/provision-core"}
+storage-s3={path="../../crates/storage-s3"}
+studio-contracts.workspace=true

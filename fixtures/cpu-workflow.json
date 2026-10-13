@@ -1,0 +1,4 @@
+{
+  "1": {"class_type": "EmptyImage", "inputs": {"width": 64, "height": 64, "batch_size": 1, "color": 14155634}},
+  "2": {"class_type": "SaveImage", "inputs": {"images": ["1", 0], "filename_prefix": "MyMovie_CPU_Canary"}}
+}

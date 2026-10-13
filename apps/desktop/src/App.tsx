@@ -1,0 +1,1168 @@
+import { useState, useEffect, useRef, type ReactNode } from "react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { listen } from "@tauri-apps/api/event";
+import {
+  Film,
+  Cloud,
+  Layers,
+  Users,
+  Image,
+  Workflow as WorkflowIcon,
+  Clapperboard,
+  Server,
+  Settings,
+  Bell,
+  ScrollText,
+  Plus,
+  FolderOpen,
+  ChevronUp,
+  ChevronDown,
+  X,
+  Search,
+  Check,
+  ArrowLeft,
+} from "lucide-react";
+import {
+  call,
+  native,
+  pickDestination,
+  pickFile,
+  pickReferenceImages,
+} from "./lib/bridge";
+import {
+  uid,
+  makeFrame,
+  type Project,
+  type AppSettings,
+  type Job,
+} from "./lib/types";
+import { Modal, Field, Picker, Empty } from "./components/Controls";
+import { AppSymbol } from "./components/AppSymbol";
+import { fileDropPoint } from "./lib/file-drop";
+import { Board } from "./features/Board";
+import { Characters, Library, Workflows, Renders } from "./features/Library";
+import { Connections, Preferences } from "./features/Connections";
+const routes = [
+  ["Keyframes", Layers],
+  ["Characters", Users],
+  ["Library", Image],
+  ["Workflows", WorkflowIcon],
+  ["Renders", Clapperboard],
+  ["Connections", Server],
+  ["Settings", Settings],
+  ["Notifications", Bell],
+  ["Logs", ScrollText],
+] as const;
+const initialSettings: AppSettings = {
+  connections: [],
+  theme: "light",
+  queueHeight: 180,
+  storage: {},
+  notifications: [],
+  logs: [],
+};
+export type Update = (fn: (p: Project) => void) => void;
+export default function App() {
+  const [p, setP] = useState<Project | null>(null),
+    [root, setRoot] = useState(""),
+    [route, setRoute] = useState("Keyframes"),
+    [episodeId, setEpisodeId] = useState(""),
+    [settings, setSettings] = useState(initialSettings),
+    [jobs, setJobs] = useState<Job[]>([]),
+    [status, setStatus] = useState("Saved locally"),
+    [modal, setModal] = useState<ReactNode>(null),
+    [toasts, setToasts] = useState<{ id: string; message: string }[]>([]),
+    [height, setHeight] = useState(180),
+    [expanded, setExpanded] = useState(true);
+  const [importing, setImporting] = useState(false);
+  const [importMode, setImportMode] = useState("copy");
+  const importingRef = useRef(false);
+  const [recent, setRecent] = useState<
+    { path: string; name: string; opened: string }[]
+  >([]);
+  const generation = useRef(0);
+  const current = useRef<Project | null>(null),
+    revision = useRef(0),
+    pending = useRef(Promise.resolve()),
+    drag = useRef<{ start: number; height: number } | null>(null);
+  const dropHandler = useRef<
+    (paths: string[], target: HTMLElement | null) => void
+  >(() => {});
+  useEffect(() => {
+    if (!native) return;
+    let stopped = false;
+    const listening = getCurrentWebview().onDragDropEvent((event) => {
+      document
+        .querySelectorAll(".file-drop-hover")
+        .forEach((el) => el.classList.remove("file-drop-hover"));
+      if (stopped || event.payload.type === "leave") return;
+      const point = fileDropPoint(
+        event.payload.position,
+        navigator.platform,
+        window.devicePixelRatio,
+      );
+      const target =
+        document
+          .elementFromPoint(point.x, point.y)
+          ?.closest<HTMLElement>("[data-file-drop]") ?? null;
+      if (event.payload.type === "drop")
+        dropHandler.current(event.payload.paths, target);
+      else target?.classList.add("file-drop-hover");
+    });
+    void listening.catch(() =>
+      notify(
+        "File drops are unavailable. Restart the app or use Import media.",
+      ),
+    );
+    return () => {
+      stopped = true;
+      void listening.then((unlisten) => unlisten()).catch(() => {});
+    };
+  }, []);
+  const notify = (message: string) => {
+    const id = uid();
+    setToasts((t) => [...t.slice(-3), { id, message }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6500);
+  };
+  const run = async <T,>(fn: () => Promise<T>): Promise<T | undefined> => {
+    try {
+      return await fn();
+    } catch (e) {
+      notify(String(e));
+      return undefined;
+    }
+  };
+  const loaded = (project: Project, path: string) => {
+    generation.current++;
+    current.current = project;
+    revision.current = project.revision;
+    setP(project);
+    setRoot(path);
+    setEpisodeId(project.episodes[0]?.id ?? "");
+    setStatus("Saved locally");
+    void run(async () => setJobs(await call<Job[]>("list_jobs")));
+    if (native) void run(async () => setRecent(await call("recent_projects")));
+  };
+  useEffect(() => {
+    void run(async () => {
+      const s = await call<AppSettings>("get_settings");
+      setSettings(s);
+      setHeight(s.queueHeight || 180);
+      if (native) setRecent(await call("recent_projects"));
+    });
+    if (!native) return;
+    const unsub = listen<string[]>("opened-projects", (event) => {
+      const path = event.payload[0];
+      if (path)
+        void run(async () =>
+          loaded(await call<Project>("open_project", { path }), path),
+        );
+    });
+    void run(async () => {
+      const paths = await call<string[]>("take_opened_projects");
+      if (paths[0])
+        loaded(
+          await call<Project>("open_project", { path: paths[0] }),
+          paths[0],
+        );
+    });
+    return () => {
+      void unsub.then((fn) => fn());
+    };
+  }, []);
+  useEffect(() => {
+    document.documentElement.dataset.theme = settings.theme || "light";
+  }, [settings.theme]);
+  useEffect(() => {
+    if (!native || !p) return;
+    const timer = setInterval(() => {
+      void run(async () => {
+        setJobs(await call<Job[]>("list_jobs"));
+        setSettings(await call<AppSettings>("get_settings"));
+        if (status === "Saved locally") {
+          const saved = await call<Project>("get_project");
+          if (saved.revision > revision.current) {
+            revision.current = saved.revision;
+            current.current = saved;
+            setP(saved);
+          }
+        }
+      });
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [p?.id, status]);
+  const update: Update = (fn) => {
+    if (!current.current) return;
+    const epoch = generation.current;
+    const next = structuredClone(current.current);
+    fn(next);
+    current.current = next;
+    setP(next);
+    setStatus("Saving…");
+    pending.current = pending.current.then(async () => {
+      if (epoch !== generation.current) return;
+      try {
+        const saved = await call<Project>("save_project", {
+          project: next,
+          expectedRevision: revision.current,
+        });
+        revision.current = saved.revision;
+        if (current.current === next) {
+          current.current = saved;
+          setP(saved);
+          setStatus(native ? "Saved locally" : "Preview · memory only");
+        }
+      } catch (e) {
+        generation.current++;
+        setStatus("Save failed · reload required");
+        notify(String(e));
+        if (native) {
+          const saved = await call<Project>("get_project");
+          current.current = saved;
+          revision.current = saved.revision;
+          setP(saved);
+        }
+      }
+    });
+  };
+  const saveSettings = async (s: AppSettings) => {
+    const saved = await call<AppSettings>("save_settings", { settings: s });
+    setSettings(saved);
+  };
+  const open = () =>
+    void run(async () => {
+      await pending.current;
+      const path = await pickFile("project");
+      if (path) loaded(await call<Project>("open_project", { path }), path);
+    });
+  const create = (name: string, demo: boolean) =>
+    void run(async () => {
+      await pending.current;
+      const path = await pickDestination(name);
+      if (path) {
+        loaded(
+          await call<Project>("create_project", { path, name, demo }),
+          path,
+        );
+        setModal(null);
+      }
+    });
+  const newMovie = () =>
+    setModal(<NewMovie onClose={() => setModal(null)} onCreate={create} />);
+  const demoPreview = () => {
+    const pilot = uid(),
+      characters = ["Mira", "Old Sal", "The Keeper"].map((name) => ({
+        id: uid(),
+        name,
+        description: "Sample character · add appearance and continuity notes",
+        assetIds: [],
+        revision: 1,
+      }));
+    loaded(
+      {
+        id: uid(),
+        name: "The Lighthouse Keeper",
+        revision: 0,
+        ratio: "16:9",
+        positivePrompt: "Cinematic light, coherent characters, natural detail",
+        negativePrompt: "Artifacts, text, watermark",
+        characters,
+        assets: [],
+        workflows: [],
+        episodes: [
+          {
+            id: pilot,
+            name: "Pilot",
+            scenes: [
+              {
+                id: uid(),
+                name: "The lighthouse",
+                positivePrompt: null,
+                negativePrompt: null,
+                shots: [
+                  {
+                    id: uid(),
+                    name: "Arrival at the coast",
+                    frames: Array.from({ length: 4 }, (_, i) => ({
+                      ...makeFrame(i + 1),
+                      positivePrompt: [
+                        "A lighthouse watches over a quiet coastline at dawn.",
+                        "Mira arrives, wind moving through her coat.",
+                        "Old Sal waits by the keeper’s door.",
+                        "A storm gathers beyond the bay.",
+                      ][i],
+                      characterIds: [characters[0].id],
+                    })),
+                  },
+                ],
+              },
+            ],
+          },
+          { id: uid(), name: "The Storm", scenes: [] },
+        ],
+      },
+      "",
+    );
+  };
+  const episode = p?.episodes.find((e) => e.id === episodeId) ?? p?.episodes[0];
+  const queueActions = async (
+    command: string,
+    args: Record<string, unknown> = {},
+  ) => {
+    await run(async () => {
+      await pending.current;
+      await call(command, args);
+      setJobs(await call<Job[]>("list_jobs"));
+    });
+  };
+  const chooseJob = (frameId: string) => {
+    if (!p) return;
+    setModal(
+      <SubmitDialog
+        project={p}
+        frameId={frameId}
+        settings={settings}
+        onClose={() => setModal(null)}
+        submit={(workflowId, connectionId, values) => {
+          setModal(null);
+          void queueActions("submit_job", {
+            frameId,
+            workflowId,
+            connectionId,
+            values,
+          });
+        }}
+      />,
+    );
+  };
+  const importFile = (kind: "media" | "workflow") =>
+    void run(async () => {
+      const epoch = generation.current;
+      const path = await pickFile(kind);
+      if (epoch !== generation.current)
+        throw new Error("Movie changed during import");
+      if (path)
+        await mutateMedia(
+          kind === "media" ? "import_asset" : "import_workflow",
+          { path, linked: importMode === "link" },
+          `${kind === "media" ? "Media" : "Workflow"} imported`,
+        );
+    });
+  const importCharacterReferences = async (characterId: string) => {
+    const epoch = generation.current;
+    const paths = await pickReferenceImages();
+    if (epoch !== generation.current)
+      throw new Error("Movie changed during import");
+    if (!paths.length) return;
+    await mutateMedia(
+      "import_character_references",
+      { characterId, paths, linked: importMode === "link" },
+      "Reference images imported and attached",
+    );
+  };
+  dropHandler.current = (paths, target) => {
+    if (!current.current || !paths.length || importingRef.current) return;
+    if (!target) {
+      notify("Drop files onto Library, a character, a scene, or a keyframe");
+      return;
+    }
+    const epoch = generation.current;
+    const args = {
+      paths,
+      frameId: target.dataset.frameId ?? null,
+      shotId: target.dataset.shotId ?? null,
+      episodeId: target.dataset.episodeId ?? null,
+      sceneId: target.dataset.sceneId ?? null,
+      newScene: target.dataset.fileDrop === "new-scene",
+      characterId: target.dataset.characterId ?? null,
+      linked: importMode === "link",
+    };
+    importingRef.current = true;
+    setImporting(true);
+    setStatus("Importing files…");
+    const operation = pending.current.then(async () => {
+      if (epoch !== generation.current)
+        throw new Error("Movie changed during import");
+      const project = await call<Project>("import_media_drop", args);
+      revision.current = project.revision;
+      current.current = project;
+      setP(project);
+      if (target.dataset.fileDrop === "library") setRoute("Library");
+      notify(
+        args.characterId
+          ? "Character reference images attached"
+          : args.newScene
+            ? "Scene created from images"
+            : args.frameId
+              ? "Keyframe image assigned"
+              : args.episodeId
+                ? "Images imported as keyframes"
+                : "Media imported into Library",
+      );
+    });
+    pending.current = operation
+      .catch((e) => notify(String(e)))
+      .finally(() => {
+        importingRef.current = false;
+        setStatus("Saved locally");
+        setImporting(false);
+      });
+  };
+  const mutateMedia = async (
+    command: string,
+    args: Record<string, unknown>,
+    message: string,
+  ) => {
+    if (importingRef.current) return;
+    const epoch = generation.current;
+    importingRef.current = true;
+    setImporting(true);
+    setStatus("Updating media…");
+    const operation = pending.current.then(async () => {
+      if (epoch !== generation.current)
+        throw new Error("Movie changed during import");
+      const project = await call<Project>(command, args);
+      revision.current = project.revision;
+      current.current = project;
+      setP(project);
+      notify(message);
+    });
+    pending.current = operation.catch(() => {});
+    try {
+      await operation;
+    } finally {
+      importingRef.current = false;
+      setImporting(false);
+      setStatus("Saved locally");
+    }
+  };
+  const persistHeight = (h: number) => {
+    void run(() => saveSettings({ ...settings, queueHeight: h }));
+  };
+  const resize = (clientY: number) => {
+    if (drag.current) {
+      setHeight(
+        Math.max(
+          96,
+          Math.min(
+            window.innerHeight * 0.65,
+            drag.current.height + drag.current.start - clientY,
+          ),
+        ),
+      );
+    }
+  };
+  return (
+    <div className="app" inert={importing}>
+      {!p ? (
+        <main className="welcome">
+          <div className="brand-mark">
+            <AppSymbol />
+          </div>
+          <span className="eyebrow">MYMOVIE STUDIO</span>
+          <h1>
+            Every movie begins
+            <br />
+            with a moment.
+          </h1>
+          <p>
+            Bring your characters, keyframes and creative direction together in
+            a portable film studio.
+          </p>
+          <div className="welcome-actions">
+            <button className="welcome-card" onClick={open}>
+              <FolderOpen size={30} />
+              <strong>Open a movie</strong>
+              <span>Pick up where your story left off.</span>
+              <small>Choose a .mymovie document →</small>
+            </button>
+            <button className="welcome-card new" onClick={newMovie}>
+              <Plus size={30} />
+              <strong>Create a movie</strong>
+              <span>A fresh canvas for your next story.</span>
+              <small>Choose a name and location →</small>
+            </button>
+          </div>
+          {recent.length > 0 && (
+            <section className="recent-projects">
+              <span className="eyebrow">RECENT MOVIES</span>
+              {recent.map((r) => (
+                <button
+                  className="choice"
+                  key={r.path}
+                  onClick={() =>
+                    void run(async () =>
+                      loaded(
+                        await call<Project>("open_project", { path: r.path }),
+                        r.path,
+                      ),
+                    )
+                  }
+                >
+                  <AppSymbol />
+                  <span>
+                    <strong>{r.name}</strong>
+                    <small>{r.path}</small>
+                  </span>
+                  <small>{new Date(r.opened).toLocaleDateString()}</small>
+                </button>
+              ))}
+            </section>
+          )}
+          <div className="welcome-note">
+            <span>LOCAL FIRST</span>
+            <span>YOUR ASSETS, YOUR STORY</span>
+            <span>BUILT FOR MACOS</span>
+          </div>
+          {!native && (
+            <button className="text-button" onClick={demoPreview}>
+              Explore the browser preview
+            </button>
+          )}
+        </main>
+      ) : (
+        <>
+          <aside className="sidebar">
+            <button
+              className="brand"
+              onClick={() =>
+                setModal(
+                  <Modal title="Your movie" onClose={() => setModal(null)}>
+                    <button
+                      className="choice"
+                      onClick={() => {
+                        setModal(null);
+                        newMovie();
+                      }}
+                    >
+                      Create a new movie
+                    </button>
+                    <button
+                      className="choice"
+                      onClick={() => {
+                        setModal(null);
+                        open();
+                      }}
+                    >
+                      Open another .mymovie
+                    </button>
+                    <RenameMovie p={p} update={update} />
+                  </Modal>,
+                )
+              }
+            >
+              <span className="brand-mark small">
+                <AppSymbol />
+              </span>
+              <strong>
+                MyMovie<span>STUDIO</span>
+              </strong>
+            </button>
+            <div className="sidebar-project">
+              <span className="eyebrow">MOVIE DOCUMENT</span>
+              <strong title={p.name}>{p.name}</strong>
+              <small>
+                {native
+                  ? `${p.episodes.length} episodes · local document`
+                  : "Browser preview · memory only"}
+              </small>
+            </div>
+            <nav>
+              {routes.map(([name, Icon]) => (
+                <button
+                  key={name}
+                  data-file-drop={name === "Library" ? "library" : undefined}
+                  className={route === name ? "active" : ""}
+                  onClick={() => setRoute(name)}
+                >
+                  <Icon size={18} />
+                  <span>{name}</span>
+                  {name === "Notifications" &&
+                    settings.notifications.length > 0 && (
+                      <b className="count">{settings.notifications.length}</b>
+                    )}
+                </button>
+              ))}
+            </nav>
+            <div className="sidebar-bottom">
+              <button
+                className="text-button"
+                onClick={() =>
+                  void run(async () => {
+                    await pending.current;
+                    if (native) await call("close_project");
+                    generation.current++;
+                    current.current = null;
+                    setP(null);
+                    setJobs([]);
+                  })
+                }
+              >
+                <ArrowLeft size={16} />
+                Welcome
+              </button>
+              <span className="status-dot" /> {status}
+              <small>⌘ Your story stays with you</small>
+            </div>
+          </aside>
+          <section
+            className="studio"
+            data-file-drop={route === "Library" ? "library" : undefined}
+          >
+            <header className="topbar">
+              <div className="row">
+                <span className="muted">{p.name}</span>
+                <span className="muted">/</span>
+                <strong>{route}</strong>
+              </div>
+              <div className="row">
+                <Picker
+                  title="Media imports"
+                  value={importMode}
+                  options={[
+                    {
+                      id: "copy",
+                      label: "Copy into movie",
+                      description:
+                        "Portable originals inside the .mymovie package",
+                    },
+                    {
+                      id: "link",
+                      label: "Keep original location",
+                      description:
+                        "Link files; collect them before sharing the movie",
+                    },
+                  ]}
+                  onChange={setImportMode}
+                />
+                <span className="badge">
+                  {native ? "LOCAL DOCUMENT" : "PREVIEW"}
+                </span>
+                <button
+                  className="icon-button"
+                  aria-label="Notifications"
+                  onClick={() => setRoute("Notifications")}
+                >
+                  <Bell size={18} />
+                </button>
+              </div>
+            </header>
+            <main className="workspace">
+              {route === "Keyframes" && episode && (
+                <>
+                  <div className="view-title">
+                    <div>
+                      <span className="eyebrow">STORY DEVELOPMENT</span>
+                      <h1>Keyframes Board</h1>
+                      <p>Shape the moments that make your movie.</p>
+                    </div>
+                    <div className="row">
+                      <Picker
+                        title="Episode"
+                        value={episode.id}
+                        options={p.episodes.map((e) => ({
+                          id: e.id,
+                          label: e.name,
+                          description: `${e.scenes.length} scenes`,
+                        }))}
+                        onChange={setEpisodeId}
+                      />
+                      <button
+                        onClick={() =>
+                          setModal(
+                            <EpisodeDialog
+                              p={p}
+                              episodeId={episode.id}
+                              update={update}
+                              onClose={() => setModal(null)}
+                            />,
+                          )
+                        }
+                      >
+                        Edit episodes
+                      </button>
+                    </div>
+                  </div>
+                  <Board
+                    key={episode.id}
+                    project={p}
+                    episode={episode}
+                    root={root}
+                    update={update}
+                    onGenerate={chooseJob}
+                  />
+                </>
+              )}
+              {route === "Characters" && (
+                <Characters
+                  project={p}
+                  root={root}
+                  update={update}
+                  onImport={importCharacterReferences}
+                />
+              )}{" "}
+              {route === "Library" && (
+                <Library
+                  project={p}
+                  root={root}
+                  onImport={() => importFile("media")}
+                  onCollect={() =>
+                    mutateMedia(
+                      "collect_media",
+                      {},
+                      "All media collected into movie",
+                    )
+                  }
+                  onRelink={async (assetId) => {
+                    const path = await pickFile("media");
+                    if (path)
+                      await mutateMedia(
+                        "relink_asset",
+                        { assetId, path },
+                        "Original relinked",
+                      );
+                  }}
+                />
+              )}{" "}
+              {route === "Workflows" && (
+                <Workflows
+                  project={p}
+                  update={update}
+                  onImport={() => importFile("workflow")}
+                />
+              )}{" "}
+              {route === "Renders" && (
+                <Renders jobs={jobs} root={root} project={p} />
+              )}{" "}
+              {route === "Connections" && (
+                <Connections
+                  settings={settings}
+                  save={saveSettings}
+                  project={p}
+                  notify={notify}
+                />
+              )}{" "}
+              {route === "Settings" && (
+                <Preferences
+                  settings={settings}
+                  save={saveSettings}
+                  project={p}
+                  update={update}
+                  notify={notify}
+                />
+              )}{" "}
+              {(route === "Notifications" || route === "Logs") && (
+                <>
+                  <div className="view-title">
+                    <div>
+                      <span className="eyebrow">STUDIO ACTIVITY</span>
+                      <h1>{route}</h1>
+                      <p>
+                        {route === "Logs"
+                          ? "Redacted diagnostics. Generation receipts stay in your movie."
+                          : "A clear view of progress and things that need attention."}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        void run(async () =>
+                          setSettings(
+                            await call<AppSettings>("clear_diagnostics", {
+                              kind: route.toLowerCase(),
+                            }),
+                          ),
+                        )
+                      }
+                    >
+                      Clear {route.toLowerCase()}
+                    </button>
+                  </div>
+                  {settings[route.toLowerCase() as "logs" | "notifications"]
+                    .length === 0 ? (
+                    <Empty title="All clear">
+                      Activity appears here as you work.
+                    </Empty>
+                  ) : (
+                    settings[
+                      route.toLowerCase() as "logs" | "notifications"
+                    ].map((d) => (
+                      <article className="panel activity" key={d.id}>
+                        <span className="badge">{d.level}</span>
+                        <p>{d.message}</p>
+                        <small>{new Date(d.createdAt).toLocaleString()}</small>
+                      </article>
+                    ))
+                  )}
+                </>
+              )}
+            </main>
+            <section
+              className="queue"
+              style={{ height: expanded ? height : "3.5rem" }}
+            >
+              <div
+                className="queue-divider"
+                role="separator"
+                aria-label="Resize render queue"
+                aria-orientation="horizontal"
+                aria-valuenow={Math.round(height)}
+                tabIndex={0}
+                onPointerDown={(e) => {
+                  drag.current = { start: e.clientY, height };
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  setExpanded(true);
+                }}
+                onPointerMove={(e) => resize(e.clientY)}
+                onPointerUp={() => {
+                  drag.current = null;
+                  persistHeight(height);
+                }}
+                onPointerCancel={() => {
+                  drag.current = null;
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                    e.preventDefault();
+                    const h = Math.max(
+                      96,
+                      Math.min(
+                        window.innerHeight * 0.65,
+                        height + (e.key === "ArrowUp" ? 24 : -24),
+                      ),
+                    );
+                    setHeight(h);
+                    persistHeight(h);
+                  }
+                }}
+              >
+                <span />
+              </div>
+              <header className="queue-header">
+                <div className="row">
+                  <Clapperboard size={18} />
+                  <strong>Render queue</strong>
+                  <span className="badge">{jobs.length} jobs</span>
+                </div>
+                <div className="row">
+                  <button
+                    className="text-button"
+                    onClick={() => void queueActions("refresh_jobs")}
+                  >
+                    Refresh
+                  </button>
+                  <button
+                    className="icon-button"
+                    aria-label={expanded ? "Collapse queue" : "Expand queue"}
+                    onClick={() => setExpanded(!expanded)}
+                  >
+                    {expanded ? (
+                      <ChevronDown size={18} />
+                    ) : (
+                      <ChevronUp size={18} />
+                    )}
+                  </button>
+                </div>
+              </header>
+              {expanded && (
+                <div className="queue-body">
+                  {jobs.length === 0 ? (
+                    <p className="muted">
+                      Your next render starts from a keyframe. Choose a workflow
+                      and a connected server.
+                    </p>
+                  ) : (
+                    jobs.map((j) => (
+                      <article className="queue-job" key={j.id}>
+                        <div>
+                          <strong>
+                            {p.episodes
+                              .flatMap((e) =>
+                                e.scenes.flatMap((s) =>
+                                  s.shots.flatMap((sh) => sh.frames),
+                                ),
+                              )
+                              .find((f) => f.id === j.frameId)?.name ??
+                              "Archived frame"}
+                          </strong>
+                          <small>{j.remoteId ?? j.id}</small>
+                        </div>
+                        <span className={`badge state-${j.state}`}>
+                          {j.state}
+                        </span>
+                        {j.error && <span className="error">{j.error}</span>}
+                        {!["completed", "failed", "canceled"].includes(
+                          j.state,
+                        ) && (
+                          <button
+                            onClick={() =>
+                              void queueActions("cancel_job", { jobId: j.id })
+                            }
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </article>
+                    ))
+                  )}
+                </div>
+              )}
+            </section>
+          </section>
+        </>
+      )}
+      {modal}
+      <div className="toast-host" aria-live="polite">
+        {toasts.map((t) => (
+          <div className="toast" key={t.id}>
+            <span>{t.message}</span>
+            <button
+              className="icon-button"
+              aria-label="Dismiss notification"
+              onClick={() => setToasts((ts) => ts.filter((x) => x.id !== t.id))}
+            >
+              <X size={18} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+function NewMovie({
+  onClose,
+  onCreate,
+}: {
+  onClose: () => void;
+  onCreate: (name: string, demo: boolean) => void;
+}) {
+  const [name, setName] = useState("Untitled Movie"),
+    [demo, setDemo] = useState(false);
+  return (
+    <Modal title="Create a movie" onClose={onClose}>
+      <Field label="Movie name" value={name} onChange={setName} />
+      <button
+        className={`choice ${demo ? "selected" : ""}`}
+        onClick={() => setDemo(!demo)}
+      >
+        <span>
+          <strong>Include sample story</strong>
+          <small>
+            Pilot, The Storm and shared characters. Clearly marked sample
+            content.
+          </small>
+        </span>
+        {demo && <Check size={20} />}
+      </button>
+      <p className="muted">
+        Choose where to store your portable .mymovie document in the next Finder
+        dialog.
+      </p>
+      <button
+        className="primary"
+        disabled={!name.trim()}
+        onClick={() => onCreate(name, demo)}
+      >
+        Choose location & create
+      </button>
+    </Modal>
+  );
+}
+function RenameMovie({ p, update }: { p: Project; update: Update }) {
+  const [name, setName] = useState(p.name);
+  return (
+    <>
+      <Field label="Movie name" value={name} onChange={setName} />
+      <button
+        className="primary"
+        disabled={!name.trim()}
+        onClick={() =>
+          update((p) => {
+            p.name = name.trim();
+          })
+        }
+      >
+        Save movie name
+      </button>
+    </>
+  );
+}
+function EpisodeDialog({
+  p,
+  episodeId,
+  update,
+  onClose,
+}: {
+  p: Project;
+  episodeId: string;
+  update: Update;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(
+      p.episodes.find((e) => e.id === episodeId)?.name ?? "",
+    ),
+    [newName, setNewName] = useState("");
+  return (
+    <Modal title="Episodes" onClose={onClose}>
+      <Field label="Current episode name" value={name} onChange={setName} />
+      <button
+        disabled={!name.trim()}
+        onClick={() => {
+          update((p) => {
+            p.episodes.find((e) => e.id === episodeId)!.name = name.trim();
+          });
+          onClose();
+        }}
+      >
+        Save name
+      </button>
+      <hr />
+      <Field
+        label="New episode"
+        value={newName}
+        onChange={setNewName}
+        placeholder="A new chapter"
+      />
+      <button
+        className="primary"
+        disabled={!newName.trim()}
+        onClick={() => {
+          update((p) => {
+            p.episodes.push({ id: uid(), name: newName.trim(), scenes: [] });
+          });
+          onClose();
+        }}
+      >
+        Add episode
+      </button>
+    </Modal>
+  );
+}
+function SubmitDialog({
+  project,
+  frameId,
+  settings,
+  onClose,
+  submit,
+}: {
+  project: Project;
+  frameId: string;
+  settings: AppSettings;
+  onClose: () => void;
+  submit: (w: string, c: string, values: Record<string, unknown>) => void;
+}) {
+  const [w, setW] = useState(project.workflows[0]?.id ?? ""),
+    [c, setC] = useState(
+      settings.connections.find((c) =>
+        ["comfyui", "runninghub", "relay"].includes(c.kind),
+      )?.id ?? "",
+    ),
+    [values, setValues] = useState<Record<string, unknown>>({});
+  const scene = project.episodes
+    .flatMap((e) => e.scenes)
+    .find((s) => s.shots.some((sh) => sh.frames.some((f) => f.id === frameId)));
+  const frame = scene?.shots
+    .flatMap((sh) => sh.frames)
+    .find((f) => f.id === frameId);
+  const assigned = new Set([
+    ...(scene?.characterIds ?? []),
+    ...(frame?.characterIds ?? []),
+  ]);
+  const references = [
+    ...new Set(
+      project.characters
+        .filter((c) => assigned.has(c.id))
+        .flatMap((c) => c.assetIds),
+    ),
+  ]
+    .map((id) => project.assets.find((a) => a.id === id))
+    .filter((a): a is NonNullable<typeof a> => !!a && a.kind === "image");
+  const workflow = project.workflows.find((x) => x.id === w);
+  const fields =
+    workflow?.bindings.filter(
+      (b) =>
+        !["positivePrompt", "negativePrompt", "image"].includes(b.semantic),
+    ) ?? [];
+  return (
+    <Modal title="Generate this keyframe" onClose={onClose}>
+      <p>
+        Submits the composed prompt and imported workflow to the selected
+        account. Provider jobs may incur charges.
+      </p>
+      <Picker
+        title="Workflow"
+        value={w}
+        options={project.workflows.map((w) => ({
+          id: w.id,
+          label: w.name,
+          description: w.version.slice(0, 12),
+        }))}
+        onChange={(id) => {
+          setW(id);
+          setValues({});
+        }}
+      />
+      <Picker
+        title="Connection"
+        value={c}
+        options={settings.connections
+          .filter((c) => ["comfyui", "runninghub", "relay"].includes(c.kind))
+          .map((c) => ({
+            id: c.id,
+            label: c.name,
+            description: c.kind,
+          }))}
+        onChange={setC}
+      />
+      {fields.map((b) =>
+        /^characterReference[1-4]$/.test(b.semantic) ? (
+          <Picker
+            key={b.semantic}
+            title={`${b.semantic} · ${b.nodeId}.${b.input}`}
+            value={String(
+              values[b.semantic] ??
+                references[Number(b.semantic.slice(-1)) - 1]?.id ??
+                "",
+            )}
+            options={references.map((a) => ({ id: a.id, label: a.name }))}
+            onChange={(id) => setValues({ ...values, [b.semantic]: id })}
+          />
+        ) : (
+          <Field
+            key={b.semantic}
+            label={`${b.semantic} · ${b.nodeId}.${b.input}`}
+            value={String(
+              values[b.semantic] ??
+                workflow?.graph[b.nodeId]?.inputs[b.input] ??
+                "",
+            )}
+            multiline={b.valueType === "json"}
+            type={b.valueType === "number" ? "number" : "text"}
+            onChange={(v) =>
+              setValues({
+                ...values,
+                [b.semantic]:
+                  b.valueType === "number"
+                    ? Number(v)
+                    : b.valueType === "boolean"
+                      ? v === "true"
+                      : v,
+              })
+            }
+          />
+        ),
+      )}
+      <p className="muted">
+        Dimensions and duration use the imported workflow values unless
+        explicitly changed here. Every submitted value is saved with the
+        attempt.
+      </p>
+      <button
+        className="primary"
+        disabled={!w || !c || !native}
+        onClick={() => submit(w, c, values)}
+      >
+        Validate & submit job
+      </button>
+    </Modal>
+  );
+}

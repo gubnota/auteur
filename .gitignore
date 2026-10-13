@@ -1,2 +1,18 @@
-DS_Store
+.DS_Store
+drafts/
+node_modules/
+target/
+dist/
+.env
+.env.*
+!.env.example
+!*.env.example
+*.mymovie/
+*.sqlite*
+*.log
+artifacts/
+test-results/
+playwright-report/
 
+# Tauri-generated permission schemas
+apps/desktop/src-tauri/gen/

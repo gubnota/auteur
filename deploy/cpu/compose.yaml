@@ -1,0 +1,18 @@
+services:
+  comfy:
+    build: .
+    image: mymovie-comfy-cpu:local
+    ports:
+      - "127.0.0.1:8188:8188"
+    volumes:
+      - comfy-input:/opt/comfy/input
+      - comfy-output:/opt/comfy/output
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8188/system_stats')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+volumes:
+  comfy-input:
+  comfy-output:

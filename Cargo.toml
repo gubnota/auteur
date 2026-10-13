@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = ["crates/*", "apps/desktop/src-tauri", "apps/relay", "apps/agent"]
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+rusqlite = { version = "0.38", features = ["bundled"] }
+sha2 = "0.10"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "stream", "rustls-tls"] }
+async-trait = "0.1"
+tempfile = "3"
+studio-contracts = { path = "crates/studio-contracts" }
+project-core = { path = "crates/project-core" }
+asset-core = { path = "crates/asset-core" }
+workflow-core = { path = "crates/workflow-core" }
+job-core = { path = "crates/job-core" }

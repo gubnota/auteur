@@ -1,0 +1,14 @@
+[package]
+name="mymovie-relay"
+version.workspace=true
+edition.workspace=true
+license.workspace=true
+[dependencies]
+axum="0.8"
+async-stream="0.3"
+tokio.workspace=true
+serde_json.workspace=true
+rusqlite.workspace=true
+project-core.workspace=true
+sha2.workspace=true
+uuid.workspace=true
