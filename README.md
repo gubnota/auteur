@@ -1,6 +1,6 @@
 # MyMovie Studio
 
-Version **0.1.1** fixes a macOS crash when Finder opens a saved movie before application setup finishes. The document waits in a shared startup inbox and opens after initialization. Saved-package opening was verified in the native release app; no package migration is required.
+Version **0.1.2** adds job creation directly from Workflows, per-account RunningHub deployment mappings, submission recovery, and GitLab/GitHub build and tag pipelines. The Finder startup crash fix from 0.1.1 is retained; no package migration is required.
 
 Release build: `npm run tauri:build -- --bundles app`; output: `target/release/bundle/macos/MyMovie Studio.app`. Local installation uses an ad-hoc signature; Apple notarization remains pending.
 
@@ -39,6 +39,25 @@ Connections support multiple ComfyUI, RunningHub and private-relay records. Goog
 
 Job receipts and results persist. Ambiguous submissions become unknown rather than being retried blindly. The relay exposes replayable SSE; the desktop currently polls. Native Dock progress and system notifications accompany in-app notification/log histories.
 
+## RunningHub: create a job
+
+1. Add a RunningHub account in **Connections** and save its key with the secure credential control.
+2. Import the API workflow in **Workflows**. In **RunningHub deployments**, select the account, API family (**Workflow** or **AI App**) and the hosted ID for that exact deployment. An imported JSON graph does not contain proof of a hosted deployment; do not substitute an unrelated AI App ID. An account default is optional.
+3. Configure **Job input bindings** with node IDs, field names and value types from that deployment’s API schema. Character reference slots use the assigned scene/frame cast.
+4. Choose **Target keyframe**, click **Create generation job**, then select the account, review the values and **Validate & submit job**. Missing setup is explained in the dialog.
+
+Provider rejections are shown as failed jobs. For an uncertain submission, check RunningHub task history and use **Resolve submission** to attach the existing task ID or confirm that no task was created before retrying. Account/deployment destinations stay frozen in the job receipt.
+
+The UI and provider contracts were tested with fixtures; a paid RunningHub generation has not been verified. The supplied [Workflow page](https://www.runninghub.ai/workflow/2110044532631932930) identifies **Workflow** API ID `2110044532631932930`. Match it to the correct imported graph before saving that mapping; public graph details could not be verified.
+
+![Installed 0.1.2 workflow job controls, using a temporary example movie](docs/screenshots/workflow-job-0.1.2.png)
+
+## CI artifacts and notebooks
+
+[Build and release guide](docs/CI_RELEASES.md) covers `.gitlab-ci.yml`, GitHub Actions, macOS ARM/Intel DMGs, Linux desktop packages, and the Linux x86_64 ComfyUI client. Version tags must match the application version and publish checksums; GitHub releases start as drafts. The current remote is GitHub; GitLab needs a project and eligible macOS runner.
+
+Generated [Colab](deploy/colab) and [Kaggle](deploy/kaggle) notebooks deploy the verified client artifact beside an existing ComfyUI installation. Kaggle supports two independent GPU workers with separate ports/node IDs. Live notebook deployment requires an authenticated relay and a permitted active runtime.
+
 ## Development
 
 Requirements: Apple Silicon macOS 13 or newer, Xcode Command Line Tools, Rust and Node.js/npm.
@@ -73,7 +92,7 @@ Keep the OrbStack/Docker engine running; the OrbStack window may be closed. The 
 
 ## Current limits
 
-This is a development foundation. Live RunningHub generation, private relay/S3/RunPod roundtrip, GPU workflows, release signing/notarization, DMG packaging and complete Finder-drop acceptance remain pending. Browser profiles, remote LoRA training and the complete FFmpeg derivative pipeline are later milestones. No paid generation or cloud rental was performed during validation.
+This is a development foundation. Live RunningHub generation, weighted ComfyUI workflow exchange, private relay/S3/RunPod roundtrip, live notebook deployment, signing/notarization and complete Finder-drop acceptance remain pending. CI and DMG packaging are configured; hosted Intel/Linux packaging has not yet been verified. Browser profiles, remote LoRA training and the complete FFmpeg derivative pipeline are later milestones. No paid generation or cloud rental was performed during validation.
 
 See [architecture](docs/ARCHITECTURE_INDEX.md), [contracts](docs/API_CONTRACTS.md) and [test evidence](docs/TASK_LOG.md). Agents should read the six compact context documents before targeted source inspection. Keep `drafts/`, secrets and personal movie packages out of Git.
 

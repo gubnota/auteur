@@ -1,0 +1,59 @@
+name: Draft release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  version:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: python3 scripts/check-release-version.py
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+  build:
+    needs: version
+    uses: ./.github/workflows/checks.yml
+  draft:
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Checksums and release notes
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          root = Path('artifacts')
+          files = sorted(p for p in root.rglob('*') if p.is_file())
+          for p in files:
+              if p.parent != root:
+                  target = root / p.name
+                  if target.exists(): raise RuntimeError('Duplicate release filename')
+                  p.rename(target)
+          (root / 'SHA256SUMS.txt').write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in sorted(root.iterdir()) if p.is_file() and p.name != 'SHA256SUMS.txt'))
+          Path('release-notes.md').write_text('Native macOS Apple Silicon/Intel and Linux x86_64 desktop builds, plus the Linux headless ComfyUI client and Colab/Kaggle notebooks.\n\nVerify SHA256SUMS.txt before deploying the notebook client. Desktop builds are not Apple-notarized. This is a draft awaiting platform and live notebook acceptance.\n')
+          PY
+      - name: Create or update draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+            gh release upload "$RELEASE_TAG" artifacts/* --clobber
+          else
+            gh release create "$RELEASE_TAG" artifacts/* --draft --verify-tag --title "$RELEASE_TAG" --notes-file release-notes.md
+          fi

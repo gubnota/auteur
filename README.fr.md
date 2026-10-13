@@ -1,6 +1,6 @@
 # MyMovie Studio
 
-La version **0.1.1** corrige un plantage macOS lorsque Finder ouvre un film enregistré avant la fin du démarrage. Le document attend dans une file partagée jusqu’à l’initialisation. L’ouverture d’un paquet enregistré a été vérifiée dans l’application native en mode release ; aucune migration du projet n’est nécessaire.
+La version **0.1.2** ajoute la création de tâches depuis Workflows, les correspondances de déploiement RunningHub par compte, la récupération des soumissions incertaines et les pipelines GitLab/GitHub avec versions étiquetées. La correction du plantage Finder de 0.1.1 est conservée ; aucune migration du projet n’est nécessaire.
 
 Compilation release : `npm run tauri:build -- --bundles app` ; résultat : `target/release/bundle/macos/MyMovie Studio.app`. L’installation locale utilise une signature ad hoc ; la notarisation Apple reste à réaliser.
 
@@ -39,6 +39,25 @@ Plusieurs connexions ComfyUI, RunningHub et relay privé sont possibles. L’aid
 
 Les reçus des tâches et leurs résultats persistent. Une soumission ambiguë devient unknown sans relance aveugle. Le relay propose SSE avec reprise des événements ; l’application utilise actuellement le polling. Progression dans le Dock, notifications système et historiques de notifications/journaux sont disponibles.
 
+## RunningHub : créer une tâche
+
+1. Ajoutez un compte RunningHub dans **Connections** et enregistrez sa clé avec le contrôle sécurisé des identifiants.
+2. Importez le workflow API dans **Workflows**. Dans **RunningHub deployments**, sélectionnez le compte, la famille API (**Workflow** ou **AI App**) et l’ID de ce déploiement précis. Un graphe JSON ne prouve pas l’existence d’un déploiement hébergé ; ne remplacez pas son ID par celui d’une autre AI App. L’ID par défaut du compte est facultatif.
+3. Configurez **Job input bindings** avec les nœuds, champs et types du schéma API de ce déploiement. Les références de personnages proviennent de la scène/image sélectionnée.
+4. Sélectionnez **Target keyframe**, cliquez sur **Create generation job**, choisissez le compte, vérifiez les valeurs puis **Validate & submit job**. Le dialogue explique les paramètres manquants.
+
+Un refus du fournisseur produit une tâche failed. Pour une soumission incertaine, consultez l’historique RunningHub puis **Resolve submission** : rattachez l’ID de la tâche existante ou confirmez qu’aucune tâche n’a été créée avant de relancer. Le compte et le déploiement restent figés dans le reçu.
+
+L’interface et les contrats ont été vérifiés avec des fixtures ; aucune génération RunningHub payante n’a été validée. La [page Workflow fournie](https://www.runninghub.ai/workflow/2110044532631932930) indique la famille **Workflow** et l’ID `2110044532631932930`. Associez cet ID au bon graphe importé avant d’enregistrer ; les détails publics du graphe n’ont pas pu être vérifiés.
+
+![Création de tâche dans la version installée 0.1.2, projet temporaire](docs/screenshots/workflow-job-0.1.2.png)
+
+## Artefacts CI et notebooks
+
+Le [guide des builds et releases](docs/CI_RELEASES.md) décrit `.gitlab-ci.yml`, GitHub Actions, les DMG macOS ARM/Intel, les paquets Linux et le client ComfyUI Linux x86_64. Les tags doivent correspondre à la version de l’application ; les fichiers sont accompagnés de sommes de contrôle. Les releases GitHub commencent comme brouillons. Le remote actuel est GitHub ; GitLab nécessite un projet et un runner macOS adapté.
+
+Les notebooks [Colab](deploy/colab) et [Kaggle](deploy/kaggle) déploient l’artefact vérifié du client près d’une installation ComfyUI existante. Kaggle peut utiliser deux processus GPU indépendants, avec ports et node ID distincts. Le déploiement réel nécessite un relay authentifié et un runtime actif autorisant ce fonctionnement.
+
 ## Développement
 
 Prérequis : Apple Silicon, macOS 13+, Xcode Command Line Tools, Rust et Node.js/npm.
@@ -68,7 +87,7 @@ Le moteur OrbStack/Docker doit rester actif ; la fenêtre OrbStack peut être fe
 
 ## Limites actuelles
 
-Il s’agit d’une base de développement. Génération RunningHub réelle, parcours complet relay/S3/RunPod privé, workflows GPU, signature/notarisation, paquet DMG et validation du glisser-déposer Finder restent à terminer. Les profils de navigateur, l’entraînement LoRA distant et le pipeline FFmpeg complet sont prévus ultérieurement. Aucun traitement payant ni location cloud n’a été effectué pendant la validation.
+Il s’agit d’une base de développement. Génération RunningHub réelle, échange de workflows ComfyUI avec poids, parcours complet relay/S3/RunPod privé, déploiement réel des notebooks, signature/notarisation et validation du glisser-déposer Finder restent à terminer. CI et empaquetage DMG sont configurés ; les builds Intel/Linux sur runners distants ne sont pas encore validés. Les profils de navigateur, l’entraînement LoRA distant et le pipeline FFmpeg complet sont prévus ultérieurement. Aucun traitement payant ni location cloud n’a été effectué pendant la validation.
 
 [Architecture](docs/ARCHITECTURE_INDEX.md) · [Contrats](docs/API_CONTRACTS.md) · [Preuves de validation](docs/TASK_LOG.md). Les agents doivent lire les six documents compacts de contexte avant une inspection ciblée. Excluez de Git `drafts/`, secrets et films personnels.
 
