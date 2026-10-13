@@ -1,5 +1,9 @@
 # MyMovie Studio
 
+Version **0.1.1** fixes a macOS crash when Finder opens a saved movie before application setup finishes. The document waits in a shared startup inbox and opens after initialization. Saved-package opening was verified in the native release app; no package migration is required.
+
+Release build: `npm run tauri:build -- --bundles app`; output: `target/release/bundle/macos/MyMovie Studio.app`. Local installation uses an ad-hoc signature; Apple notarization remains pending.
+
 A local-first macOS film studio built with Rust, Tauri and React. Movies are Finder `.mymovie` document packages containing episodes, an ordered storyboard, characters, imported workflows, generation records and media. The desktop uses Fenki’s palette and an original SVG symbol.
 
 [Русский](README.ru.md) · [Français](README.fr.md) · [Implementation status](docs/PROJECT_CONTEXT.md)

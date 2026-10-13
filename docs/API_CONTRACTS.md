@@ -54,3 +54,9 @@
 - Full private runner/S3/GPU roundtrip, desktop SSE consumer and deployment hardening.
 - Normalized entity migrations/schema parity; variants, derivatives, prompt version history.
 - Browser/training/Homer interfaces require later implementation; no fabricated contract.
+
+## Native document startup
+- Finder Opened events may precede Tauri setup/Ready on macOS.
+- A shared, deduplicated path inbox exists before the native app is built.
+- Studio receives that same inbox during setup; event callbacks never read unregistered managed state.
+- Existing opened-projects event / take_opened_projects frontend contract stays unchanged.

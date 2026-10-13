@@ -87,3 +87,17 @@
 - Implementation commit: 918140a; delivery branch: codex/mymovie-studio.
 - Final format/diff checks passed; generated schemas, drafts, personal packages and root cpu-canary.png excluded from commits.
 - Bundled font license texts included; historical scaffolding script removed from runtime source.
+
+## 2026-10-14 — Saved-document startup hotfix, 0.1.1
+
+- Reproduced the supplied macOS abort with 0.1.0 and a previously saved temporary movie.
+- Root cause: Finder Opened arrives before setup; state() panics because Studio has not been registered.
+- Created the shared document inbox before Builder and injected it into Studio; lifecycle callbacks deduplicate paths without reading uninitialized managed state. No project format changes.
+- Added a regression test for pre-setup delivery, shared inbox identity and Ready deduplication.
+- Incremented Rust/npm/Tauri versions to 0.1.1; ARM64 debug and release app builds passed.
+- Replaced /Applications/MyMovie Studio.app with the release build; local ad-hoc codesign verification passed. Previous 0.1.0 app preserved at /private/tmp/MyMovie Studio-0.1.0-backup.app.
+- Debug acceptance: cold document launch, recent-project reopening and warm Finder opening passed. Installed release acceptance: Finder opened Import Verification.mymovie and displayed its saved episode/scene/frame without abort; installed binary path/version verified.
+- Screenshot: docs/screenshots/reopened-project-0.1.1.png (installed release). EN/RU/FR README release notes updated.
+- Current working-tree checks: Rust workspace 17 tests passed; frontend 2 tests passed; notebook bootstrap 10 tests passed; production TypeScript/Vite build passed. Existing relay test has an unused-result warning, separate from this hotfix.
+- Approved ComfyUI/images/notebook/CI extension remains in progress in the working tree; hotfix staged separately. No live RunningHub/Colab/Kaggle or weighted GPU job acceptance claimed. Drafts and root cpu-canary.png untouched.
+- Isolated staged hotfix snapshot compiled successfully; cold-launch regression passed independently of the unfinished integration changes.

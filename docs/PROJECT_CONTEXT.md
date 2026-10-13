@@ -10,7 +10,9 @@
 ## Current milestone
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
 - Native local-studio foundation implemented; remote hardening remains open.
-- React desktop UI and Rust/Tauri ARM64 debug .app build successfully.
+- Version 0.1.1: ARM64 native debug and release .app builds pass.
+- Installed release: /Applications/MyMovie Studio.app (local ad-hoc signature).
+- Cold Finder opening and warm saved-project opening verified; startup abort fixed.
 - Real SQLite package persistence; browser preview is memory-only.
 - Native picker import, linked character reference and collection verified.
 - Weight-free local Docker ComfyUI HTTP/history/result canary passed.

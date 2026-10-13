@@ -11,20 +11,20 @@ use studio_contracts::*;
 use tauri::{Emitter, State};
 pub struct Studio {
     pub inner: tokio::sync::Mutex<Inner>,
-    pub opened: Mutex<Vec<String>>,
+    pub opened: Arc<Mutex<Vec<String>>>,
 }
 pub struct Inner {
     pub project: Option<ProjectStore>,
     pub settings: SettingsStore,
 }
 impl Studio {
-    pub fn new(dir: &Path) -> Result<Self> {
+    pub fn new(dir: &Path, opened: Arc<Mutex<Vec<String>>>) -> Result<Self> {
         Ok(Self {
             inner: tokio::sync::Mutex::new(Inner {
                 project: None,
                 settings: SettingsStore::open(&dir.join("app.sqlite"))?,
             }),
-            opened: Mutex::new(vec![]),
+            opened,
         })
     }
 }

@@ -70,3 +70,13 @@ Context: User wants model-reference images imported/dropped onto characters and 
 Decision: Scene cast is inherited by its frames; additional frame cast extends it. Reference images are shared by asset ID and resolved only for explicit characterReference1..4 workflow bindings. Native drops use Tauri events; storyboard sorting uses pointer interactions because native file drops consume browser drag events.
 Consequences: Character references are neither duplicated per scene nor silently injected into unbound graph inputs. Snapshots freeze resolved references. Finder gesture acceptance remains separately tracked.
 Related files: crates/workflow-core/src/lib.rs, apps/desktop/src/App.tsx, apps/desktop/src/features/Board.tsx.
+
+# ADR-0008: Document inbox exists before native setup
+
+Date: 2026-10-14
+Status: Accepted
+
+Context: Finder cold launch delivers Opened before setup registers Studio; state() panics across the Cocoa callback and aborts.
+Decision: Create a shared path inbox before Builder, inject it into Studio, and enqueue/deduplicate without accessing managed state in lifecycle callbacks. Recover poisoned inbox locks at this native callback boundary.
+Consequences: Existing saved packages open after initialization without migration. Post-setup frontend event and polling contracts stay unchanged.
+Related files: apps/desktop/src-tauri/src/main.rs, apps/desktop/src-tauri/src/service.rs.

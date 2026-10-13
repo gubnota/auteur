@@ -2,9 +2,13 @@ mod assistant;
 mod media;
 mod service;
 use service::*;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
 fn main() {
+    // macOS can deliver Opened before Tauri's Ready/setup event on a cold launch.
+    // Keep the document inbox outside managed state until setup has completed.
+    let opened = Arc::new(Mutex::new(Vec::<String>::new()));
+    let setup_opened = opened.clone();
     let app = tauri::Builder::default()
         .register_asynchronous_uri_scheme_protocol("mymovie", |ctx, request, responder| {
             let state = ctx.app_handle().state::<Arc<Studio>>().inner().clone();
@@ -15,10 +19,12 @@ fn main() {
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
-        .setup(|app| {
+        .setup(move |app| {
             let dir = app.path().app_data_dir()?;
-            let state =
-                Arc::new(Studio::new(&dir).map_err(|e| std::io::Error::other(e.to_string()))?);
+            let state = Arc::new(
+                Studio::new(&dir, setup_opened.clone())
+                    .map_err(|e| std::io::Error::other(e.to_string()))?,
+            );
             app.manage(state.clone());
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -63,18 +69,14 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("Cannot initialize MyMovie Studio");
-    app.run(|app, event| match event {
+    app.run(move |app, event| match event {
         tauri::RunEvent::Ready => {
             let paths: Vec<_> = std::env::args()
                 .skip(1)
                 .filter(|p| p.ends_with(".mymovie"))
                 .collect();
             if !paths.is_empty() {
-                app.state::<Arc<Studio>>()
-                    .opened
-                    .lock()
-                    .unwrap()
-                    .extend(paths);
+                enqueue_documents(&opened, paths);
             }
         }
         #[cfg(target_os = "macos")]
@@ -85,17 +87,35 @@ fn main() {
                 .filter(|p| p.extension().is_some_and(|e| e == "mymovie"))
                 .map(|p| p.to_string_lossy().into_owned())
                 .collect();
-            let state = app.state::<Arc<Studio>>();
-            {
-                let mut queue = state.opened.lock().unwrap();
-                for p in &paths {
-                    if !queue.contains(p) {
-                        queue.push(p.clone());
-                    }
-                }
-            }
+            enqueue_documents(&opened, paths.clone());
             let _ = app.emit("opened-projects", paths);
         }
         _ => {}
     });
+}
+fn enqueue_documents(inbox: &Mutex<Vec<String>>, paths: Vec<String>) {
+    let mut queue = inbox.lock().unwrap_or_else(|poison| poison.into_inner());
+    for path in paths {
+        if !queue.contains(&path) {
+            queue.push(path);
+        }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn cold_launch_documents_survive_setup_and_ready_without_duplicates() {
+        let inbox = Arc::new(Mutex::new(vec![]));
+        enqueue_documents(&inbox, vec!["Movie.mymovie".into()]);
+        let setup_inbox = inbox.clone();
+        enqueue_documents(
+            &inbox,
+            vec!["Movie.mymovie".into(), "Second.mymovie".into()],
+        );
+        assert_eq!(
+            *setup_inbox.lock().unwrap(),
+            vec!["Movie.mymovie", "Second.mymovie"]
+        );
+    }
 }
