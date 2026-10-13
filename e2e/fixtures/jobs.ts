@@ -117,7 +117,7 @@ export async function openFixture(
       if (command === 'open_project') return project;
       if (command === 'save_project') { project = {...args.project, revision: args.expectedRevision + 1}; window.fixture.saved = project; return project; }
       if (command === 'list_jobs' || command === 'refresh_jobs' || command === 'list_job_runs') return [];
-      if (command === 'preview_job_draft') return { items: args.draft.items.map(item => ({ semantic: item.values, frameId: args.draft.frameId, workflowId: item.workflowId, connectionId: item.connectionId })) }; 
+      if (command === 'preview_job_draft') return { items: args.draft.items.map(item => ({ semantic: item.values, frameId: args.draft.frameId, workflowId: item.workflowId, connectionId: item.connectionId })) };
       if (command === 'start_job_draft') { window.fixture.submissions.push(args); return []; }
       throw new Error('Unexpected fixture command: ' + command);
     }
