@@ -25,7 +25,11 @@ macOS artifacts are ad-hoc signed and are not Apple-notarized. Distribution sign
 
 `checks.yml` runs source acceptance and a native platform matrix. `release.yml` validates version tags, calls that matrix and creates a **draft** release with checksums. Published release approval and live platform acceptance remain pending. Nothing creates a tag automatically.
 
-## Notebook client
+## RunPod agent (primary target)
+
+GitHub branch builds expose **comfyui-agent-linux-x86_64**, independent of the desktop build matrix after shared checks pass. GitLab exposes **comfyui-agent-linux-x86_64-<branch>**. Both contain `mymovie-agent-linux-x86_64.tar.gz`, metadata, checksums and the [RunPod setup guide](../deploy/runpod/README.md). Packaging rejects non-ELF or non-x86_64 binaries. The archive includes the agent and guide; the relay is built but must be deployed separately. RunPod connects outbound over authenticated HTTPS, without a public ComfyUI port. No live pod or relay is provisioned by CI.
+
+## Colab/Kaggle deployment
 
 Download the Linux client archive, its metadata/checksums, `notebook-bootstrap.py` and the appropriate notebook from one verified release. Confirm the archive and bootstrap SHA-256 values before execution. The notebook asks for an authenticated HTTPS relay and reads its token from notebook Secrets; do not paste credentials into cells or movie packages.
 

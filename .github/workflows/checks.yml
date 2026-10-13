@@ -82,7 +82,7 @@ jobs:
             target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
           if-no-files-found: error
           retention-days: 14
-  notebook-client:
+  linux-agent:
     needs: checks
     runs-on: ubuntu-22.04
     timeout-minutes: 30
@@ -97,7 +97,7 @@ jobs:
       - run: python3 scripts/package-agent.py target/release/mymovie-agent release-assets
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: notebook-client-linux-x86_64
+          name: comfyui-agent-linux-x86_64
           path: release-assets/*
           if-no-files-found: error
           retention-days: 14

@@ -1,4 +1,4 @@
-"""Package the CI-built ELF client, notebooks and reproducibility metadata."""
+"""Package the CI-built RunPod/ComfyUI ELF agent and reproducibility metadata."""
 import argparse
 import hashlib
 import json
@@ -10,10 +10,15 @@ p = argparse.ArgumentParser()
 p.add_argument("binary", type=Path); p.add_argument("destination", type=Path)
 a = p.parse_args(); a.destination.mkdir(parents=True, exist_ok=True)
 root = Path(__file__).resolve().parents[1]
+header = a.binary.read_bytes()[:20]
+if len(header) < 20 or header[:6] != b"\x7fELF\x02\x01" or header[18:20] != b"\x3e\x00":
+    raise SystemExit("Expected a Linux ELF64 little-endian x86_64 agent binary")
 archive = a.destination / "mymovie-agent-linux-x86_64.tar.gz"
 with tarfile.open(archive, "w:gz") as tar:
     tar.add(a.binary, arcname="mymovie-agent", recursive=False)
+    tar.add(root / "deploy/runpod/README.md", arcname="README-RunPod.md", recursive=False)
 files = [archive]
+guide = a.destination / "README-RunPod.md"; guide.write_bytes((root / "deploy/runpod/README.md").read_bytes()); files.append(guide)
 for host in ["colab", "kaggle"]:
     dest = a.destination / f"MyMovie_ComfyUI_{host}.ipynb"
     dest.write_bytes((root / f"deploy/{host}/MyMovie_ComfyUI.ipynb").read_bytes()); files.append(dest)

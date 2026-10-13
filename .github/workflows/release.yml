@@ -44,7 +44,7 @@ jobs:
                   if target.exists(): raise RuntimeError('Duplicate release filename')
                   p.rename(target)
           (root / 'SHA256SUMS.txt').write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in sorted(root.iterdir()) if p.is_file() and p.name != 'SHA256SUMS.txt'))
-          Path('release-notes.md').write_text('Native macOS Apple Silicon/Intel and Linux x86_64 desktop builds, plus the Linux headless ComfyUI client and Colab/Kaggle notebooks.\n\nVerify SHA256SUMS.txt before deploying the notebook client. Desktop builds are not Apple-notarized. This is a draft awaiting platform and live notebook acceptance.\n')
+          Path('release-notes.md').write_text('Native macOS Apple Silicon/Intel and Linux x86_64 desktop builds, plus the Linux x86_64 ComfyUI agent for private RunPod workers and Colab/Kaggle notebooks.\n\nVerify SHA256SUMS.txt before deploying the agent. README-RunPod.md includes startup and private relay setup. Desktop builds are not Apple-notarized. This is a draft awaiting platform and live notebook acceptance.\n')
           PY
       - name: Create or update draft
         env:

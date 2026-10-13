@@ -78,7 +78,7 @@ linux-desktop:
       - target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
       - target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
 
-linux-client:
+linux-agent:
   extends: .linux
   stage: build
   needs: [verify]
@@ -89,7 +89,7 @@ linux-client:
     - target/release/mymovie-agent --version
     - python3 scripts/package-agent.py target/release/mymovie-agent release-assets
   artifacts:
-    name: "linux-client-$CI_COMMIT_REF_SLUG"
+    name: "comfyui-agent-linux-x86_64-$CI_COMMIT_REF_SLUG"
     expire_in: 14 days
     paths:
       - release-assets/*
@@ -102,7 +102,7 @@ release:
       artifacts: true
     - job: linux-desktop
       artifacts: true
-    - job: linux-client
+    - job: linux-agent
       artifacts: true
   resource_group: versioned-release
   rules:
