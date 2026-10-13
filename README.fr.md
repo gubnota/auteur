@@ -1,6 +1,6 @@
 # MyMovie Studio
 
-La version **0.1.2** ajoute la création de tâches depuis Workflows, les correspondances de déploiement RunningHub par compte, la récupération des soumissions incertaines et les pipelines GitLab/GitHub avec versions étiquetées. La correction du plantage Finder de 0.1.1 est conservée ; aucune migration du projet n’est nécessaire.
+La version **0.1.3** ajoute Jobs : lots enregistrés, entrées typées exactes, FIFO pour une instance ComfyUI et envoi parallèle vers des instances distinctes. ComfyUI sur RunPod est la cible principale ; RunningHub sert aux tests de workflows. L’ouverture d’un ancien document demande une mise à niveau sauvegardée vers le schéma v2 ; les anciennes versions ne peuvent pas ouvrir ce paquet mis à niveau.
 
 Compilation release : `npm run tauri:build -- --bundles app` ; résultat : `target/release/bundle/macos/MyMovie Studio.app`. L’installation locale utilise une signature ad hoc ; la notarisation Apple reste à réaliser.
 
@@ -39,12 +39,30 @@ Plusieurs connexions ComfyUI, RunningHub et relay privé sont possibles. L’aid
 
 Les reçus des tâches et leurs résultats persistent. Une soumission ambiguë devient unknown sans relance aveugle. Le relay propose SSE avec reprise des événements ; l’application utilise actuellement le polling. Progression dans le Dock, notifications système et historiques de notifications/journaux sont disponibles.
 
+## Jobs : entrées exactes et lots
+
+Ouvrez **Jobs**, ou utilisez **Create generation job** depuis un workflow/image clé. Nommez un brouillon, choisissez l’image cible, puis ajoutez, dupliquez et ordonnez les workflows indépendants. Chaque élément choisit une connexion et des associations d’entrées explicites. Texte, nombres, contrôles boolean personnalisés et JSON analysé sont disponibles. Les prompts utilisent le texte composé du projet/scène/image ou une valeur exacte, y compris une chaîne vide. Les médias proviennent du film et des références des personnages assignés.
+
+**Review exact inputs** valide tout le lot avant téléchargement ou création de tentatives. L’aperçu montre les empreintes des médias ; le nom de fichier fournisseur reste en attente jusqu’au staging. **Validate & start** fige le lot. Les graphes importés restent inchangés. Cette version ne chaîne pas les résultats entre workflows.
+
+Les éléments partageant un endpoint ComfyUI normalisé suivent une FIFO, même via des connexions dupliquées. Les endpoints distincts fonctionnent en parallèle. Pour le relay, la file dépend de son URL et du node ID ; utilisez une connexion par worker GPU RunPod. RunningHub respecte la capacité de chaque compte. Les alias d’URL distincts d’un même serveur ne sont pas identifiés automatiquement.
+
+Pause arrête les éléments en attente ; Cancel demande aussi l’annulation du travail actif. Les éléments non envoyés restent en pause après réouverture jusqu’à **Resume waiting**. Une soumission incertaine bloque sa file jusqu’à réconciliation ; les autres instances continuent. Runs et la provenance Renders conservent les ID de lot/élément et les snapshots exacts.
+
+La migration sauvegarde SQLite et le manifest dans `backups/` du paquet. Conservez une copie complète du projet original pour continuer avec une ancienne version.
+
+![Jobs dans l’application macOS](docs/screenshots/jobs-workspace.png)
+
+## ComfyUI privé sur RunPod
+
+Le [guide de l’agent RunPod](deploy/runpod/README.md) explique le déploiement de l’artefact CI Linux x86_64 près de ComfyUI privé. L’agent contacte un relay HTTPS authentifié en sortie ; aucun port public ComfyUI n’est nécessaire. CI fournit le binaire ELF, les instructions, les métadonnées et les empreintes SHA-256. Les poids et custom nodes doivent être installés au préalable. La synchronisation automatique LoRA/runtime via S3 et une validation complète RunPod/GPU restent à réaliser.
+
 ## RunningHub : créer une tâche
 
 1. Ajoutez un compte RunningHub dans **Connections** et enregistrez sa clé avec le contrôle sécurisé des identifiants.
 2. Importez le workflow API dans **Workflows**. Dans **RunningHub deployments**, sélectionnez le compte, la famille API (**Workflow** ou **AI App**) et l’ID de ce déploiement précis. Un graphe JSON ne prouve pas l’existence d’un déploiement hébergé ; ne remplacez pas son ID par celui d’une autre AI App. L’ID par défaut du compte est facultatif.
 3. Configurez **Job input bindings** avec les nœuds, champs et types du schéma API de ce déploiement. Les références de personnages proviennent de la scène/image sélectionnée.
-4. Sélectionnez **Target keyframe**, cliquez sur **Create generation job**, choisissez le compte, vérifiez les valeurs puis **Validate & submit job**. Le dialogue explique les paramètres manquants.
+4. Sélectionnez **Target keyframe**, cliquez sur **Create generation job**, choisissez le compte, vérifiez les valeurs puis **Review exact inputs** → **Validate & start**. Le dialogue explique les paramètres manquants.
 
 Un refus du fournisseur produit une tâche failed. Pour une soumission incertaine, consultez l’historique RunningHub puis **Resolve submission** : rattachez l’ID de la tâche existante ou confirmez qu’aucune tâche n’a été créée avant de relancer. Le compte et le déploiement restent figés dans le reçu.
 

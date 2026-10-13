@@ -11,6 +11,8 @@
 ## Desktop frontend
 - apps/desktop/src/features/Board.tsx: ordered storyboard and frame inspector.
 - features/Library.tsx: characters/reference imports, media, workflows and renders.
+- features/Jobs.tsx: saved batch drafts, exact input editor, review and run controls.
+- lib/job-inputs.ts / job-inputs.test.ts: typed input resolution/readiness.
 - features/Connections.tsx: endpoint types, credentials, runtime/storage settings.
 - features/PromptAssistant.tsx: optional provider prompt assistance.
 - components/Controls.tsx: styled controls, modal pickers and dialogs.
@@ -21,14 +23,17 @@
 
 ## Native/domain modules
 - apps/desktop/src-tauri/src/service.rs: command orchestration and polling.
+- src/service/jobs.rs: batch preflight, per-lane reservation and concurrent scoped provider I/O.
 - src/media.rs: bounded media protocol; src/assistant.rs: optional LLM transport.
 - tauri.conf.json / capabilities/main.json / Info.plist: security and Finder registration.
 - crates/studio-contracts/src/lib.rs: serde DTOs, camelCase JSON.
 - crates/project-core/src/lib.rs: revisioned SQLite packages and projections.
 - project-core/migrations/0001_initial.sql: schema v1; JSON rows, not normalized entities.
+- project-core/migrations/0002_job_runs.sql: schema v2 durable run rows; v1 backup/upgrade.
 - crates/asset-core/src/lib.rs: copy/link/import/drop/collect/integrity rules.
 - crates/workflow-core/src/lib.rs: graph import, bindings, cast/ref resolution.
 - crates/job-core/src/lib.rs: durable attempts, backend trait and recovery.
+- job-core/src/runs.rs / tests/runs.rs: run persistence, endpoint FIFO/capacity and recovery.
 - crates/provider-comfyui/src/lib.rs: ComfyUI HTTP/WS/history transport.
 - crates/provider-runninghub/src/lib.rs: RunningHub workflow/AI App transport.
 - crates/provider-relay/src/lib.rs: relay HTTPS/SSE API client.
@@ -40,6 +45,7 @@
 ## Verification/build
 - Domain regression tests: inline #[cfg(test)] in the relevant Rust crate.
 - Frontend test: apps/desktop/src/lib/file-drop.test.ts.
+- deploy/runpod/README.md: ELF artifact, outbound relay startup and private GPU workers.
 - deploy/cpu/: pinned weight-free ComfyUI Docker test environment.
 - fixtures/cpu-workflow.json / cpu-canary.png: safe execution/import fixtures.
 - scripts/cpu-smoke.py: real HTTP/history/PNG acceptance; artifacts/ is ignored.
@@ -62,5 +68,5 @@
 - scripts/notebook-bootstrap.py / generate-notebooks.py: verified artifact and GPU worker setup.
 - deploy/colab/, deploy/kaggle/: generated notebooks; scripts/tests/: bootstrap/release regression.
 - examples/workflows/: CPU, text-to-image, masked-edit API/editor fixtures; actual UI exchange pending.
-- playwright.config.ts / e2e/: mocked native RunningHub job creation/mapping acceptance.
+- playwright.config.ts / e2e/: mocked native Jobs exact-input/persistence and RunningHub mapping acceptance.
 - docs/CI_RELEASES.md: runner requirements, tag and notebook artifact usage.

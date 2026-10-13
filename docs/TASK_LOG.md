@@ -1,5 +1,18 @@
 # Task Log
 
+## 2026-10-14 — Jobs workspace and RunPod agent delivery, 0.1.3
+
+- User approved Jobs plan with `go`: independent jobs queue on the same ComfyUI instance and run concurrently across different instances. Later steering makes private RunPod ComfyUI primary; RunningHub remains for workflow tests.
+- Added saved ordered batch drafts, exact typed inputs, per-item literal bindings/media sources/deployments, no-upload native review, durable run history and pause/resume/cancel controls. Existing workflow/keyframe entry points use Jobs.
+- SQLite v2 migration backs up v1 database and manifest before upgrading, requires native acknowledgement and preserves prior history. Reopening unsent work pauses it; unknown submissions hold their lane pending reconciliation.
+- Native dispatch reserves attempts durably, performs staging/submission/polling/collection outside the global mutex and rejects late writes after project changes. Tests prove independent delayed endpoints overlap while unrelated progress continues.
+- Installed ARM64 release 0.1.3 at /Applications/MyMovie Studio.app; strict local ad-hoc signature and version checks passed. Previous 0.1.2 preserved in /private/tmp/MyMovie Studio-0.1.2-backup.app.
+- Native temporary Jobs Verification.mymovie: imported CPU graph, bound width, duplicated item, reviewed and ran two jobs on localhost:8188. Both completed in endpoint order, collected separate results and displayed run/item provenance. Widths 64/80 survived close/reopen; immutable original remained 64. Native screenshot: docs/screenshots/jobs-workspace.png.
+- Validation: 30 Rust workspace tests plus doc tests, 5 frontend unit tests, 4 mocked browser acceptance tests and 16 Python tests passed. Typecheck/production native build, release version parity, CI YAML parse, formatting and diff checks passed.
+- GitHub/GitLab agent job now publishes comfyui-agent-linux-x86_64 (GitLab adds branch suffix), checks actual ELF x86_64 architecture and bundles RunPod startup instructions/checksums. Branch artifacts and version-tag publication remain configured; latest hosted execution tracked below.
+- EN/RU/FR READMEs and compact contracts/module maps updated. Drafts, personal movies/settings/keys, build output and root cpu-canary.png excluded. No paid provider jobs, rented pods or cloud deployments performed.
+- Live RunningHub/RunPod/relay/S3, desktop SSE, automatic LoRA sync, workflow chains, notarization and full image/editor exchange remain open. GitLab requires a project mirror and eligible macOS runner; no GitLab resources created.
+
 ## 2026-10-13 — MyMovie Studio planning
 
 - Read supplied build request, invoked planning skill and initialized missing six compact context docs before repository inspection.

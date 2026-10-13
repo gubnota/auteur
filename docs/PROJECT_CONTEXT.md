@@ -10,8 +10,8 @@
 ## Current milestone
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
 - Native local-studio foundation implemented; remote hardening remains open.
-- Version 0.1.2: ARM64 native debug and release .app builds pass.
-- Installed release: 0.1.2 at /Applications/MyMovie Studio.app (local ad-hoc signature).
+- Version 0.1.3 installed: Jobs drafts, exact inputs and automatic endpoint queues implemented and locally verified.
+- Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.
 - Real SQLite package persistence; browser preview is memory-only.
 - Native picker import, linked character reference and collection verified.
@@ -70,14 +70,19 @@
 - Workflows expose keyframe job creation and per-account RunningHub deployment/family maps.
 - Provider rejections become failed; ambiguous submissions require history reconciliation.
 - Durable jobs/receipts/results; unknown submission blocks blind retry.
-- Per-connection concurrency admission, cancel and result collection implemented.
+- ComfyUI URL FIFO (one active); relay URL + node FIFO/capacity; RunningHub account capacity.
+- Saved independent batches, exact typed inputs and frozen run/item provenance.
+- v1→v2 requires explicit backup/upgrade; SQLite and manifest backups retained.
+- Reopening unsent work pauses it; unknown submissions keep their lane occupied.
 - Desktop polls providers; relay offers authenticated replayable SSE.
-- Desktop SSE consumption and richer scheduling/batch UI remain open.
+- Desktop SSE consumption and result-handoff chains remain open.
 - Native Dock active-job badge and terminal system notifications implemented.
 - Notifications and Logs histories have clear controls.
 
 ## Private runner and storage
-- Authenticated node-scoped relay and outbound agent are initial implementations.
+- RunPod ComfyUI is the primary execution target; RunningHub is for workflow tests.
+- Authenticated node-scoped relay and outbound Linux x86_64 agent are initial implementations.
+- CI publishes checksummed ELF agent archive and deploy/runpod/README.md; no public pod IP needed.
 - Independent Kaggle workers isolate GPU/port/node identity; live deployment pending.
 - Agent exposes typed doctor/inventory/drain/bootstrap/provision operations.
 - Generation receipts precede ComfyUI submission; stale leases become unknown.

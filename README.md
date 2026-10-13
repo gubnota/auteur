@@ -1,6 +1,6 @@
 # MyMovie Studio
 
-Version **0.1.2** adds job creation directly from Workflows, per-account RunningHub deployment mappings, submission recovery, and GitLab/GitHub build and tag pipelines. The Finder startup crash fix from 0.1.1 is retained; no package migration is required.
+Version **0.1.3** adds a Jobs workspace with saved batches, exact typed inputs, automatic FIFO on one ComfyUI instance and parallel dispatch to different instances. RunPod ComfyUI is the main execution target; RunningHub is for workflow tests. Opening an older document requests approval for a backed-up schema v2 upgrade; older app versions cannot open the upgraded package.
 
 Release build: `npm run tauri:build -- --bundles app`; output: `target/release/bundle/macos/MyMovie Studio.app`. Local installation uses an ad-hoc signature; Apple notarization remains pending.
 
@@ -39,12 +39,30 @@ Connections support multiple ComfyUI, RunningHub and private-relay records. Goog
 
 Job receipts and results persist. Ambiguous submissions become unknown rather than being retried blindly. The relay exposes replayable SSE; the desktop currently polls. Native Dock progress and system notifications accompany in-app notification/log histories.
 
+## Jobs: exact inputs and batches
+
+Open **Jobs** directly, or choose **Create generation job** from a workflow/keyframe. Save a named draft, select its target keyframe, then add, duplicate or reorder independent workflow items. Each item selects a connection and explicit bindings. Inputs support text, numbers, custom boolean toggles and parsed JSON. Prompts can use the composed project/scene/frame text or an exact override, including an empty string. Media selectors use movie assets and references from the assigned cast.
+
+**Review exact inputs** validates the entire batch before uploads or creating attempts. Preview media shows asset hashes and a pending provider filename; the final staged graph/payload is stored in the attempt receipt. **Validate & start** freezes the configured batch. Original imported graphs remain unchanged. There is no chained output dependency in this version.
+
+Items sharing a normalized ComfyUI endpoint queue in FIFO order, including duplicate connection records. Different endpoints run concurrently. Private relay connections use the relay URL and worker node ID as their lane; use one connection per RunPod GPU worker. RunningHub uses each account’s configured concurrency. Different URL aliases for the same server cannot be automatically identified.
+
+Pause affects waiting items; cancel also requests cancellation of active work. Reopened unsent items are paused until **Resume waiting**. Unknown submissions block their lane until reconciled; other instances continue. The Runs history and Renders provenance retain run/item IDs and exact snapshots.
+
+The schema v2 upgrade creates SQLite/manifest backups under the package’s `backups/` directory. Keep a complete copy of the original package if you need to continue using an older app.
+
+![Jobs in the native macOS app](docs/screenshots/jobs-workspace.png)
+
+## Private RunPod ComfyUI
+
+Use the [RunPod agent guide](deploy/runpod/README.md) to deploy the CI-built Linux x86_64 agent beside private ComfyUI. It connects outbound to an authenticated HTTPS relay; no public ComfyUI port is required. CI packages the real ELF agent, setup guide, metadata and SHA-256 checksums. Weights and custom nodes must already be installed. Automatic LoRA/runtime S3 synchronization and a live private RunPod/GPU roundtrip remain pending.
+
 ## RunningHub: create a job
 
 1. Add a RunningHub account in **Connections** and save its key with the secure credential control.
 2. Import the API workflow in **Workflows**. In **RunningHub deployments**, select the account, API family (**Workflow** or **AI App**) and the hosted ID for that exact deployment. An imported JSON graph does not contain proof of a hosted deployment; do not substitute an unrelated AI App ID. An account default is optional.
 3. Configure **Job input bindings** with node IDs, field names and value types from that deployment’s API schema. Character reference slots use the assigned scene/frame cast.
-4. Choose **Target keyframe**, click **Create generation job**, then select the account, review the values and **Validate & submit job**. Missing setup is explained in the dialog.
+4. Choose **Target keyframe**, click **Create generation job**, then select the account, review the values and **Review exact inputs** → **Validate & start**. Missing setup is explained in the dialog.
 
 Provider rejections are shown as failed jobs. For an uncertain submission, check RunningHub task history and use **Resolve submission** to attach the existing task ID or confirm that no task was created before retrying. Account/deployment destinations stay frozen in the job receipt.
 
