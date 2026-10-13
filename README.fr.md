@@ -48,7 +48,7 @@ Les reçus des tâches et leurs résultats persistent. Une soumission ambiguë d
 
 Un refus du fournisseur produit une tâche failed. Pour une soumission incertaine, consultez l’historique RunningHub puis **Resolve submission** : rattachez l’ID de la tâche existante ou confirmez qu’aucune tâche n’a été créée avant de relancer. Le compte et le déploiement restent figés dans le reçu.
 
-L’interface et les contrats ont été vérifiés avec des fixtures ; aucune génération RunningHub payante n’a été validée. La [page Workflow fournie](https://www.runninghub.ai/workflow/2110044532631932930) indique la famille **Workflow** et l’ID `2110044532631932930`. Associez cet ID au bon graphe importé avant d’enregistrer ; les détails publics du graphe n’ont pas pu être vérifiés.
+L’interface et les contrats ont été vérifiés avec des fixtures ; aucune génération RunningHub payante n’a été validée. La [page Workflow fournie](https://www.runninghub.ai/workflow/2110044532631932930) indique la famille **Workflow** et l’ID `2110044532631932930`. L’utilisateur a confirmé que cet ID correspond au LTX API JSON fourni ; les détails publics du graphe n’ont pas été vérifiés indépendamment. Les entrées de type chaîne sont `positivePrompt → 121.text`, `negativePrompt → 110.text` et `image → 167.image`. Assignez une image à l’image clé cible avant l’envoi ; la commande native refuse une tâche sans image.
 
 ![Création de tâche dans la version installée 0.1.2, projet temporaire](docs/screenshots/workflow-job-0.1.2.png)
 

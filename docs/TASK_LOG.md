@@ -126,3 +126,10 @@
 - Installed app reopened a saved temporary movie, imported a 7-node API graph, selected its keyframe and opened the new submission review. Native screenshot: docs/screenshots/workflow-job-0.1.2.png. Personal movies untouched; sample screenshot is not a real RunningHub generation.
 - Validation: Rust workspace 23 tests plus doc tests passed; frontend typecheck and 2 unit tests passed; 2 mocked end-to-end RunningHub tests passed; Python 14 tests passed. Release-version parity, CI YAML parsing, shell syntax and diff checks passed. Mocked job-review screenshot saved separately.
 - EN/RU/FR README updated. Drafts, private settings/keys, root cpu-canary.png and generated build output excluded from staging. Full ComfyUI/image milestone and real cloud/GPU/S3 roundtrip remain open.
+
+## 2026-10-14 — Confirmed LTX hosted mapping
+
+- User identified Workflow 2110044532631932930 as the supplied LTX API JSON.
+- Saved that Workflow-family deployment for the selected account through the installed 0.1.2 app; added string bindings for positivePrompt/121.text, negativePrompt/110.text and image/167.image.
+- Read-only persistence check verified the mapping and three bindings; no generation jobs were created. Review opens with the hosted destination, but the selected frame needs an image before submission. The native command rejects a missing frame image; the current review does not disable submit for that case.
+- Native configuration screenshot: ignored artifacts/acceptance/ltx-runninghub-ready.png. Personal movie data and account settings remain outside Git. No provider acceptance or paid generation claimed.

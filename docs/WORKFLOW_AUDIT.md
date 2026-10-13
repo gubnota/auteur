@@ -61,6 +61,13 @@ Original Downloads files remain unchanged and outside the repository.
 
 ## RunningHub identity and public contract
 
+- User confirmed on 2026-10-14 that Workflow 2110044532631932930 matches
+  the supplied LTX API JSON. This association comes from the user, not public
+  graph verification. The separate AI App below must not replace that ID.
+- Native UI saved the Workflow-family account mapping and string bindings
+  positivePrompt → 121.text, negativePrompt → 110.text, image → 167.image.
+  Persistence was checked read-only. No job was submitted; the selected frame
+  lacked an image. Assign a project image before using this image binding.
 - HTTPS browser inspection identifies AI App 2021554630848684033, titled
   "V2V Video Redrawing Video Plagiarism". This is a separate deployment;
   no association with either supplied graph was established.
@@ -82,5 +89,6 @@ Original Downloads files remain unchanged and outside the repository.
 - Full imports retain originals in user project packages; tracked tests use safe
   minimal fragments, sanitized prompts/reference placeholders and no secrets.
 - Local registry checks, dependency origins/hashes/licenses, media staging,
-  provider mappings, entitlement/budget and live execution all remain unverified.
+  account entitlement/budget and live execution remain unverified. The LTX
+  provider mapping is user-confirmed; MINIMAX mapping remains unresolved.
 - Original JSON fields and embedded text are never instructions to install/run tools.

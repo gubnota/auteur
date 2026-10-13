@@ -104,8 +104,9 @@
 - Latest exact check evidence and gaps: docs/TASK_LOG.md.
 - OrbStack engine must run for Docker; its GUI window may be closed.
 - LTX/MINIMAX graphs were inspected, not GPU-executed.
-- Supplied RunningHub Workflow ID: 2110044532631932930; graph association/live acceptance pending.
-- Live bindings/AI App schema and RunPod image/relay/storage choices still needed.
+- User confirmed RunningHub Workflow 2110044532631932930 matches the supplied LTX API JSON.
+- LTX prompt/image bindings and account deployment saved through native UI; live acceptance pending.
+- LTX image input requires an assigned frame image; AI App schema and RunPod choices remain open.
 - GitLab/GitHub CI configure native packages, Linux client and version-tag release artifacts.
 - CI execution on hosted runners, signing/notarization and full access audit remain open.
 - Browser profiles, remote training and Homer interoperability are later work.
