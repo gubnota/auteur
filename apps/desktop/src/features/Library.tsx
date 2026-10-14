@@ -1,3 +1,4 @@
+import { WorkflowTarget } from "../components/WorkflowTarget";
 import { WorkflowSetup, compatibilityLabel } from "../components/WorkflowSetup";
 import { useState, useEffect } from "react";
 import { Plus, Image, Upload, X, Workflow as WorkflowIcon } from "lucide-react";
@@ -35,8 +36,15 @@ export function PageTitle({
   );
 }
 export function Media({ asset, root }: { asset: Asset; root: string }) {
-  if (!mediaUrl(root, asset) && ["image", "video", "audio"].includes(asset.kind)) {
-    return <div className="file-placeholder">{asset.kind} · {asset.name}</div>;
+  if (
+    !mediaUrl(root, asset) &&
+    ["image", "video", "audio"].includes(asset.kind)
+  ) {
+    return (
+      <div className="file-placeholder">
+        {asset.kind} · {asset.name}
+      </div>
+    );
   }
   return asset.kind === "video" ? (
     <video controls preload="metadata" src={mediaUrl(root, asset)} />
@@ -416,7 +424,11 @@ export function Workflows({
   update,
   onImport,
   onGenerate,
+  prepare,
+  notify,
 }: {
+  prepare: (w: string, c: string) => Promise<void>;
+  notify: (s: string) => void;
   project: Project;
   settings: AppSettings;
   update: Update;
@@ -424,6 +436,10 @@ export function Workflows({
   onGenerate: (frameId: string, workflowId: string) => void;
 }) {
   const [selected, setSelected] = useState(""),
+    [targetId, setTargetId] = useState(
+      settings.connections.find((c) => ["comfyui", "relay"].includes(c.kind))
+        ?.id ?? "",
+    ),
     [nodeId, setNode] = useState(""),
     [input, setInput] = useState(""),
     [semantic, setSemantic] = useState("positivePrompt"),
@@ -444,13 +460,21 @@ export function Workflows({
       <PageTitle
         eyebrow="GENERATION DEFINITIONS"
         title="Workflows"
-        description="Import API graphs. Bind fields explicitly. Keep every original node and version."
+        description="Choose saved workflows, prepare their inputs, and preserve every original version."
         action={
           <button className="primary" onClick={onImport}>
             <Upload size={18} />
-            Import API workflow
+            Browse workflow catalogue
           </button>
         }
+      />
+      <Picker
+        title="Preparation target"
+        value={targetId}
+        options={settings.connections
+          .filter((c) => ["comfyui", "relay", "runninghub"].includes(c.kind))
+          .map((c) => ({ id: c.id, label: c.name, description: c.kind }))}
+        onChange={setTargetId}
       />
       <Picker
         title="Workflow category"
@@ -467,7 +491,7 @@ export function Workflows({
         <Empty
           title="Bring your workflow"
           action={
-            <button onClick={onImport}>Choose a ComfyUI API export</button>
+            <button onClick={onImport}>Choose or import a workflow</button>
           }
         >
           LTX and MINIMAX exports can be imported here. Availability is checked
@@ -489,8 +513,9 @@ export function Workflows({
                 <WorkflowIcon size={28} />
                 <strong>{w.name}</strong>
                 <small>
-                  {Object.keys(w.graph).length} nodes · {w.bindings.length}{" "}
-                  bindings
+                  {Object.keys(w.graph).length
+                    ? `${Object.keys(w.graph).length} nodes · ${w.bindings.length} bindings`
+                    : "Editor workflow · prepare to discover inputs"}
                 </small>
                 <span className="compatibility-badge">
                   {compatibilityLabel(w)}
@@ -502,8 +527,15 @@ export function Workflows({
       )}
       {w && (
         <Modal title={w.name} onClose={() => setSelected("")}>
+          <WorkflowTarget
+            workflow={w}
+            connection={settings.connections.find((c) => c.id === targetId)}
+            prepare={prepare}
+            notify={notify}
+          />
           <WorkflowSetup
             workflow={w}
+            connectionId={targetId}
             change={(requirements) =>
               update((p) => {
                 p.workflows.find((x) => x.id === w.id)!.requirements =

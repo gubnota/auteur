@@ -27,9 +27,11 @@ class AgentPackageTests(unittest.TestCase):
             archive = dest / "mymovie-agent-linux-x86_64.tar.gz"
             with tarfile.open(archive) as tar:
                 self.assertEqual(tar.getnames()[:3], ["mymovie-agent", "README-RunPod.md", "mymovie_runtime.py"])
+                self.assertIn("mymovie_workflow_compiler.py", tar.getnames())
+                self.assertIn("workflow-compiler-requirements.txt", tar.getnames())
                 self.assertIn("mask-canary_api.json", tar.getnames())
                 self.assertIn("mymovie-rembg.plugin.json", tar.getnames())
-                self.assertLessEqual(len(tar.getnames()), 16)
+                self.assertLessEqual(len(tar.getnames()), 18)
                 self.assertEqual(tar.extractfile("mymovie-agent").read(), binary.read_bytes())
                 self.assertTrue(tar.getmember("mymovie-agent").mode & 0o111)
             metadata = json.loads((dest / "mymovie-agent-linux-x86_64.json").read_text())
@@ -65,3 +67,15 @@ class AgentPackageTests(unittest.TestCase):
             self.assertTrue((dest / "SHA256SUMS-agent-aarch64.txt").exists())
             binary.write_bytes(b"\x7fELF\x02\x01" + bytes(12) + b"\x3e\x00")
             self.assertNotEqual(self.run_packager(binary, dest, "aarch64").returncode, 0)
+
+    def test_macos_compiler_archive(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory=Path(temp); binary=directory/'agent'
+            binary.write_bytes(b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01"+bytes(32));binary.chmod(0o755)
+            dest=directory/'dist'
+            result=subprocess.run([sys.executable,str(ROOT/'scripts/package-agent.py'),str(binary),str(dest),'--platform','macos','--architecture','aarch64'],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            metadata=json.loads((dest/'mymovie-agent-macos-aarch64.json').read_text())
+            self.assertEqual(metadata['target'],'aarch64-apple-darwin')
+            with tarfile.open(dest/'mymovie-agent-macos-aarch64.tar.gz') as archive:
+                self.assertEqual(hashlib.sha256(archive.extractfile('mymovie_workflow_compiler.py').read()).hexdigest(),metadata['compilerSha256'])

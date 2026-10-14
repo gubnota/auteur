@@ -108,12 +108,35 @@ export async function openFixture(
     export const native = true;
     let project = ${JSON.stringify(movie)};
     let settings = ${JSON.stringify(connections)};
+    let catalogue = structuredClone(project.workflows);
     window.fixture = { submissions: [] };
     export async function call(command, args = {}) {
       if (command === 'get_settings') return settings;
       if (command === 'recent_projects' || command === 'take_opened_projects') return [];
       if (command === 'close_project') return null;
       if (command === 'get_project') return project;
+      if (command === 'list_workflows') return catalogue;
+      if (command === 'catalogue_workflow') {
+        const w = project.workflows.find(w => w.id === args.workflowId);
+        catalogue = [...catalogue.filter(x => x.id !== w.id), structuredClone(w)]; return w;
+      }
+      if (command === 'pin_workflow') {
+        const w = catalogue.find(w => w.id === args.workflowId);
+        if (!project.workflows.some(x => x.id === w.id)) project.workflows.push(structuredClone(w));
+        return project;
+      }
+      if (command === 'save_workflow_layout') {
+        const w = project.workflows.find(w => w.id === args.workflowId);
+        w.layout = args.layout;
+        catalogue = [...catalogue.filter(x => x.id !== w.id), structuredClone(w)];
+        project.revision++; window.fixture.saved = project; return project;
+      }
+      if (command === 'prepare_workflow') {
+        const w = project.workflows.find(w => w.id === args.workflowId);
+        w.profiles = [...(w.profiles ?? []).filter(x => x.connectionId !== args.connectionId), {connectionId:args.connectionId, sourceHash:w.editorHash ?? w.version, apiHash:w.version, registryHash:'r', frontendHash:'f', compilerVersion:'fixture', graph:w.graph, inputs:w.inputs ?? [], outputs:w.outputs ?? []}];
+        w.lastTarget = args.connectionId;
+        project.revision++; window.fixture.saved = project; return project;
+      }
       if (command === 'open_project') return project;
       if (command === 'save_project') { project = {...args.project, revision: args.expectedRevision + 1}; window.fixture.saved = project; return project; }
       if (command === 'list_jobs' || command === 'refresh_jobs' || command === 'list_job_runs') return [];

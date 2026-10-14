@@ -14,6 +14,7 @@ import {
   parseInput,
   resolveInputs,
 } from "../lib/job-inputs";
+import { ratios } from "../lib/types";
 import { Field, Modal, Picker, Toggle } from "./Controls";
 import { Media } from "../features/Library";
 export function WorkflowInputs({
@@ -36,6 +37,52 @@ export function WorkflowInputs({
   importMedia?: (semantic: string) => Promise<void>;
 }) {
   const bindings = item.bindings ?? w.bindings;
+  const [advanced, setAdvanced] = useState(false);
+  const [dimensionNode, setDimensionNode] = useState("");
+  const axis = (b: Binding) => b.input.split(".").at(-1);
+  const dimensionKey = (b: Binding) =>
+    `${b.nodeId}:${b.input.split(".").slice(0, -1).join(".")}`;
+  const dimensionNodes = [
+    ...new Set(
+      bindings
+        .filter(
+          (b) =>
+            axis(b) === "width" &&
+            b.valueType === "number" &&
+            bindings.some(
+              (h) =>
+                dimensionKey(h) === dimensionKey(b) &&
+                axis(h) === "height" &&
+                h.valueType === "number",
+            ),
+        )
+        .map(dimensionKey),
+    ),
+  ];
+  const selectedDimensions = dimensionNodes.includes(dimensionNode)
+    ? dimensionNode
+    : dimensionNodes[0];
+  const dimensions = bindings.filter(
+    (b) =>
+      dimensionKey(b) === selectedDimensions &&
+      ["width", "height"].includes(axis(b) ?? "") &&
+      b.valueType === "number",
+  );
+  const [ratio, setRatio] = useState(() => {
+    const value = (axisName: string) => {
+      const b = dimensions.find((b) => axis(b) === axisName);
+      return b
+        ? Number(item.values[b.semantic] ?? w.graph[b.nodeId]?.inputs[b.input])
+        : NaN;
+    };
+    const savedRatio = value("width") / value("height");
+    return (
+      ratios.find((choice) => {
+        const [width, height] = choice.split(":").map(Number);
+        return Math.abs(savedRatio / (width / height) - 1) < 0.015;
+      }) ?? p.ratio
+    );
+  });
   const [adding, setAdding] = useState(false);
   const [field, setField] = useState("");
   const [semantic, setSemantic] = useState("");
@@ -62,7 +109,91 @@ export function WorkflowInputs({
           configure inputs.
         </p>
       )}
+      {!!dimensions.length && (
+        <section className="workflow-ratio">
+          {dimensionNodes.length > 1 && (
+            <Picker
+              title="Dimension node"
+              value={selectedDimensions}
+              options={dimensionNodes.map((id) => ({
+                id,
+                label: `${id} · ${w.graph[id.split(":")[0]].class_type}`,
+              }))}
+              onChange={setDimensionNode}
+            />
+          )}
+          <Picker
+            title="Output ratio"
+            value={ratio}
+            options={ratios.map((id) => ({ id, label: id }))}
+            onChange={setRatio}
+          />
+          <button
+            disabled={
+              !dimensions.some((b) => axis(b) === "width") ||
+              !dimensions.some((b) => axis(b) === "height")
+            }
+            onClick={() =>
+              edit((i) => {
+                const [x, y] = ratio.split(":").map(Number);
+                const base = Number(
+                  i.values[
+                    dimensions.find((b) => axis(b) === "width")!.semantic
+                  ] ??
+                    defaultValue(dimensions.find((b) => axis(b) === "width")!),
+                );
+                for (const b of dimensions) {
+                  const d = w.inputs?.find(
+                    (d) =>
+                      d.binding.nodeId === b.nodeId &&
+                      d.binding.input === b.input,
+                  );
+                  const step = d?.step ?? 1;
+                  const raw = axis(b) === "width" ? base : (base * y) / x;
+                  i.values[b.semantic] = Math.max(
+                    d?.min ?? step,
+                    Math.min(d?.max ?? Infinity, Math.round(raw / step) * step),
+                  );
+                  delete i.inputText?.[`${b.semantic}:${b.nodeId}.${b.input}`];
+                  delete i.inputErrors?.[
+                    `${b.semantic}:${b.nodeId}.${b.input}`
+                  ];
+                }
+              })
+            }
+          >
+            Apply ratio to bound dimensions
+          </button>
+          <p className="generate-ratio-summary">
+            {ratio} · Updates width / height fields below. Image-edit workflows
+            without dimension controls keep their source framing.
+          </p>
+        </section>
+      )}
+      {!!w.inputs?.some((d) => d.advanced || d.hidden) && (
+        <Toggle
+          label="Show advanced inputs"
+          checked={advanced}
+          onChange={setAdvanced}
+        />
+      )}
+      {w.inputs
+        ?.filter((d) => d.control === "unsupported")
+        .map((d) => (
+          <p key={d.binding.semantic} className="muted">
+            {d.label}: custom type requires an explicit mapping.
+          </p>
+        ))}
       {bindings.map((b) => {
+        const descriptor = w.inputs?.find(
+          (d) => d.binding.nodeId === b.nodeId && d.binding.input === b.input,
+        );
+        if (
+          (descriptor?.hidden || descriptor?.advanced) &&
+          !advanced &&
+          !dimensions.includes(b)
+        )
+          return null;
         let resolved: unknown = defaultValue(b);
         try {
           resolved = resolveInputs(p, draft, { ...item, bindings: [b] }).values[
@@ -83,7 +214,8 @@ export function WorkflowInputs({
           <article className="jobs-input" key={key}>
             <div className="jobs-toolbar">
               <div>
-                <strong>{b.semantic}</strong>
+                {descriptor?.group && <small>{descriptor.group}</small>}
+                <strong>{descriptor?.label ?? b.semantic}</strong>
                 <small>
                   {w.graph[b.nodeId]?.class_type} · {b.nodeId}.{b.input} ·{" "}
                   {b.valueType}
@@ -106,7 +238,9 @@ export function WorkflowInputs({
               </button>
             </div>
             <small className="muted">
-              Imported default: {JSON.stringify(defaultValue(b))}
+              Imported default:{" "}
+              {String(JSON.stringify(defaultValue(b))).slice(0, 180)}
+              {String(JSON.stringify(defaultValue(b))).length > 180 ? "…" : ""}
             </small>
             {mediaBinding(b) ? (
               <div
@@ -238,7 +372,21 @@ export function WorkflowInputs({
                   />
                 )}
                 {!composed &&
-                  (b.valueType === "boolean" ? (
+                  (descriptor?.control === "choice" ? (
+                    <Picker
+                      title={descriptor.label}
+                      value={JSON.stringify(value)}
+                      options={descriptor.choices.map((v) => ({
+                        id: JSON.stringify(v),
+                        label: String(v),
+                      }))}
+                      onChange={(text) =>
+                        edit((i) => {
+                          i.values[b.semantic] = JSON.parse(text);
+                        })
+                      }
+                    />
+                  ) : b.valueType === "boolean" ? (
                     <Toggle
                       label={b.semantic}
                       checked={value === true}
@@ -250,14 +398,21 @@ export function WorkflowInputs({
                     />
                   ) : (
                     <Field
-                      label={`${b.semantic} · ${b.nodeId}.${b.input}`}
+                      label={
+                        descriptor?.label ??
+                        `${b.semantic} · ${b.nodeId}.${b.input}`
+                      }
                       value={
                         item.inputText?.[key] ??
                         (typeof value === "string" && b.valueType !== "json"
                           ? value
                           : (JSON.stringify(value) ?? ""))
                       }
-                      multiline={prompt || b.valueType === "json"}
+                      multiline={
+                        prompt ||
+                        descriptor?.control === "multiline" ||
+                        b.valueType === "json"
+                      }
                       onChange={(text) => {
                         try {
                           const v = parseInput(b.valueType, text);

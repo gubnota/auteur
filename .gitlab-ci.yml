@@ -130,6 +130,30 @@ linux-agent:
     paths:
       - release-assets/*
 
+macos-agent:
+  stage: build
+  needs: [verify]
+  image: macos-15-xcode-16
+  tags: ["$MACOS_RUNNER_TAG"]
+  timeout: 30m
+  parallel:
+    matrix:
+      - TARGET: aarch64-apple-darwin
+        ARCHITECTURE: aarch64
+      - TARGET: x86_64-apple-darwin
+        ARCHITECTURE: x86_64
+  before_script:
+    - source scripts/ci-setup.sh
+  script:
+    - rustup target add "$TARGET"
+    - cargo build --locked --release -p mymovie-agent --target "$TARGET"
+    - python3 scripts/package-agent.py "target/$TARGET/release/mymovie-agent" release-assets --platform macos --architecture "$ARCHITECTURE" --build-os macos-15
+  artifacts:
+    name: "comfyui-agent-macos-$ARCHITECTURE-$CI_COMMIT_REF_SLUG"
+    expire_in: 14 days
+    paths:
+      - release-assets/*
+
 release:
   image: python:3.12-slim-bookworm
   stage: release
@@ -141,6 +165,8 @@ release:
     - job: windows
       artifacts: true
     - job: linux-agent
+      artifacts: true
+    - job: macos-agent
       artifacts: true
   resource_group: versioned-release
   rules:

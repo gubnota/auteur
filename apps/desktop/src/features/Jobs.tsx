@@ -1,3 +1,5 @@
+import { WorkflowTarget } from "../components/WorkflowTarget";
+import { workflowForTarget } from "../lib/job-inputs";
 import { WorkflowInputs } from "../components/WorkflowInputs";
 import { useEffect, useState } from "react";
 import {
@@ -30,6 +32,8 @@ export function newJobDraft(
   frameId = "",
   workflowId = "",
 ): JobDraft {
+  const workflow =
+    p.workflows.find((w) => w.id === workflowId) ?? p.workflows[0];
   return {
     id: uid(),
     name: `Generation ${(p.jobDrafts ?? []).length + 1}`,
@@ -44,9 +48,13 @@ export function newJobDraft(
         id: uid(),
         workflowId: workflowId || p.workflows[0]?.id || "",
         connectionId:
+          (settings.connections.some((c) => c.id === workflow?.lastTarget)
+            ? workflow?.lastTarget
+            : undefined) ??
           settings.connections.find((c) =>
             ["comfyui", "runninghub", "relay"].includes(c.kind),
-          )?.id ?? "",
+          )?.id ??
+          "",
         values: {},
         assets: {},
       },
@@ -65,7 +73,11 @@ export function Jobs({
   notify,
   root,
   importMedia,
+  importWorkflow,
+  prepare,
 }: {
+  importWorkflow: () => void;
+  prepare: (w: string, c: string) => Promise<void>;
   root: string;
   importMedia: (
     draftId: string,
@@ -127,7 +139,8 @@ export function Jobs({
   const issue = draft
     ? [...readiness(p, settings, draft), ...Object.values(errors)]
     : [];
-  const w = p.workflows.find((w) => w.id === item?.workflowId);
+  const sourceWorkflow = p.workflows.find((w) => w.id === item?.workflowId);
+  const w = workflowForTarget(sourceWorkflow, item?.connectionId ?? "");
   const c = settings.connections.find((c) => c.id === item?.connectionId);
   const d = w?.deployments?.find((d) => d.connectionId === c?.id);
   const frames = p.episodes.flatMap((e) =>
@@ -386,6 +399,9 @@ export function Jobs({
                     onChange={(id) =>
                       editItem((i) => {
                         i.connectionId = id;
+                        i.bindings = undefined;
+                        i.inputText = {};
+                        i.inputErrors = {};
                         i.deploymentId = null;
                         i.apiFamily = null;
                       })
@@ -452,26 +468,39 @@ export function Jobs({
                   </section>
                 )}
                 {w && (
-                  <WorkflowInputs
-                    key={`${draft.id}:${item.id}:${w.id}`}
-                    root={root}
-                    importMedia={(semantic) =>
-                      importMedia(draft.id, item.id, semantic)
-                    }
-                    p={p}
-                    draft={draft}
-                    item={item}
-                    workflow={w}
-                    edit={editItem}
-                    error={(key, message) =>
-                      setErrors((e) => {
-                        const next = { ...e };
-                        if (message) next[key] = message;
-                        else delete next[key];
-                        return next;
-                      })
-                    }
-                  />
+                  <>
+                    {sourceWorkflow && (
+                      <WorkflowTarget
+                        workflow={sourceWorkflow}
+                        connection={c}
+                        prepare={prepare}
+                        notify={notify}
+                      />
+                    )}
+                    <button onClick={importWorkflow}>
+                      Browse workflow catalogue
+                    </button>
+                    <WorkflowInputs
+                      key={`${draft.id}:${item.id}:${w.id}`}
+                      root={root}
+                      importMedia={(semantic) =>
+                        importMedia(draft.id, item.id, semantic)
+                      }
+                      p={p}
+                      draft={draft}
+                      item={item}
+                      workflow={w}
+                      edit={editItem}
+                      error={(key, message) =>
+                        setErrors((e) => {
+                          const next = { ...e };
+                          if (message) next[key] = message;
+                          else delete next[key];
+                          return next;
+                        })
+                      }
+                    />
+                  </>
                 )}
               </>
             )}

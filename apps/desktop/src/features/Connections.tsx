@@ -803,6 +803,25 @@ export function Preferences({
               Manrope and IBM Plex Mono are bundled locally. System focus,
               reduced motion and keyboard navigation are supported.
             </p>
+            <h3>Workflow compiler</h3>
+            <Field
+              label="Compiler Python executable"
+              value={String(storage.compilerPython ?? "python3")}
+              onChange={(v) => setStorage({ ...storage, compilerPython: v })}
+            />
+            <Field
+              label="Chromium executable (optional override)"
+              value={String(storage.compilerBrowser ?? "")}
+              onChange={(v) => setStorage({ ...storage, compilerBrowser: v })}
+            />
+            <p>
+              Install Playwright and Chromium for this Python once. Preparation
+              uses an isolated browser with your target’s installed frontend; it
+              never submits a generation.
+            </p>
+            <button onClick={() => void save({ ...settings, storage })}>
+              Save compiler settings
+            </button>
             <h3>Browser profiles · upcoming</h3>
             <p className="muted">
               Isolated manual logins for Flow and other image providers are

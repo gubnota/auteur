@@ -59,7 +59,48 @@ export interface Binding {
     order: number;
   } | null;
 }
+export interface WorkflowInput {
+  binding: Binding;
+  label: string;
+  required: boolean;
+  control: string;
+  default: unknown;
+  choices: unknown[];
+  min?: number;
+  max?: number;
+  step?: number;
+  advanced: boolean;
+  group?: string;
+  hidden?: boolean;
+}
+export interface WorkflowLayout {
+  inputs: {
+    nodeId: string;
+    input: string;
+    label: string;
+    group: string;
+    hidden: boolean;
+    advanced: boolean;
+  }[];
+  outputs: { nodeId: string; label: string; selected: boolean }[];
+}
+export interface CompiledProfile {
+  connectionId: string;
+  sourceHash: string;
+  apiHash: string;
+  registryHash: string;
+  frontendHash: string;
+  compilerVersion: string;
+  graph: Workflow["graph"];
+  inputs: WorkflowInput[];
+  outputs: { nodeId: string; label: string; classType: string }[];
+}
 export interface Workflow {
+  layout?: WorkflowLayout;
+  outputs?: CompiledProfile["outputs"];
+  inputs?: WorkflowInput[];
+  profiles?: CompiledProfile[];
+  lastTarget?: string;
   id: string;
   name: string;
   version: string;

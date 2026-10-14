@@ -12,7 +12,8 @@ import type { AppSettings, JobDraft, JobItem, Project } from "../lib/types";
 import { newJobDraft } from "./Jobs";
 import { WorkflowInputs } from "../components/WorkflowInputs";
 import { Field, Picker, Toggle } from "../components/Controls";
-import { readiness } from "../lib/job-inputs";
+import { WorkflowTarget } from "../components/WorkflowTarget";
+import { readiness, workflowForTarget } from "../lib/job-inputs";
 import { compatibilityLabel } from "../components/WorkflowSetup";
 import { Media } from "./Library";
 const modes = [
@@ -35,6 +36,7 @@ export function Generate({
   review,
   importMedia,
   importWorkflow,
+  prepare,
   notify,
 }: {
   project: Project;
@@ -50,6 +52,7 @@ export function Generate({
     semantic: string,
   ) => Promise<void>;
   importWorkflow: () => void;
+  prepare: (w: string, c: string) => Promise<void>;
   notify: (message: string) => void;
 }) {
   const drafts = (p.jobDrafts ?? []).filter(
@@ -58,7 +61,8 @@ export function Generate({
   const draft = drafts.find((d) => d.id === selectedId) ?? drafts[0];
   const [itemId, setItemId] = useState("");
   const item = draft?.items.find((i) => i.id === itemId) ?? draft?.items[0];
-  const workflow = p.workflows.find((w) => w.id === item?.workflowId);
+  const sourceWorkflow = p.workflows.find((w) => w.id === item?.workflowId);
+  const workflow = workflowForTarget(sourceWorkflow, item?.connectionId ?? "");
   const mode = modes.find((m) => m.id === draft?.context?.mode) ?? modes[0];
   const editDraft = (fn: (d: JobDraft) => void) => {
     if (draft)
@@ -142,7 +146,7 @@ export function Generate({
           <WandSparkles size={40} />
           <h2>Start with a workflow</h2>
           <p>
-            Import an API workflow, bind its exact inputs and add your own
+            Choose a saved workflow, bind its exact inputs and add your own
             media. Each batch can target different nodes.
           </p>
           <div className="row">
@@ -227,7 +231,7 @@ export function Generate({
                     }
                   />
                   <button className="text-button" onClick={importWorkflow}>
-                    Import another workflow
+                    Browse workflow catalogue
                   </button>
                   <Picker
                     title="Execution node"
@@ -247,6 +251,9 @@ export function Generate({
                     onChange={(connectionId) =>
                       editItem((i) => {
                         i.connectionId = connectionId;
+                        i.bindings = undefined;
+                        i.inputText = {};
+                        i.inputErrors = {};
                         i.deploymentId = null;
                         i.apiFamily = null;
                       })
@@ -274,23 +281,35 @@ export function Generate({
                     </details>
                   )}
                   {workflow && (
-                    <WorkflowInputs
-                      key={`${draft.id}:${item.id}:${workflow.id}`}
-                      p={p}
-                      draft={draft}
-                      item={item}
-                      workflow={workflow}
-                      root={root}
-                      edit={editItem}
-                      error={() => {}}
-                      importMedia={async (semantic) => {
-                        try {
-                          await importMedia(draft.id, item.id, semantic);
-                        } catch (e) {
-                          notify(String(e));
-                        }
-                      }}
-                    />
+                    <>
+                      {sourceWorkflow && (
+                        <WorkflowTarget
+                          workflow={sourceWorkflow}
+                          connection={settings.connections.find(
+                            (c) => c.id === item.connectionId,
+                          )}
+                          prepare={prepare}
+                          notify={notify}
+                        />
+                      )}
+                      <WorkflowInputs
+                        key={`${draft.id}:${item.id}:${workflow.id}`}
+                        p={p}
+                        draft={draft}
+                        item={item}
+                        workflow={workflow}
+                        root={root}
+                        edit={editItem}
+                        error={() => {}}
+                        importMedia={async (semantic) => {
+                          try {
+                            await importMedia(draft.id, item.id, semantic);
+                          } catch (e) {
+                            notify(String(e));
+                          }
+                        }}
+                      />
+                    </>
                   )}
                 </>
               )}

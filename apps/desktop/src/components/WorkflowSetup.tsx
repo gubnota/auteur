@@ -117,9 +117,11 @@ export function destinationConflict(
 
 export function WorkflowSetup({
   workflow: w,
+  connectionId,
   change,
 }: {
   workflow: Workflow;
+  connectionId?: string;
   change: (requirements: NonNullable<Workflow["requirements"]>) => void;
 }) {
   const [editing, setEditing] = useState<number | null>(null),
@@ -382,6 +384,7 @@ export function WorkflowSetup({
                   await call("export_workflow_setup", {
                     path,
                     workflowId: w.id,
+                    connectionId,
                     requirements,
                   });
                   setNotice(

@@ -91,7 +91,7 @@ jobs:
             target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
           retention-days: 14
-  linux-agent:
+  agent:
     needs: checks
     strategy:
       fail-fast: false
@@ -99,8 +99,16 @@ jobs:
         include:
           - runner: ubuntu-22.04
             architecture: x86_64
+            platform: linux
           - runner: ubuntu-22.04-arm
             architecture: aarch64
+            platform: linux
+          - runner: macos-15
+            architecture: aarch64
+            platform: macos
+          - runner: macos-15-intel
+            architecture: x86_64
+            platform: macos
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
@@ -109,12 +117,12 @@ jobs:
           persist-credentials: false
       - run: rustup toolchain install 1.96.0 --profile minimal && rustup default 1.96.0
       - run: cargo build --locked --release -p mymovie-agent -p mymovie-relay
-      - name: Actual Linux binary smoke test
+      - name: Native agent binary smoke test
         run: target/release/mymovie-agent --help && target/release/mymovie-agent --version
-      - run: python3 scripts/package-agent.py target/release/mymovie-agent release-assets --architecture ${{ matrix.architecture }} --build-os ubuntu-22.04
+      - run: python3 scripts/package-agent.py target/release/mymovie-agent release-assets --architecture ${{ matrix.architecture }} --platform ${{ matrix.platform }} --build-os ${{ matrix.runner }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: comfyui-agent-linux-${{ matrix.architecture }}
+          name: comfyui-agent-${{ matrix.platform }}-${{ matrix.architecture }}
           path: release-assets/*
           if-no-files-found: error
           retention-days: 14

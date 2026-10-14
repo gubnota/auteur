@@ -50,7 +50,7 @@ jobs:
           import os
           source = os.environ['GITHUB_SHA']
           run = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
-          Path('release-notes.md').write_text(f'Native macOS Apple Silicon/Intel, Windows x64 (MSI and EXE), and Linux x86_64/ARM64 (DEB and AppImage) desktop builds. Linux x86_64/ARM64 ComfyUI agents are included for private workers. Colab/Kaggle notebooks use the x86_64 agent.\n\nVerify SHA256SUMS.txt before installation. README-RunPod.md includes startup and private relay setup. macOS builds are ad-hoc signed and are not Apple-notarized; Windows installers are unsigned. Live cloud GPU acceptance remains pending.\n\nSource commit: `{source}`. [Successful checks and builds]({run}).\n')
+          Path('release-notes.md').write_text(f'Native macOS Apple Silicon/Intel, Windows x64 (MSI and EXE), and Linux x86_64/ARM64 (DEB and AppImage) desktop builds. macOS Apple Silicon/Intel and Linux x86_64/ARM64 ComfyUI agents with the workflow compiler are included for private workers. Colab/Kaggle notebooks use the x86_64 agent.\n\nVerify SHA256SUMS.txt before installation. README-RunPod.md includes startup and private relay setup. macOS builds are ad-hoc signed and are not Apple-notarized; Windows installers are unsigned. Live cloud GPU acceptance remains pending.\n\nSource commit: `{source}`. [Successful checks and builds]({run}).\n')
           PY
       - name: Create or update draft
         env:

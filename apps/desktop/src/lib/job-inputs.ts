@@ -68,11 +68,51 @@ export const mediaBinding = (b: Binding) =>
   !!b.media ||
   ["image", "mask"].includes(b.semantic) ||
   b.semantic.startsWith("characterReference");
+export function workflowForTarget(
+  w: Workflow | undefined,
+  connectionId: string,
+): Workflow | undefined {
+  if (!w) return;
+  const profile = w.profiles?.find((p) => p.connectionId === connectionId);
+  if (!profile) return w;
+  return {
+    ...w,
+    graph: profile.graph,
+    inputs: profile.inputs.map((d) => ({
+      ...d,
+      ...w.layout?.inputs.find(
+        (l) => l.nodeId === d.binding.nodeId && l.input === d.binding.input,
+      ),
+    })),
+    outputs: profile.outputs.map((d) => ({
+      ...d,
+      ...w.layout?.outputs.find((l) => l.nodeId === d.nodeId),
+    })),
+    bindings: [
+      ...w.bindings,
+      ...profile.inputs
+        .filter(
+          (d) =>
+            d.control !== "unsupported" &&
+            !w.bindings.some(
+              (b) =>
+                b.nodeId === d.binding.nodeId && b.input === d.binding.input,
+            ),
+        )
+        .map((d) => d.binding),
+    ],
+  };
+}
 export function resolveInputs(p: Project, draft: JobDraft, item: JobItem) {
   if (Object.keys(item.inputErrors ?? {}).length)
     throw new Error(Object.values(item.inputErrors!).join("; "));
-  const w = p.workflows.find((w) => w.id === item.workflowId);
+  const w = workflowForTarget(
+    p.workflows.find((w) => w.id === item.workflowId),
+    item.connectionId,
+  );
   if (!w) throw new Error("Select a workflow");
+  if (!Object.keys(w.graph).length)
+    throw new Error("Prepare this workflow for the selected target first");
   const scene = p.episodes
     .flatMap((e) => e.scenes)
     .find((s) =>
@@ -152,6 +192,24 @@ export function resolveInputs(p: Project, draft: JobDraft, item: JobItem) {
       throw new Error(`${b.semantic} needs a ${b.valueType} value`);
     if (typeof value === "number" && !Number.isFinite(value))
       throw new Error(`${b.semantic} needs a finite number`);
+    const descriptor = w.inputs?.find(
+      (d) => d.binding.nodeId === b.nodeId && d.binding.input === b.input,
+    );
+    if (
+      descriptor?.control === "choice" &&
+      !descriptor.choices.some(
+        (v) => JSON.stringify(v) === JSON.stringify(value),
+      )
+    )
+      throw new Error(`${field}: choose a listed value`);
+    if (
+      typeof value === "number" &&
+      descriptor &&
+      ((descriptor.min != null && value < descriptor.min) ||
+        (descriptor.max != null && value > descriptor.max) ||
+        (descriptor.step === 1 && !Number.isInteger(value)))
+    )
+      throw new Error(`${field}: outside allowed range or step`);
     values[b.semantic] = value;
     graph[b.nodeId].inputs[b.input] =
       b.valueType === "json" && typeof defaults[b.input] === "string"
@@ -169,7 +227,10 @@ export function readiness(
   return draft.items.flatMap((item, index) => {
     const errors: string[] = [];
     const c = s.connections.find((c) => c.id === item.connectionId);
-    const w = p.workflows.find((w) => w.id === item.workflowId);
+    const w = workflowForTarget(
+      p.workflows.find((w) => w.id === item.workflowId),
+      item.connectionId,
+    );
     if (!c || !["comfyui", "runninghub", "relay"].includes(c.kind))
       errors.push("Select an execution connection");
     if (c?.kind === "runninghub") {

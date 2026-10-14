@@ -37,8 +37,11 @@ import {
   type Project,
   type AppSettings,
   type Job,
+  type WorkflowLayout,
 } from "./lib/types";
 import { Modal, Field, Picker, Empty, Toggle } from "./components/Controls";
+import { workflowForTarget } from "./lib/job-inputs";
+import { WorkflowCatalogue } from "./components/WorkflowCatalogue";
 import { AppSymbol } from "./components/AppSymbol";
 import { fileDropPoint } from "./lib/file-drop";
 import { Board } from "./features/Board";
@@ -373,6 +376,33 @@ export default function App() {
           `${kind === "media" ? "Media" : "Workflow"} imported`,
         );
     });
+  const browseWorkflows = () =>
+    setModal(
+      <WorkflowCatalogue
+        close={() => setModal(null)}
+        importFile={() => importFile("workflow")}
+        pin={async (workflowId) => {
+          await mutateMedia(
+            "pin_workflow",
+            { workflowId },
+            "Workflow added to this movie",
+          );
+        }}
+      />,
+    );
+  const prepareWorkflow = async (
+    workflowId: string,
+    connectionId: string,
+    layout?: WorkflowLayout,
+  ) => {
+    await mutateMedia(
+      layout ? "save_workflow_layout" : "prepare_workflow",
+      layout ? { workflowId, layout } : { workflowId, connectionId },
+      layout
+        ? "Workflow form saved for reuse"
+        : "Workflow prepared for selected target",
+    );
+  };
   const importCharacterReferences = async (characterId: string) => {
     const epoch = generation.current;
     const paths = await pickReferenceImages();
@@ -510,7 +540,10 @@ export default function App() {
     const item = draft?.items.find((i) => i.id === itemId);
     const binding = (
       item?.bindings ??
-      project.workflows.find((w) => w.id === item?.workflowId)?.bindings
+      workflowForTarget(
+        project.workflows.find((w) => w.id === item?.workflowId),
+        item?.connectionId ?? "",
+      )?.bindings
     )?.find((b) => b.semantic === semantic);
     if (!asset || asset.kind !== (binding?.media?.kind ?? "image"))
       throw new Error(
@@ -813,7 +846,9 @@ export default function App() {
                   project={p}
                   settings={settings}
                   update={update}
-                  onImport={() => importFile("workflow")}
+                  onImport={browseWorkflows}
+                  prepare={prepareWorkflow}
+                  notify={notify}
                   onGenerate={chooseJob}
                 />
               )}{" "}
@@ -830,12 +865,15 @@ export default function App() {
                     setRoute("Jobs");
                   }}
                   importMedia={importGenerateMedia}
-                  importWorkflow={() => importFile("workflow")}
+                  importWorkflow={browseWorkflows}
+                  prepare={prepareWorkflow}
                   notify={notify}
                 />
               )}
               {route === "Jobs" && (
                 <Jobs
+                  importWorkflow={browseWorkflows}
+                  prepare={prepareWorkflow}
                   root={root}
                   importMedia={importGenerateMedia}
                   project={p}
