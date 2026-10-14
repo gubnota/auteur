@@ -33,6 +33,40 @@ local.connections = [8188, 8189].map((port, i) => ({
   concurrency: 1,
 }));
 
+test("queued batches stay idle across reopening until explicitly started", async ({
+  page,
+}) => {
+  await openFixture(page, movie(), local);
+  await page
+    .getByRole("button", { name: "Target keyframe", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Pilot / Coast / Frame 01" }).click();
+  await page.getByRole("button", { name: "Create generation job" }).click();
+  await page.getByRole("button", { name: "Review exact inputs" }).click();
+  await page.getByRole("button", { name: "Add to queue", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Run queued batch", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as any).fixture.submissions),
+  ).toEqual([]);
+  await page.getByRole("button", { name: "Welcome", exact: true }).click();
+  await page.getByRole("button", { name: /Open a movie/ }).click();
+  await page.getByRole("button", { name: "Jobs", exact: true }).click();
+  expect(
+    await page.evaluate(() => (window as any).fixture.submissions),
+  ).toEqual([]);
+  await page
+    .getByRole("button", { name: "Run all queued", exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).fixture.submissions.length))
+    .toBe(1);
+  await expect(
+    page.getByRole("button", { name: "Run all queued", exact: true }),
+  ).toHaveCount(0);
+});
+
 test("exact empty prompt, zero, false and parsed JSON survive batch duplication", async ({
   page,
 }) => {
@@ -56,10 +90,12 @@ test("exact empty prompt, zero, false and parsed JSON survive batch duplication"
   await page
     .getByRole("button", { name: "Duplicate item", exact: true })
     .click();
-  await page.getByRole("button", { name: "Connection", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Execution node", exact: true })
+    .click();
   await page.getByRole("button", { name: /ComfyUI 2 comfyui/ }).click();
   await page.getByRole("button", { name: "Review exact inputs" }).click();
-  await page.getByRole("button", { name: /Validate & start 2 jobs/ }).click();
+  await page.getByRole("button", { name: /Run now.*2 jobs/ }).click();
   await expect
     .poll(() => page.evaluate(() => (window as any).fixture.submissions.length))
     .toBe(1);
@@ -131,4 +167,95 @@ test("invalid raw inputs persist through item switching and reopening and block 
   expect(
     await page.evaluate(() => (window as any).fixture.submissions),
   ).toEqual([]);
+});
+
+test("collapse editor, edit a queued node and save an idle replacement", async ({
+  page,
+}) => {
+  await openFixture(page, movie(), local);
+  await page
+    .getByRole("button", { name: "Target keyframe", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Pilot / Coast / Frame 01" }).click();
+  await page.getByRole("button", { name: "Create generation job" }).click();
+  await page.getByLabel("seed · 2.seed", { exact: true }).fill("7");
+  await page.getByRole("button", { name: "Review exact inputs" }).click();
+  await page.getByRole("button", { name: "Add to queue", exact: true }).click();
+  // Changing the saved draft must not change the inputs restored from its queue receipt.
+  await page.getByLabel("seed · 2.seed", { exact: true }).fill("99");
+  await page.getByRole("button", { name: "Collapse draft editor" }).click();
+  await expect(page.getByLabel("Job draft name")).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit queued batch" }).click();
+  await expect(page.getByLabel("seed · 2.seed", { exact: true })).toHaveValue(
+    "7",
+  );
+  await page
+    .getByRole("button", { name: "Execution node", exact: true })
+    .click();
+  await page.getByRole("button", { name: /ComfyUI 2 comfyui/ }).click();
+  // Pending queue edits survive reopening as a saved draft.
+  await page.getByRole("button", { name: "Welcome", exact: true }).click();
+  await page.getByRole("button", { name: /Open a movie/ }).click();
+  await page.getByRole("button", { name: "Jobs", exact: true }).click();
+  await page
+    .getByRole("button", { name: /Generation 1 edit.*workflow items/ })
+    .click();
+  await page.getByRole("button", { name: "Review exact inputs" }).click();
+  await expect(page.getByRole("button", { name: /Run now/ })).toBeDisabled();
+  await page.getByRole("button", { name: "Save queue changes" }).click();
+  const state = await page.evaluate(() => ({
+    submissions: (window as any).fixture.submissions,
+  }));
+  expect(state.submissions).toEqual([]);
+  await expect(
+    page.getByRole("button", { name: "Run queued batch", exact: true }),
+  ).toHaveCount(1);
+  await expect(page.getByText(/ComfyUI 2: paused/)).toBeVisible();
+  await page.screenshot({
+    path: "docs/screenshots/jobs-queue-edit.png",
+    fullPage: true,
+  });
+});
+
+test("clear finished queue entries persists without removing history or active jobs", async ({
+  page,
+}) => {
+  await openFixture(page, movie(), local);
+  await page
+    .getByRole("button", { name: "Target keyframe", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Pilot / Coast / Frame 01" }).click();
+  await page.getByRole("button", { name: "Create generation job" }).click();
+  for (let i = 0; i < 4; i++)
+    await page
+      .getByRole("button", { name: "Duplicate item", exact: true })
+      .click();
+  await page.getByRole("button", { name: "Review exact inputs" }).click();
+  await page.getByRole("button", { name: "Add to queue", exact: true }).click();
+  await page.evaluate(() =>
+    (window as any).fixture.setJobStates([
+      "completed",
+      "failed",
+      "canceled",
+      "submitted",
+      "unknown",
+    ]),
+  );
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect(page.locator(".queue-job")).toHaveCount(5);
+  await page
+    .getByRole("button", { name: "Clear finished", exact: true })
+    .click();
+  await expect(page.locator(".queue-job")).toHaveCount(2);
+  await expect(page.locator(".queue-job .state-unknown")).toBeVisible();
+  await expect(page.locator(".queue-job .state-submitted")).toBeVisible();
+  expect(
+    await page.evaluate(() => (window as any).fixture.jobHistory().length),
+  ).toBe(5);
+  await page.reload();
+  await page.getByRole("button", { name: /Open a movie/ }).click();
+  await expect(page.locator(".queue-job")).toHaveCount(2);
+  await expect(
+    page.getByRole("button", { name: "Clear finished", exact: true }),
+  ).toBeDisabled();
 });

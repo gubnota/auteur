@@ -4,7 +4,7 @@ use serde_json::Value;
 use studio_contracts::{Binding, MediaBinding, WorkflowInput, WorkflowOutput};
 // V3 dynamic-combo children are serialized as dotted literals. Describe only
 // the active branch; switching branches requires a new frontend compilation.
-fn field_spec<'a>(definition: &'a Value, field: &str, values: &Value) -> Option<&'a Value> {
+pub fn field_spec<'a>(definition: &'a Value, field: &str, values: &Value) -> Option<&'a Value> {
     if let Some(spec) = definition["required"]
         .get(field)
         .or_else(|| definition["optional"].get(field))
@@ -33,7 +33,6 @@ pub fn describe(
     let mut inputs = vec![];
     let mut outputs = vec![];
     let mut media_order = 0;
-    let mut image_order = 0;
     for (id, node) in graph.as_object().unwrap() {
         let ty = node["class_type"].as_str().unwrap();
         let definition = registry
@@ -109,14 +108,9 @@ pub fn describe(
                 media_order += 1;
                 MediaBinding {
                     kind: kind.into(),
+                    // Enumeration order says nothing about source/reference semantics.
                     role: if kind == "image" {
-                        let index = image_order;
-                        image_order += 1;
-                        if index == 0 {
-                            "sourceImage"
-                        } else {
-                            "referenceImage"
-                        }
+                        "referenceImage"
                     } else {
                         kind
                     }
@@ -148,10 +142,99 @@ pub fn describe(
     }
     Ok((inputs, outputs))
 }
+/// Hash only execution/serialization schemas used by this graph. Known runtime
+/// inventory lists are validated against the resolved job immediately before submit.
+pub fn fingerprint(graph: &Value, registry: &Value) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    super::validate_graph(graph)?;
+    let mut used = serde_json::Map::new();
+    for node in graph.as_object().unwrap().values() {
+        let ty = node["class_type"].as_str().unwrap();
+        let definition = registry
+            .get(ty)
+            .ok_or_else(|| format!("Missing node type {ty}"))?;
+        let mut input = definition["input"].clone();
+        for group in ["required", "optional"] {
+            if let Some(fields) = input[group].as_object_mut() {
+                for (field, spec) in fields {
+                    let upload = ["image_upload", "video_upload", "audio_upload"]
+                        .iter()
+                        .any(|key| spec[1][key] == true);
+                    let inventory = upload
+                        || matches!(
+                            (ty, field.as_str()),
+                            ("LoadImage" | "LoadImageMask", "image")
+                                | ("LoadAudio", "audio")
+                                | ("VHS_LoadVideo", "video")
+                                | ("CheckpointLoaderSimple" | "CheckpointLoader", "ckpt_name")
+                                | ("UNETLoader", "unet_name")
+                                | ("VAELoader", "vae_name")
+                                | ("LoraLoader" | "LoraLoaderModelOnly", "lora_name")
+                                | ("CLIPLoader", "clip_name")
+                                | ("DualCLIPLoader", "clip_name1" | "clip_name2")
+                                | (
+                                    "TripleCLIPLoader",
+                                    "clip_name1" | "clip_name2" | "clip_name3"
+                                )
+                        );
+                    if inventory && spec[0].is_array() {
+                        spec[0] = Value::String("RUNTIME_INVENTORY".into());
+                        if let Some(options) = spec[1].as_object_mut() {
+                            options.remove("default");
+                        }
+                    }
+                    if inventory && spec[0] == "COMBO" {
+                        if let Some(options) = spec[1].as_object_mut() {
+                            options.remove("default");
+                            options.insert(
+                                "options".into(),
+                                Value::String("RUNTIME_INVENTORY".into()),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        let mut schema = serde_json::Map::new();
+        schema.insert("input".into(), input);
+        for key in [
+            "input_order",
+            "output",
+            "output_is_list",
+            "output_name",
+            "output_node",
+            "is_input_list",
+            "python_module",
+        ] {
+            if let Some(value) = definition.get(key) {
+                schema.insert(key.into(), value.clone());
+            }
+        }
+        used.insert(ty.into(), Value::Object(schema));
+    }
+    Ok(format!(
+        "scope-v1:{:x}",
+        Sha256::digest(serde_json::to_vec(&used)?)
+    ))
+}
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn fingerprint_ignores_only_known_inventory_and_unrelated_classes() {
+        let graph =
+            json!({"1":{"class_type":"LoadImage","inputs":{"image":"a.png","channel":"red"}}});
+        let mut registry = json!({"LoadImage":{"input":{"required":{"image":[["a.png"],{"image_upload":true}],"channel":[["red","blue"]]}}}});
+        let initial = fingerprint(&graph, &registry).unwrap();
+        registry["LoadImage"]["input"]["required"]["image"][0] = json!(["a.png", "new-upload.png"]);
+        registry["Unrelated"] = json!({"input":{"required":{"x":["FLOAT"]}}});
+        assert_eq!(initial, fingerprint(&graph, &registry).unwrap());
+        registry["LoadImage"]["input"]["required"]["channel"][0] = json!(["red", "green"]);
+        assert_ne!(initial, fingerprint(&graph, &registry).unwrap());
+        registry.as_object_mut().unwrap().remove("LoadImage");
+        assert!(fingerprint(&graph, &registry).is_err());
+    }
     #[test]
     fn v3_choices_and_active_dynamic_dimensions() {
         let graph = json!({"1":{"class_type":"Resize","inputs":{"resize_type":"dimensions","resize_type.width":512,"resize_type.height":512,"resize_type.crop":"center","scale_method":"area","input":["2",0]}},"2":{"class_type":"LoadAudio","inputs":{"audio":"a.wav"}},"3":{"class_type":"LoadImage","inputs":{"image":"a.png"}}});
@@ -183,7 +266,7 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .role,
-            "sourceImage"
+            "referenceImage"
         );
     }
     #[test]
@@ -194,7 +277,7 @@ mod tests {
         assert_eq!(fields.len(), 3);
         assert_eq!(
             fields[0].binding.media.as_ref().unwrap().role,
-            "sourceImage"
+            "referenceImage"
         );
         assert_eq!(
             fields[1].binding.media.as_ref().unwrap().role,

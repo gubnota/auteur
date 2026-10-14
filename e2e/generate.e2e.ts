@@ -99,11 +99,54 @@ test("standalone multi-media draft persists and reviews a batch on two nodes", a
     fullPage: true,
   });
   await page
-    .getByRole("button", { name: "Review & run all in Jobs", exact: true })
+    .getByRole("button", { name: "Review / run in Jobs", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Review exact inputs", exact: true }),
   ).toBeDisabled(); // Second item still needs explicit media.
+});
+
+test("Generate removes several selected batch items without starting jobs", async ({
+  page,
+}) => {
+  await openFixture(page, movie, nodes);
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await page.getByRole("button", { name: "Generate", exact: true }).click();
+  await page.getByRole("tab", { name: "Multi-reference", exact: true }).click();
+  const originalId = await page.evaluate(
+    () => (window as any).fixture.saved.jobDrafts[0].items[0].id,
+  );
+  await page.getByRole("button", { name: "Add to batch", exact: true }).click();
+  await page.getByRole("button", { name: "Add to batch", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Remove selected item", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Remove selected item", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).fixture.saved.jobDrafts[0].items.map((i: any) => i.id),
+      ),
+    )
+    .toEqual([originalId]);
+  await expect(
+    page.getByText("Selected item 1 of 1", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Remove selected item", exact: true })
+    .click();
+  await expect(
+    page.getByText("This batch is empty.", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add to queue", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Add to batch", exact: true }).click();
+  await expect(
+    page.getByText("Selected item 1 of 1", { exact: true }),
+  ).toBeVisible();
 });
 
 test("workflow compatibility and pinned dependency validation use custom dialogs", async ({

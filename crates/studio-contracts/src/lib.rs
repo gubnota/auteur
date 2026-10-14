@@ -145,6 +145,8 @@ pub struct InputLayout {
     pub group: String,
     pub hidden: bool,
     pub advanced: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_role: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -322,6 +324,8 @@ pub struct Job {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JobDraft {
+    #[serde(default)]
+    pub queued_run_id: Option<String>,
     pub id: String,
     pub name: String,
     pub frame_id: String,
@@ -380,6 +384,8 @@ pub struct JobRun {
     pub job_ids: Vec<String>,
     pub state: String,
     pub created_at: String,
+    #[serde(default)]
+    pub queued: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -395,6 +401,8 @@ pub struct AppSettings {
     pub connections: Vec<Connection>,
     pub theme: String,
     pub queue_height: f64,
+    #[serde(default)]
+    pub dismissed_queue_job_ids: Vec<String>,
     pub storage: Value,
     pub notifications: Vec<Diagnostic>,
     pub logs: Vec<Diagnostic>,

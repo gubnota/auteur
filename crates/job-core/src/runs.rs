@@ -70,6 +70,9 @@ pub fn control(store: &ProjectStore, run_id: &str, action: &str) -> Result<()> {
     if run.state == "canceled" && action != "cancel" {
         return Err("Canceled run cannot resume".into());
     }
+    if action == "resume" {
+        run.queued = false;
+    }
     run.state = if action == "resume" {
         "active"
     } else if action == "pause" {
@@ -85,6 +88,77 @@ pub fn control(store: &ProjectStore, run_id: &str, action: &str) -> Result<()> {
         }
     }
     persist(store, &run)
+}
+/// Replace only an explicitly queued, wholly unsent batch. Keep canceled receipts.
+pub fn replace_queued(
+    store: &ProjectStore,
+    old_id: &str,
+    run: &JobRun,
+    attempts: &[Job],
+) -> Result<()> {
+    let mut old = list(store)?
+        .into_iter()
+        .find(|r| r.id == old_id)
+        .ok_or("Run missing")?;
+    let all = jobs(store)?;
+    let mut previous = Vec::new();
+    if !old.queued
+        || old.state != "paused"
+        || !run.queued
+        || run.state != "paused"
+        || attempts.is_empty()
+    {
+        return Err(
+            "Only an unstarted queued batch can be edited; reuse other runs as a new draft".into(),
+        );
+    }
+    for id in &old.job_ids {
+        let mut job = all
+            .iter()
+            .find(|j| &j.id == id)
+            .cloned()
+            .ok_or("Queued attempt missing")?;
+        if job.state != "paused" || job.remote_id.is_some() {
+            return Err("Batch has already started; reuse it as a new draft".into());
+        }
+        job.state = "canceled".into();
+        previous.push(job);
+    }
+    if attempts.iter().any(|j| {
+        j.state != "paused" || j.remote_id.is_some() || j.run_id.as_deref() != Some(&run.id)
+    }) {
+        return Err("Replacement attempts must remain queued".into());
+    }
+    old.state = "canceled".into();
+    old.queued = false;
+    let tx = store.connection().unchecked_transaction()?;
+    tx.execute(
+        "UPDATE job_runs SET json=?2 WHERE id=?1",
+        rusqlite::params![old.id, serde_json::to_string(&old)?],
+    )?;
+    for j in &previous {
+        tx.execute(
+            "UPDATE jobs SET json=?2 WHERE id=?1",
+            rusqlite::params![j.id, serde_json::to_string(j)?],
+        )?;
+    }
+    tx.execute(
+        "INSERT INTO job_runs(id,json) VALUES(?1,?2)",
+        rusqlite::params![run.id, serde_json::to_string(run)?],
+    )?;
+    for j in attempts {
+        tx.execute(
+            "INSERT INTO jobs(id,json) VALUES(?1,?2)",
+            rusqlite::params![j.id, serde_json::to_string(j)?],
+        )?;
+    }
+    tx.commit()?;
+    persist(store, &old)?;
+    persist(store, run)?;
+    for j in previous.iter().chain(attempts) {
+        crate::persist(store, j)?;
+    }
+    Ok(())
 }
 /// Caller reserves returned attempts under the same project lock before any await.
 pub fn eligible(attempts: &[Job], connections: &[Connection]) -> Result<Vec<String>> {

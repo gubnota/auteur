@@ -2,13 +2,22 @@ use crate::service::Studio;
 use std::sync::Arc;
 use tauri::http::{Request, Response};
 pub async fn respond(state: &Arc<Studio>, request: Request<Vec<u8>>) -> Response<Vec<u8>> {
-    let id = request.uri().path().trim_start_matches('/');
+    let uri = request.uri().path().trim_start_matches('/');
+    let (id, poster) = match uri.split_once('/') {
+        Some((id, "thumbnail")) => (id, true),
+        Some(_) => return Response::builder().status(404).body(vec![]).unwrap(),
+        None => (uri, false),
+    };
     let path = {
         let inner = state.inner.lock().await;
         inner.project.as_ref().and_then(|s| {
             let p = s.read().ok()?;
             let a = p.assets.iter().find(|a| a.id == id)?;
-            asset_core::source(s.path(), a, false).ok()
+            if poster {
+                asset_core::poster_path(s.path(), a).ok()
+            } else {
+                asset_core::source(s.path(), a, false).ok()
+            }
         })
     };
     let Some(path) = path else {

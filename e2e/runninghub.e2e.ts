@@ -66,15 +66,19 @@ test("account-specific mapping survives reopening and enables only the mapped ac
   await expect(
     page.getByLabel("Hosted deployment ID", { exact: true }),
   ).toHaveValue("123456789");
-  await page.getByRole("button", { name: "Connection", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Execution node", exact: true })
+    .click();
   await page.getByRole("button", { name: /Second account runninghub/ }).click();
   await expect(submit).toBeDisabled();
-  await page.getByRole("button", { name: "Connection", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Execution node", exact: true })
+    .click();
   await page.getByRole("button", { name: /Studio account runninghub/ }).click();
   await expect(submit).toBeEnabled();
   await page.screenshot({ path: "artifacts/e2e/runninghub-job-review.png" });
   await submit.click();
-  await page.getByRole("button", { name: /Validate & start 1 job/ }).click();
+  await page.getByRole("button", { name: /Run now.*1 job/ }).click();
   await expect
     .poll(() => page.evaluate(() => (window as any).fixture.submissions.length))
     .toBe(1);

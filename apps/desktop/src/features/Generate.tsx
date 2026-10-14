@@ -6,6 +6,7 @@ import {
   Video,
   WandSparkles,
   FolderOpen,
+  Trash2,
 } from "lucide-react";
 import type { Update } from "../App";
 import type { AppSettings, JobDraft, JobItem, Project } from "../lib/types";
@@ -38,7 +39,9 @@ export function Generate({
   importWorkflow,
   prepare,
   notify,
+  enqueue,
 }: {
+  enqueue: (id: string) => Promise<void>;
   project: Project;
   settings: AppSettings;
   root: string;
@@ -52,7 +55,11 @@ export function Generate({
     semantic: string,
   ) => Promise<void>;
   importWorkflow: () => void;
-  prepare: (w: string, c: string) => Promise<void>;
+  prepare: (
+    w: string,
+    c: string,
+    layout?: import("../lib/types").WorkflowLayout,
+  ) => Promise<void>;
   notify: (message: string) => void;
 }) {
   const drafts = (p.jobDrafts ?? []).filter(
@@ -60,6 +67,7 @@ export function Generate({
   );
   const draft = drafts.find((d) => d.id === selectedId) ?? drafts[0];
   const [itemId, setItemId] = useState("");
+  const [queueing, setQueueing] = useState(false);
   const item = draft?.items.find((i) => i.id === itemId) ?? draft?.items[0];
   const sourceWorkflow = p.workflows.find((w) => w.id === item?.workflowId);
   const workflow = workflowForTarget(sourceWorkflow, item?.connectionId ?? "");
@@ -207,6 +215,38 @@ export function Generate({
                   Add to batch
                 </button>
               </div>
+              {item && (
+                <div className="row">
+                  <span className="muted">
+                    Selected item {draft.items.indexOf(item) + 1} of{" "}
+                    {draft.items.length}
+                  </span>
+                  <button
+                    onClick={() => {
+                      const index = draft.items.findIndex(
+                        (i) => i.id === item.id,
+                      );
+                      const remaining = draft.items.filter(
+                        (i) => i.id !== item.id,
+                      );
+                      editDraft((d) => {
+                        d.items = d.items.filter((i) => i.id !== item.id);
+                      });
+                      setItemId(
+                        remaining[Math.min(index, remaining.length - 1)]?.id ??
+                          "",
+                      );
+                    }}
+                  >
+                    <Trash2 size={16} /> Remove selected item
+                  </button>
+                </div>
+              )}
+              {draft.items.length === 0 && (
+                <p className="muted">
+                  This batch is empty. Use Add to batch to choose a workflow.
+                </p>
+              )}
               {item && (
                 <>
                   <Picker
@@ -361,10 +401,22 @@ export function Generate({
                 </small>
               )}
             </div>
-            <button className="primary" onClick={() => review(draft.id)}>
-              <ListChecks size={18} />
-              Review & run all in Jobs
-            </button>
+            <div className="jobs-toolbar">
+              <button
+                className="primary"
+                disabled={queueing || !!issues.length}
+                onClick={() => {
+                  setQueueing(true);
+                  void enqueue(draft.id).finally(() => setQueueing(false));
+                }}
+              >
+                Add to queue
+              </button>
+              <button onClick={() => review(draft.id)}>
+                <ListChecks size={18} />
+                Review / run in Jobs
+              </button>
+            </div>
           </footer>
         </>
       )}

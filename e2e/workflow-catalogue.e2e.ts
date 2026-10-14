@@ -106,6 +106,29 @@ test("saved catalogue prepares a two-image form, maps ratio and reuses its layou
       .click();
     await page.getByRole("button", { name: new RegExp(`^${name} `) }).click();
   }
+  await page
+    .getByRole("button", { name: "Swap the two image inputs", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).fixture.saved?.jobDrafts?.[0]?.items[0].assets[
+            "1.image"
+          ],
+      ),
+    )
+    .toBe("image-1");
+  await page.getByText("Workflow tools", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "Install in ComfyUI", exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).fixture.installs.length))
+    .toBe(1);
+  expect(
+    await page.evaluate(() => (window as any).fixture.submissions),
+  ).toEqual([]);
   await page.getByRole("button", { name: "Output ratio", exact: true }).click();
   await page.getByRole("button", { name: "9:16", exact: true }).click();
   await page

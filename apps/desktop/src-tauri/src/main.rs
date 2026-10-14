@@ -44,6 +44,7 @@ fn main() {
             import_media_drop,
             collect_media,
             asset_availability,
+            video_thumbnail,
             relink_asset,
             import_character_references,
             import_workflow,
@@ -52,6 +53,7 @@ fn main() {
             catalogue_workflow,
             save_workflow_layout,
             prepare_workflow,
+            install_workflow,
             export_workflow,
             export_workflow_setup,
             get_settings,
@@ -61,6 +63,8 @@ fn main() {
             submit_job,
             preview_job_draft,
             start_job_draft,
+            enqueue_job_draft,
+            replace_queued_job_run,
             list_job_runs,
             control_job_run,
             refresh_jobs,
@@ -78,6 +82,8 @@ fn main() {
             clear_diagnostics,
             take_opened_projects,
             recent_projects,
+            remove_recent_project,
+            clear_recent_projects,
             project_history,
             close_project
         ])

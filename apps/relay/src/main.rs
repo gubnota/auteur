@@ -169,6 +169,16 @@ async fn submit(
     {
         return Err((StatusCode::BAD_REQUEST, "Invalid target or action".into()));
     }
+    if v["kind"] == "workflow-install"
+        && (v["payload"]["name"].as_str().is_some_and(|n| n.len() > 200)
+            || (!v["payload"]["publishToComfyui"].is_null()
+                && !v["payload"]["publishToComfyui"].is_boolean()))
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Invalid workflow installation options".into(),
+        ));
+    }
     let mut db = s.db.lock().unwrap();
     let tx = db.transaction().map_err(failure)?;
     if let Ok(old) = read(&tx, &id) {

@@ -897,6 +897,16 @@ export function Preferences({
         {tab === "Media & FFmpeg" && (
           <article className="panel storage-panel">
             <h2>Local media tools</h2>
+            <Field
+              label="FFmpeg executable path (optional)"
+              value={String(storage.ffmpegPath ?? "")}
+              onChange={(v) => setStorage({ ...storage, ffmpegPath: v })}
+            />
+            <p className="muted">
+              Leave empty for automatic discovery. macOS: install with Homebrew
+              using brew install ffmpeg. Linux: sudo apt install ffmpeg. Save
+              settings, then retry the video preview.
+            </p>
             <p>
               Verify the local decoder before creating thumbnails and inspecting
               video files.

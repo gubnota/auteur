@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Workflow, Connection, WorkflowLayout } from "../lib/types";
 import { call, exportDestination } from "../lib/bridge";
-import { Field, Modal, Toggle } from "./Controls";
+import { Field, Modal, Toggle, Picker } from "./Controls";
 export function WorkflowTarget({
   workflow,
   connection,
@@ -67,6 +67,7 @@ export function WorkflowTarget({
                   group: "",
                   hidden: false,
                   advanced: d.advanced,
+                  mediaRole: d.binding.media?.role,
                   ...workflow.layout?.inputs.find(
                     (l) =>
                       l.nodeId === d.binding.nodeId &&
@@ -95,32 +96,57 @@ export function WorkflowTarget({
             {busy ? "Preparing…" : "Prepare / refresh inputs"}
           </button>
         )}
-        <button
-          disabled={busy}
-          onClick={() =>
-            void act(async () => {
-              await call("catalogue_workflow", { workflowId: workflow.id });
-              notify("Saved in workflow catalogue");
-            })
-          }
-        >
-          Save to catalogue
-        </button>
-        {workflow.editorGraph && (
-          <button disabled={busy} onClick={() => void download(true)}>
-            Export editor
-          </button>
-        )}
-        {(profile || Object.keys(workflow.graph).length > 0) && (
-          <button disabled={busy} onClick={() => void download(false)}>
-            Export API
-          </button>
-        )}
+        <details className="workflow-tools">
+          <summary>Workflow tools</summary>
+          <div className="jobs-toolbar">
+            {workflow.editorGraph &&
+              connection &&
+              ["comfyui", "relay"].includes(connection.kind) && (
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    void act(async () => {
+                      const receipt = await call<{ libraryPath: string }>(
+                        "install_workflow",
+                        {
+                          workflowId: workflow.id,
+                          connectionId: connection.id,
+                        },
+                      );
+                      notify(`Saved in ComfyUI: ${receipt.libraryPath}`);
+                    })
+                  }
+                >
+                  Install in ComfyUI
+                </button>
+              )}
+            <button
+              disabled={busy}
+              onClick={() =>
+                void act(async () => {
+                  await call("catalogue_workflow", { workflowId: workflow.id });
+                  notify("Saved in workflow catalogue");
+                })
+              }
+            >
+              Save to catalogue
+            </button>
+            {workflow.editorGraph && (
+              <button disabled={busy} onClick={() => void download(true)}>
+                Export editor
+              </button>
+            )}
+            {(profile || Object.keys(workflow.graph).length > 0) && (
+              <button disabled={busy} onClick={() => void download(false)}>
+                Export API
+              </button>
+            )}
+          </div>
+        </details>
       </div>
       {busy && (
         <p role="status">
-          Loading the selected instance’s node definitions and exporter. No
-          generation is submitted.
+          Working with the selected instance. No generation is submitted.
         </p>
       )}
       {failure && (
@@ -163,6 +189,44 @@ export function WorkflowTarget({
                   })
                 }
               />
+              {profile?.inputs.find(
+                (d) =>
+                  d.binding.nodeId === l.nodeId && d.binding.input === l.input,
+              )?.binding.media && (
+                <Picker
+                  title="Media role"
+                  value={l.mediaRole ?? "referenceImage"}
+                  options={(profile?.inputs.find(
+                    (d) =>
+                      d.binding.nodeId === l.nodeId &&
+                      d.binding.input === l.input,
+                  )?.binding.media?.kind === "video"
+                    ? ["referenceVideo"]
+                    : profile?.inputs.find(
+                          (d) =>
+                            d.binding.nodeId === l.nodeId &&
+                            d.binding.input === l.input,
+                        )?.binding.media?.kind === "audio"
+                      ? ["referenceAudio"]
+                      : [
+                          "sourceImage",
+                          "referenceImage",
+                          "startFrame",
+                          "endFrame",
+                          "mask",
+                          "characterReference",
+                        ]
+                  ).map((id) => ({ id, label: id.replace(/([A-Z])/g, " $1") }))}
+                  onChange={(mediaRole) =>
+                    setLayout({
+                      ...layout,
+                      inputs: layout.inputs.map((x, n) =>
+                        n === index ? { ...x, mediaRole } : x,
+                      ),
+                    })
+                  }
+                />
+              )}
               <Toggle
                 label="Show in Advanced"
                 checked={l.advanced}

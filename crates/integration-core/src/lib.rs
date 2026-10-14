@@ -135,4 +135,13 @@ impl SettingsStore {
         let rows=st.query_map([],|r|Ok(json!({"path":r.get::<_,String>(0)?,"name":r.get::<_,String>(1)?,"opened":r.get::<_,String>(2)?})))?;
         Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?.into())
     }
+    pub fn remove_recent(&self, path: &str) -> Result<()> {
+        self.db
+            .execute("DELETE FROM recent WHERE path=?1", [path])?;
+        Ok(())
+    }
+    pub fn clear_recent(&self) -> Result<()> {
+        self.db.execute("DELETE FROM recent", [])?;
+        Ok(())
+    }
 }

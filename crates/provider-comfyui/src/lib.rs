@@ -4,6 +4,7 @@ use project_core::Result;
 use reqwest::{Client, multipart};
 use serde_json::{Value, json};
 use std::time::Duration;
+mod workflow;
 pub struct ComfyUi {
     pub url: String,
     client: Client,
@@ -49,11 +50,13 @@ impl ComfyUi {
 impl ExecutionBackend for ComfyUi {
     async fn validate_profile(&self, profile: &Value) -> Result<()> {
         if let Some(expected) = profile["registryHash"].as_str() {
-            use sha2::{Digest, Sha256};
+            if !expected.starts_with("scope-v1:") {
+                return Err("Refresh inputs once for this older prepared workflow; its saved form and values will be retained".into());
+            }
             let registry = self.get("/object_info").await?;
-            let hash = format!("{:x}", Sha256::digest(serde_json::to_vec(&registry)?));
+            let hash = workflow_core::schema::fingerprint(&profile["graph"], &registry)?;
             if hash != expected {
-                return Err("ComfyUI registry changed; prepare the workflow again".into());
+                return Err("Used ComfyUI node definitions changed; refresh inputs on the selected node. Saved values will be retained".into());
             }
         }
         Ok(())
@@ -76,36 +79,15 @@ impl ExecutionBackend for ComfyUi {
     }
     async fn validate_job(&self, graph: &Value) -> Result<()> {
         let registry = self.get("/object_info").await?;
-        for (id, n) in graph.as_object().ok_or("Graph is not an object")? {
-            let ty = n["class_type"].as_str().ok_or("Node has no type")?;
-            let definition = registry
-                .get(ty)
-                .ok_or_else(|| format!("Missing node type {ty} ({id})"))?;
-            for (key, v) in n["inputs"].as_object().ok_or("Missing inputs")? {
-                let spec = definition["input"]["required"]
-                    .get(key)
-                    .or_else(|| definition["input"]["optional"].get(key));
-                let Some(spec) = spec else { continue };
-                if v.is_array() {
-                    continue;
-                }
-                if let Some(options) = spec[0].as_array() {
-                    if !options.contains(v) {
-                        return Err(format!("Unavailable {ty}.{key}").into());
-                    }
-                }
-                match spec[0].as_str() {
-                    Some("INT") if !v.is_i64() && !v.is_u64() => {
-                        return Err(format!("{ty}.{key} requires integer").into());
-                    }
-                    Some("FLOAT") if !v.is_number() => return Err("Expected number".into()),
-                    Some("BOOLEAN") if !v.is_boolean() => return Err("Expected Boolean".into()),
-                    Some("STRING") if !v.is_string() => return Err("Expected text".into()),
-                    _ => {}
-                }
-            }
-        }
-        Ok(())
+        validate_literals(graph, &registry, &[])
+    }
+    async fn validate_before_staging(
+        &self,
+        graph: &Value,
+        bindings: &[studio_contracts::Binding],
+    ) -> Result<()> {
+        let registry = self.get("/object_info").await?;
+        validate_literals(graph, &registry, bindings)
     }
     async fn validate_media(
         &self,
@@ -272,5 +254,74 @@ impl ExecutionBackend for ComfyUi {
         } else {
             format!("{sub}/{name}")
         })
+    }
+}
+
+fn validate_literals(
+    graph: &Value,
+    registry: &Value,
+    excluded: &[studio_contracts::Binding],
+) -> Result<()> {
+    for (id, n) in graph.as_object().ok_or("Graph is not an object")? {
+        let ty = n["class_type"].as_str().ok_or("Node has no type")?;
+        let definition = registry
+            .get(ty)
+            .ok_or_else(|| format!("Missing node type {ty} ({id})"))?;
+        for (key, v) in n["inputs"].as_object().ok_or("Missing inputs")? {
+            if excluded.iter().any(|b| {
+                b.node_id == *id
+                    && b.input == *key
+                    && (b.media.is_some()
+                        || matches!(b.semantic.as_str(), "image" | "mask")
+                        || b.semantic.starts_with("characterReference"))
+            }) {
+                continue;
+            }
+            let spec = workflow_core::schema::field_spec(&definition["input"], key, &n["inputs"]);
+            let Some(spec) = spec else { continue };
+            if v.is_array() {
+                continue;
+            }
+            if let Some(options) = spec[0].as_array().or_else(|| {
+                (spec[0] == "COMBO" && spec[1]["multiselect"] != true)
+                    .then(|| spec[1]["options"].as_array())
+                    .flatten()
+            }) {
+                if !options.contains(v) {
+                    return Err(format!("Unavailable {ty}.{key}").into());
+                }
+            }
+            match spec[0].as_str() {
+                Some("INT") if !v.is_i64() && !v.is_u64() => {
+                    return Err(format!("{ty}.{key} requires integer").into());
+                }
+                Some("FLOAT") if !v.is_number() => return Err("Expected number".into()),
+                Some("BOOLEAN") if !v.is_boolean() => return Err("Expected Boolean".into()),
+                Some("STRING") if !v.is_string() => return Err("Expected text".into()),
+                _ => {}
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod validation_tests {
+    use super::*;
+    #[test]
+    fn selected_models_are_checked_before_media_staging_including_v3_choices() {
+        let graph = json!({"1":{"class_type":"UNETLoader","inputs":{"unet_name":"missing.safetensors"}},"2":{"class_type":"LoadImage","inputs":{"image":"not-uploaded.png"}}});
+        let registry = json!({"UNETLoader":{"input":{"required":{"unet_name":["COMBO",{"options":["installed.safetensors"]}]}}},"LoadImage":{"input":{"required":{"image":[["old.png"],{"image_upload":true}]}}}});
+        let bindings:Vec<studio_contracts::Binding> = serde_json::from_value(json!([{"semantic":"2.image","nodeId":"2","input":"image","valueType":"string","media":{"kind":"image","role":"sourceImage","order":0}}])).unwrap();
+        assert!(
+            validate_literals(&graph, &registry, &bindings)
+                .unwrap_err()
+                .to_string()
+                .contains("UNETLoader.unet_name")
+        );
+        let mut ready = graph.clone();
+        ready["1"]["inputs"]["unet_name"] = json!("installed.safetensors");
+        validate_literals(&ready, &registry, &bindings).unwrap();
+        assert!(validate_literals(&ready, &registry, &[]).is_err());
     }
 }

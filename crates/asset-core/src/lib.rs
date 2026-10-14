@@ -132,6 +132,15 @@ pub fn thumbnail(source: &Path, dest: &Path) -> Result<()> {
     }
     Ok(())
 }
+pub fn poster_path(root: &Path, asset: &Asset) -> Result<std::path::PathBuf> {
+    if asset.kind != "video"
+        || asset.sha256.len() != 64
+        || !asset.sha256.bytes().all(|c| c.is_ascii_hexdigit())
+    {
+        return Err("Video with a valid content hash required".into());
+    }
+    confined(root, &format!("media/derived/posters/{}.jpg", asset.sha256))
+}
 
 /// Only explicit user imports may introduce external paths. Originals retain their
 /// content identity; collect/relink never accepts changed bytes under the same ID.

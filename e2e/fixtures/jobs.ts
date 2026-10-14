@@ -107,12 +107,20 @@ export async function openFixture(
       body: `
     export const native = true;
     let project = ${JSON.stringify(movie)};
-    let settings = ${JSON.stringify(connections)};
+    let settings = JSON.parse(sessionStorage.getItem("fixture-settings") ?? "null") ?? ${JSON.stringify(connections)};
     let catalogue = structuredClone(project.workflows);
-    window.fixture = { submissions: [] };
+    let runs = []; let jobs = JSON.parse(sessionStorage.getItem("fixture-jobs") ?? "[]");
+    let recents = Array.from({length: 12}, (_, i) => ({name: "Recent movie " + i, path: "/tmp/movie-" + i + ".mymovie", opened: "2026-10-14T10:00:00Z"}));
+    window.fixture = { submissions: [], enqueued: [], installs: [], thumbnails: [], setJobStates: states => { jobs.forEach((job, i) => job.state = states[i]); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, jobHistory: () => jobs };
     export async function call(command, args = {}) {
       if (command === 'get_settings') return settings;
-      if (command === 'recent_projects' || command === 'take_opened_projects') return [];
+      if (command === 'save_settings') { settings = args.settings; sessionStorage.setItem("fixture-settings", JSON.stringify(settings)); return settings; }
+      if (command === 'recent_projects') return recents;
+      if (command === 'clear_recent_projects') { recents = []; return recents; }
+      if (command === 'remove_recent_project') { recents = recents.filter(r => r.path !== args.path); return recents; }
+      if (command === 'take_opened_projects') return [];
+      if (command === 'video_thumbnail') { window.fixture.thumbnails.push(args); return true; }
+      if (command === 'install_workflow') { window.fixture.installs.push(args); return {installed:true, loadedCanvas:false, libraryPath:'workflows/MyMovie/fixture.json'}; }
       if (command === 'close_project') return null;
       if (command === 'get_project') return project;
       if (command === 'list_workflows') return catalogue;
@@ -139,7 +147,10 @@ export async function openFixture(
       }
       if (command === 'open_project') return project;
       if (command === 'save_project') { project = {...args.project, revision: args.expectedRevision + 1}; window.fixture.saved = project; return project; }
-      if (command === 'list_jobs' || command === 'refresh_jobs' || command === 'list_job_runs') return [];
+      if (command === 'list_jobs' || command === 'refresh_jobs') return jobs;
+      if (command === 'list_job_runs') return runs;
+      if (command === 'enqueue_job_draft' || command === 'replace_queued_job_run') { if (command === 'replace_queued_job_run') { const old = runs.find(r => r.id === args.runId); if (!old?.queued || old.state !== 'paused') throw new Error('Batch already started'); old.queued = false; old.state = 'canceled'; jobs.forEach(j => { if (j.runId === old.id) j.state = 'canceled'; }); } window.fixture.enqueued.push(args); const draft = project.jobDrafts.find(d => d.id === args.draftId); const id = 'run-' + runs.length; const ids = draft.items.map((item, index) => { const jobId = id + '-job-' + index; jobs.push({id:jobId, runId:id, workflowId:item.workflowId, connectionId:item.connectionId, frameId:draft.frameId, workflowVersion:project.workflows.find(w => w.id === item.workflowId).version, state:'paused', progress:0, error:null, snapshot:{semantic:structuredClone(item.values),media:Object.fromEntries(Object.entries(item.assets).map(([k,id]) => [k,project.assets.find(a => a.id === id)])),bindings:structuredClone(item.bindings ?? project.workflows.find(w => w.id === item.workflowId).bindings),context:structuredClone(draft.context),connection:structuredClone(settings.connections.find(c => c.id === item.connectionId))}}); return jobId; }); runs.push({id, name:draft.name, draftId:draft.id, jobIds:ids, state:'paused', queued:true, createdAt:'2026-10-14'}); return jobs; }
+      if (command === 'control_job_run') { const r = runs.find(r => r.id === args.runId); if (args.action === 'resume') { r.queued = false; r.state = 'submitted'; window.fixture.submissions.push(args); jobs.forEach(j => { if (j.runId === r.id) j.state = 'submitted'; }); } return jobs; }
       if (command === 'preview_job_draft') return { items: args.draft.items.map(item => ({ semantic: item.values, frameId: args.draft.frameId, workflowId: item.workflowId, connectionId: item.connectionId })) };
       if (command === 'start_job_draft') { window.fixture.submissions.push(args); return []; }
       throw new Error('Unexpected fixture command: ' + command);
@@ -148,7 +159,8 @@ export async function openFixture(
     export async function pickDestination() { throw new Error('Not used'); }
     export async function pickReferenceImages() { throw new Error('Not used'); }
     export async function exportDestination() { return null; }
-    export const mediaUrl = () => '';
+    export const mediaUrl = (root, asset) => asset.kind === 'video' ? '/fixture-video.mp4' : '';
+    export const posterUrl = () => '/fixture-poster.jpg';
   `,
     }),
   );

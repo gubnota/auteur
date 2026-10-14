@@ -1638,3 +1638,89 @@ dd {
   max-height: 24rem;
   resize: vertical;
 }
+
+/* Compact reusable forms and document navigation. */
+.workflow-tools {
+  min-width: 0;
+}
+.workflow-tools summary {
+  cursor: pointer;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+}
+.workflow-tools[open] .jobs-toolbar {
+  margin-top: 0.75rem;
+}
+.welcome {
+  overflow-y: auto;
+  max-height: 100dvh;
+  box-sizing: border-box;
+}
+.welcome > * {
+  flex-shrink: 0;
+}
+.recent-projects {
+  min-height: 0;
+  width: min(100%, 48rem);
+}
+.recent-heading {
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.recent-scroll {
+  overflow-y: auto;
+  max-height: min(30dvh, 18rem);
+  padding-right: 0.5rem;
+}
+.recent-entry {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.recent-entry .choice {
+  flex: 1;
+  min-width: 0;
+}
+.recent-entry .choice span {
+  min-width: 0;
+}
+.recent-entry .choice strong,
+.recent-entry .choice span small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-grid > * {
+  min-width: 0;
+}
+.media-card .asset-name {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.video-preview {
+  min-width: 0;
+  width: 100%;
+}
+.video-preview video {
+  width: 100%;
+  object-fit: contain;
+}
+.usage-list {
+  display: grid;
+  gap: 0.65rem;
+  margin-block: 1rem;
+}
+.usage-list button {
+  text-align: left;
+  display: grid;
+  gap: 0.35rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding: 0.8rem 1rem;
+}

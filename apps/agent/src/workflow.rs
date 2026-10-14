@@ -30,6 +30,14 @@ pub async fn control(args: &Args, kind: &str, payload: &Value) -> Result<Value> 
         atomic_json(&input, source)?;
     }
     if kind == "workflow-install" {
+        if payload["publishToComfyui"] == true {
+            return provider_comfyui::ComfyUi::new(&args.comfy_url)?
+                .install_workflow(
+                    payload["name"].as_str().unwrap_or("MyMovie workflow"),
+                    source,
+                )
+                .await;
+        }
         return Ok(json!({"sourceHash":hash,"installed":true,"loadedCanvas":false}));
     }
     let output = confined(&directory, &format!("compile-{}.json", project_core::id()))?;

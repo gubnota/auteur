@@ -28,6 +28,10 @@ struct Args {
     #[arg(long)]
     workflow_source: Option<PathBuf>,
     #[arg(long)]
+    publish_to_comfyui: bool,
+    #[arg(long, default_value = "MyMovie workflow")]
+    workflow_name: String,
+    #[arg(long)]
     workflow_compiler: Option<PathBuf>,
     #[arg(long)]
     compiler_browser: Option<PathBuf>,
@@ -115,6 +119,8 @@ async fn main() -> Result<()> {
             payload["source"] = serde_json::from_slice(&std::fs::read(path)?)?;
         }
         payload["apply"] = json!(args.apply);
+        payload["publishToComfyui"] = json!(args.publish_to_comfyui);
+        payload["name"] = json!(args.workflow_name);
         println!(
             "{}",
             serde_json::to_string_pretty(&execute(&args, &comfy, &args.command, &payload).await?)?
@@ -218,6 +224,7 @@ async fn main() -> Result<()> {
             comfy.validate_profile(&payload["compiledProfile"]).await?;
             let initialized=provision::generation_ready(&args,&graph).await?;
             comfy.validate_media(&graph,&initialized.bindings).await?;
+            comfy.validate_before_staging(&graph,&initialized.bindings).await?;
             let mut staged:std::collections::HashMap<String,(String,String)>=std::collections::HashMap::new();
             for (node_id,node) in graph.as_object_mut().ok_or("Invalid graph")? {
                 for (input,value) in node["inputs"].as_object_mut().ok_or("Invalid inputs")? {

@@ -1,5 +1,6 @@
 mod catalogue;
 mod jobs;
+mod thumbnails;
 pub use catalogue::*;
 use integration_core::SettingsStore;
 use job_core::ExecutionBackend;
@@ -13,6 +14,7 @@ use std::{
 };
 use studio_contracts::*;
 use tauri::{Emitter, State};
+pub use thumbnails::*;
 pub struct Studio {
     pub inner: tokio::sync::Mutex<Inner>,
     pub opened: Arc<Mutex<Vec<String>>>,
@@ -289,6 +291,18 @@ pub async fn recent_projects(state: S<'_>) -> Reply<Value> {
     state.inner.lock().await.settings.list_recent().map_err(err)
 }
 #[tauri::command]
+pub async fn remove_recent_project(state: S<'_>, path: String) -> Reply<Value> {
+    let i = state.inner.lock().await;
+    i.settings.remove_recent(&path).map_err(err)?;
+    i.settings.list_recent().map_err(err)
+}
+#[tauri::command]
+pub async fn clear_recent_projects(state: S<'_>) -> Reply<Value> {
+    let i = state.inner.lock().await;
+    i.settings.clear_recent().map_err(err)?;
+    i.settings.list_recent().map_err(err)
+}
+#[tauri::command]
 pub async fn project_history(state: S<'_>) -> Reply<Value> {
     let i = state.inner.lock().await;
     let s = store(&i).map_err(err)?;
@@ -331,6 +345,7 @@ pub async fn submit_job(
     let mut i = state.inner.lock().await;
     let draft_id = project_core::id();
     let draft = JobDraft {
+        queued_run_id: None,
         id: draft_id.clone(),
         name: "Generation".into(),
         frame_id,
@@ -641,16 +656,26 @@ pub fn validate_runtime(runtime: Value) -> Reply<()> {
     lock.validate().map_err(err)
 }
 #[tauri::command]
-pub async fn media_tools() -> Reply<Value> {
+pub async fn media_tools(state: S<'_>) -> Reply<Value> {
+    let configured = state
+        .inner
+        .lock()
+        .await
+        .settings
+        .read()
+        .map_err(err)?
+        .storage["ffmpegPath"]
+        .as_str()
+        .map(str::to_owned);
     let mut reports = serde_json::Map::new();
     for tool in ["ffmpeg", "ffprobe"] {
-        let result = tokio::process::Command::new(tool)
+        let result = tokio::process::Command::new(thumbnails::executable(configured.clone(), tool))
             .arg("-version")
             .output()
             .await;
         reports.insert(tool.into(), match result {
             Ok(o) if o.status.success() => json!({"available":true,"version":String::from_utf8_lossy(&o.stdout).lines().next().unwrap_or("")}),
-            _ => json!({"available":false,"help":"Install FFmpeg and ensure the application can find it in PATH"}),
+            _ => json!({"available":false,"help":"Install FFmpeg or set its executable path in Settings → Media tools"}),
         });
     }
     Ok(Value::Object(reports))

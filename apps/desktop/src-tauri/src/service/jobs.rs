@@ -80,6 +80,32 @@ pub async fn start_job_draft(
     state: S<'_>,
     draft_id: String,
 ) -> Reply<Vec<Job>> {
+    freeze_draft(app, state, draft_id, false, None).await
+}
+#[tauri::command]
+pub async fn enqueue_job_draft(
+    app: tauri::AppHandle,
+    state: S<'_>,
+    draft_id: String,
+) -> Reply<Vec<Job>> {
+    freeze_draft(app, state, draft_id, true, None).await
+}
+#[tauri::command]
+pub async fn replace_queued_job_run(
+    app: tauri::AppHandle,
+    state: S<'_>,
+    draft_id: String,
+    run_id: String,
+) -> Reply<Vec<Job>> {
+    freeze_draft(app, state, draft_id, true, Some(run_id)).await
+}
+async fn freeze_draft(
+    app: tauri::AppHandle,
+    state: S<'_>,
+    draft_id: String,
+    queued: bool,
+    replace: Option<String>,
+) -> Reply<Vec<Job>> {
     let i = state.inner.lock().await;
     let draft = store(&i)
         .map_err(err)?
@@ -89,25 +115,38 @@ pub async fn start_job_draft(
         .into_iter()
         .find(|d| d.id == draft_id)
         .ok_or("Draft missing; wait for it to save")?;
+    if draft.queued_run_id.is_some() && draft.queued_run_id != replace {
+        return Err("This draft edits an existing queue. Save queue changes or keep it as a separate draft first".into());
+    }
     let mut attempts = preflight(&i, &draft).map_err(err)?;
     let run = JobRun {
         id: project_core::id(),
         name: draft.name,
         draft_id: draft.id,
         job_ids: attempts.iter().map(|j| j.id.clone()).collect(),
-        state: "active".into(),
+        state: if queued { "paused" } else { "active" }.into(),
         created_at: chrono_now(),
+        queued,
     };
     for j in &mut attempts {
         j.run_id = Some(run.id.clone());
+        if queued {
+            j.state = "paused".into();
+        }
     }
-    runs::create(store(&i).map_err(err)?, &run, &attempts).map_err(err)?;
+    if let Some(old) = replace {
+        runs::replace_queued(store(&i).map_err(err)?, &old, &run, &attempts).map_err(err)?;
+    } else {
+        runs::create(store(&i).map_err(err)?, &run, &attempts).map_err(err)?;
+    }
     let all = job_core::list(store(&i).map_err(err)?).map_err(err)?;
     drop(i);
     let studio = state.inner().clone();
-    tauri::async_runtime::spawn(async move {
-        let _ = refresh(&studio, &app).await;
-    });
+    if !queued {
+        tauri::async_runtime::spawn(async move {
+            let _ = refresh(&studio, &app).await;
+        });
+    }
     Ok(all)
 }
 #[tauri::command]
@@ -163,6 +202,8 @@ async fn dispatch(
         b.validate_compatibility(j.snapshot["compatibility"].as_str().unwrap_or("unspecified")).await?;
         b.validate_profile(&j.snapshot["compiledProfile"]).await?;
         b.validate_media(&j.snapshot["originalGraph"], &bindings).await?;
+        let resolved = workflow_core::bind_exact(&j.snapshot["originalGraph"], &bindings, &semantic)?;
+        b.validate_before_staging(&resolved, &bindings).await?;
         let mut staged: std::collections::HashMap<String,String> = std::collections::HashMap::new();
         for (key, asset, bytes) in uploads {
             let name = if let Some(name) = staged.get(&asset.sha256) { name.clone() } else {

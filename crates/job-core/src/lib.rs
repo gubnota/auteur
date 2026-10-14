@@ -22,6 +22,9 @@ pub struct RemoteStatus {
 pub trait ExecutionBackend: Send + Sync {
     async fn health(&self) -> Result<Value>;
     async fn validate_job(&self, graph: &Value) -> Result<()>;
+    async fn validate_before_staging(&self, _graph: &Value, _bindings: &[Binding]) -> Result<()> {
+        Ok(())
+    }
     async fn validate_profile(&self, _profile: &Value) -> Result<()> {
         Ok(())
     }

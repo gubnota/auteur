@@ -40,6 +40,7 @@ import {
   type WorkflowLayout,
 } from "./lib/types";
 import { Modal, Field, Picker, Empty, Toggle } from "./components/Controls";
+import type { FrameLocation } from "./lib/project-usage";
 import { workflowForTarget } from "./lib/job-inputs";
 import { WorkflowCatalogue } from "./components/WorkflowCatalogue";
 import { AppSymbol } from "./components/AppSymbol";
@@ -83,6 +84,17 @@ export default function App() {
     [toasts, setToasts] = useState<{ id: string; message: string }[]>([]),
     [height, setHeight] = useState(180),
     [expanded, setExpanded] = useState(true);
+  const [frameNavigation, setFrameNavigation] = useState<{
+    frameId: string;
+    token: string;
+  }>();
+  const [characterFilter, setCharacterFilter] = useState("");
+  const navigateFrame = (f: FrameLocation) => {
+    setEpisodeId(f.episodeId);
+    setRoute("Keyframes");
+    setCharacterFilter("");
+    setFrameNavigation({ frameId: f.frameId, token: uid() });
+  };
   const [jobDraftId, setJobDraftId] = useState("");
   const [importing, setImporting] = useState(false);
   const [importMode, setImportMode] = useState("copy");
@@ -267,6 +279,24 @@ export default function App() {
     const saved = await call<AppSettings>("save_settings", { settings: s });
     setSettings(saved);
   };
+  const finished = (job: Job) =>
+    ["completed", "failed", "canceled"].includes(job.state);
+  const dismissed = new Set(settings.dismissedQueueJobIds ?? []);
+  const queueJobs = jobs.filter(
+    (job) => !finished(job) || !dismissed.has(job.id),
+  );
+  const clearFinished = () =>
+    void run(async () => {
+      await saveSettings({
+        ...settings,
+        dismissedQueueJobIds: [
+          ...new Set([
+            ...(settings.dismissedQueueJobIds ?? []),
+            ...queueJobs.filter(finished).map((job) => job.id),
+          ]),
+        ],
+      });
+    });
   const open = () =>
     void run(async () => {
       await pending.current;
@@ -572,6 +602,16 @@ export default function App() {
       );
     }
   };
+  const welcome = () =>
+    void run(async () => {
+      await pending.current;
+      if (native) await call("close_project");
+      generation.current++;
+      current.current = null;
+      setP(null);
+      setJobs([]);
+      if (native) setRecent(await call("recent_projects"));
+    });
   return (
     <div className="app" inert={importing}>
       {!p ? (
@@ -605,25 +645,56 @@ export default function App() {
           </div>
           {recent.length > 0 && (
             <section className="recent-projects">
-              <span className="eyebrow">RECENT MOVIES</span>
-              {recent.map((r) => (
+              <div className="row recent-heading">
+                <span className="eyebrow">RECENT MOVIES</span>
                 <button
-                  className="choice"
-                  key={r.path}
+                  className="text-button"
                   onClick={() =>
                     void run(async () =>
-                      loaded(await openMovie(r.path), r.path),
+                      setRecent(await call("clear_recent_projects")),
                     )
                   }
                 >
-                  <AppSymbol />
-                  <span>
-                    <strong>{r.name}</strong>
-                    <small>{r.path}</small>
-                  </span>
-                  <small>{new Date(r.opened).toLocaleDateString()}</small>
+                  Clear list
                 </button>
-              ))}
+              </div>
+              <div className="recent-scroll">
+                {recent.map((r) => (
+                  <div className="recent-entry" key={r.path}>
+                    <button
+                      className="choice"
+                      onClick={() =>
+                        void run(async () =>
+                          loaded(await openMovie(r.path), r.path),
+                        )
+                      }
+                    >
+                      <AppSymbol />
+                      <span>
+                        <strong>{r.name}</strong>
+                        <small>{r.path}</small>
+                      </span>
+                      <small>{new Date(r.opened).toLocaleDateString()}</small>
+                    </button>
+                    <button
+                      className="icon-button"
+                      aria-label={`Remove ${r.name} from recent movies`}
+                      onClick={() =>
+                        void run(async () =>
+                          setRecent(
+                            await call("remove_recent_project", {
+                              path: r.path,
+                            }),
+                          ),
+                        )
+                      }
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <small>Removing entries keeps your movie files.</small>
             </section>
           )}
           <div className="welcome-note">
@@ -688,6 +759,7 @@ export default function App() {
               {routes.map(([name, Icon]) => (
                 <button
                   key={name}
+                  aria-label={name}
                   data-file-drop={name === "Library" ? "library" : undefined}
                   className={route === name ? "active" : ""}
                   onClick={() => setRoute(name)}
@@ -702,19 +774,7 @@ export default function App() {
               ))}
             </nav>
             <div className="sidebar-bottom">
-              <button
-                className="text-button"
-                onClick={() =>
-                  void run(async () => {
-                    await pending.current;
-                    if (native) await call("close_project");
-                    generation.current++;
-                    current.current = null;
-                    setP(null);
-                    setJobs([]);
-                  })
-                }
-              >
+              <button className="text-button" onClick={welcome}>
                 <ArrowLeft size={16} />
                 Welcome
               </button>
@@ -728,6 +788,13 @@ export default function App() {
           >
             <header className="topbar">
               <div className="row">
+                <button
+                  className="icon-button"
+                  aria-label="Back to welcome"
+                  onClick={welcome}
+                >
+                  <ArrowLeft size={18} />
+                </button>
                 <span className="muted">{p.name}</span>
                 <span className="muted">/</span>
                 <strong>{route}</strong>
@@ -807,6 +874,9 @@ export default function App() {
                     root={root}
                     update={update}
                     onGenerate={chooseJob}
+                    navigation={frameNavigation}
+                    characterFilter={characterFilter}
+                    clearFilter={() => setCharacterFilter("")}
                   />
                 </>
               )}
@@ -816,6 +886,22 @@ export default function App() {
                   root={root}
                   update={update}
                   onImport={importCharacterReferences}
+                  onNavigate={navigateFrame}
+                  onFilterCharacter={(id) => {
+                    setCharacterFilter(id);
+                    setFrameNavigation(undefined);
+                    setRoute("Keyframes");
+                    const e = p.episodes.find((e) =>
+                      e.scenes.some(
+                        (s) =>
+                          s.characterIds?.includes(id) ||
+                          s.shots.some((sh) =>
+                            sh.frames.some((f) => f.characterIds.includes(id)),
+                          ),
+                      ),
+                    );
+                    if (e) setEpisodeId(e.id);
+                  }}
                 />
               )}{" "}
               {route === "Library" && (
@@ -823,6 +909,7 @@ export default function App() {
                   project={p}
                   root={root}
                   onImport={() => importFile("media")}
+                  onNavigate={navigateFrame}
                   onCollect={async () => {
                     await mutateMedia(
                       "collect_media",
@@ -860,6 +947,17 @@ export default function App() {
                   update={update}
                   selectedId={jobDraftId}
                   select={setJobDraftId}
+                  enqueue={async (id) => {
+                    await run(async () => {
+                      await pending.current;
+                      setJobs(
+                        await call<Job[]>("enqueue_job_draft", { draftId: id }),
+                      );
+                      notify(
+                        "Queued. Open Jobs and use Run all queued when ready.",
+                      );
+                    });
+                  }}
                   review={(id) => {
                     setJobDraftId(id);
                     setRoute("Jobs");
@@ -997,9 +1095,17 @@ export default function App() {
                 <div className="row">
                   <Clapperboard size={18} />
                   <strong>Render queue</strong>
-                  <span className="badge">{jobs.length} jobs</span>
+                  <span className="badge">{queueJobs.length} jobs</span>
                 </div>
                 <div className="row">
+                  <button
+                    className="text-button"
+                    disabled={!queueJobs.some(finished)}
+                    title="Clear finished entries here. Results and history stay in Jobs and Renders."
+                    onClick={clearFinished}
+                  >
+                    Clear finished
+                  </button>
                   <button
                     className="text-button"
                     onClick={() => void queueActions("refresh_jobs")}
@@ -1021,13 +1127,13 @@ export default function App() {
               </header>
               {expanded && (
                 <div className="queue-body">
-                  {jobs.length === 0 ? (
+                  {queueJobs.length === 0 ? (
                     <p className="muted">
                       Choose a workflow in Generate or select a keyframe to
                       start a render.
                     </p>
                   ) : (
-                    jobs.map((j) => (
+                    queueJobs.map((j) => (
                       <article className="queue-job" key={j.id}>
                         <div>
                           <strong>

@@ -53,6 +53,7 @@ fn fifo_aliases_parallel_slots_unknown_and_recovery() {
         job_ids: vec![first.id.clone(), second.id.clone(), third.id.clone()],
         state: "active".into(),
         created_at: "now".into(),
+        queued: false,
     };
     runs::create(&s, &run, &[first.clone(), second.clone(), third.clone()]).unwrap();
     assert_eq!(
@@ -140,4 +141,98 @@ fn private_runpod_nodes_share_relay_but_dispatch_independently() {
         runs::eligible(&[other.clone(), next, first], &[]).unwrap(),
         vec![other.id]
     );
+}
+
+#[test]
+fn queued_run_survives_reopen_without_admission_until_start() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("queued.mymovie");
+    let store = ProjectStore::create(&path, "Queue", true).unwrap();
+    let connection = c("http://localhost:8188");
+    let rid = id();
+    let mut attempt = j(&connection, &rid);
+    attempt.state = "paused".into();
+    let run = JobRun {
+        id: rid.clone(),
+        name: "Queued".into(),
+        draft_id: id(),
+        job_ids: vec![attempt.id.clone()],
+        state: "paused".into(),
+        created_at: "now".into(),
+        queued: true,
+    };
+    runs::create(&store, &run, &[attempt.clone()]).unwrap();
+    assert!(
+        runs::eligible(&list(&store).unwrap(), &[])
+            .unwrap()
+            .is_empty()
+    );
+    drop(store);
+    let store = ProjectStore::open(&path).unwrap();
+    recover(&store).unwrap();
+    assert!(runs::list(&store).unwrap()[0].queued);
+    assert!(
+        runs::eligible(&list(&store).unwrap(), &[])
+            .unwrap()
+            .is_empty()
+    );
+    runs::control(&store, &rid, "resume").unwrap();
+    assert!(!runs::list(&store).unwrap()[0].queued);
+    assert_eq!(
+        runs::eligible(&list(&store).unwrap(), &[]).unwrap(),
+        vec![attempt.id]
+    );
+}
+
+#[test]
+fn queue_edits_are_atomic_idle_and_preserve_original_receipts() {
+    let tmp = tempfile::tempdir().unwrap();
+    let s = ProjectStore::create(&tmp.path().join("edit.mymovie"), "Edit", false).unwrap();
+    let first_node = c("http://localhost:8188");
+    let next_node = c("http://localhost:8189");
+    let rid = id();
+    let mut before = j(&first_node, &rid);
+    before.state = "paused".into();
+    let old = JobRun {
+        id: rid,
+        name: "Before".into(),
+        draft_id: id(),
+        job_ids: vec![before.id.clone()],
+        state: "paused".into(),
+        created_at: "now".into(),
+        queued: true,
+    };
+    runs::create(&s, &old, &[before.clone()]).unwrap();
+    let new_id = id();
+    let mut after = j(&next_node, &new_id);
+    after.state = "paused".into();
+    let replacement = JobRun {
+        id: new_id,
+        name: "After".into(),
+        draft_id: id(),
+        job_ids: vec![after.id.clone()],
+        state: "paused".into(),
+        created_at: "later".into(),
+        queued: true,
+    };
+    // A database conflict rolls back cancellation of the original batch.
+    let mut conflict = after.clone();
+    conflict.id = before.id.clone();
+    assert!(runs::replace_queued(&s, &old.id, &replacement, &[conflict]).is_err());
+    assert_eq!(runs::list(&s).unwrap()[0].state, "paused");
+    assert_eq!(list(&s).unwrap()[0].state, "paused");
+    runs::replace_queued(&s, &old.id, &replacement, &[after.clone()]).unwrap();
+    let original = list(&s)
+        .unwrap()
+        .into_iter()
+        .find(|j| j.id == before.id)
+        .unwrap();
+    assert_eq!(original.state, "canceled");
+    assert_eq!(original.snapshot, before.snapshot);
+    assert_eq!(list(&s).unwrap()[0].connection_id, next_node.id);
+    assert!(runs::eligible(&list(&s).unwrap(), &[]).unwrap().is_empty());
+    runs::control(&s, &replacement.id, "resume").unwrap();
+    // An already started batch cannot be replaced, even before its next poll.
+    assert!(runs::replace_queued(&s, &replacement.id, &replacement, &[after]).is_err());
+    assert_eq!(runs::list(&s).unwrap().len(), 2);
 }

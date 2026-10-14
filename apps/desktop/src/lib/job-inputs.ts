@@ -68,6 +68,14 @@ export const mediaBinding = (b: Binding) =>
   !!b.media ||
   ["image", "mask"].includes(b.semantic) ||
   b.semantic.startsWith("characterReference");
+export function swapMediaInputs(item: JobItem, first: string, second: string) {
+  const a = item.assets[first],
+    b = item.assets[second];
+  if (b) item.assets[first] = b;
+  else delete item.assets[first];
+  if (a) item.assets[second] = a;
+  else delete item.assets[second];
+}
 export function workflowForTarget(
   w: Workflow | undefined,
   connectionId: string,
@@ -78,12 +86,22 @@ export function workflowForTarget(
   return {
     ...w,
     graph: profile.graph,
-    inputs: profile.inputs.map((d) => ({
-      ...d,
-      ...w.layout?.inputs.find(
+    inputs: profile.inputs.map((d) => {
+      const layout = w.layout?.inputs.find(
         (l) => l.nodeId === d.binding.nodeId && l.input === d.binding.input,
-      ),
-    })),
+      );
+      return {
+        ...d,
+        ...layout,
+        binding: {
+          ...d.binding,
+          media: d.binding.media && {
+            ...d.binding.media,
+            role: layout?.mediaRole ?? d.binding.media.role,
+          },
+        },
+      };
+    }),
     outputs: profile.outputs.map((d) => ({
       ...d,
       ...w.layout?.outputs.find((l) => l.nodeId === d.nodeId),
@@ -100,7 +118,12 @@ export function workflowForTarget(
             ),
         )
         .map((d) => d.binding),
-    ],
+    ].map((b) => {
+      const role = w.layout?.inputs.find(
+        (l) => l.nodeId === b.nodeId && l.input === b.input,
+      )?.mediaRole;
+      return role && b.media ? { ...b, media: { ...b.media, role } } : b;
+    }),
   };
 }
 export function resolveInputs(p: Project, draft: JobDraft, item: JobItem) {

@@ -106,6 +106,22 @@ pub fn for_target(w: &Workflow, connection: &str) -> Result<Workflow> {
             input.group = layout.group.clone();
             input.hidden = layout.hidden;
             input.advanced = layout.advanced;
+            if let (Some(media), Some(role)) = (&mut input.binding.media, &layout.media_role) {
+                media.role = role.clone();
+            }
+        }
+    }
+    for binding in &mut result.bindings {
+        if let Some(role) = w
+            .layout
+            .inputs
+            .iter()
+            .find(|l| l.node_id == binding.node_id && l.input == binding.input)
+            .and_then(|l| l.media_role.as_ref())
+        {
+            if let Some(media) = &mut binding.media {
+                media.role = role.clone();
+            }
         }
     }
     for output in &mut result.outputs {
@@ -685,7 +701,7 @@ pub fn resolve_item(
         "compiledProfile":w.profiles.iter().find(|p|p.connection_id==item.connection_id),
         "outputLayout":w.layout.outputs,"outputs":w.outputs,
         "compatibility":w.requirements.compatibility,"requirements":w.requirements,
-        "frame":target.map(|(_,f)|f),"sceneId":target.map(|(s,_)|&s.id),"context":draft.context,"bindings":bindings,
+        "frame":target.map(|(_,f)|f),"sceneId":target.map(|(s,_)|&s.id),"context":draft.context,"bindings":bindings,"draftItem":item,
         "characters":p.characters.iter().filter(|c| cast.contains(&c.id)).collect::<Vec<_>>() }),
     )
 }
@@ -736,6 +752,7 @@ mod jobs_tests {
         let frame = p.episodes[0].scenes[0].shots[0].frames[0].id.clone();
         let item:JobItem=serde_json::from_value(serde_json::json!({"id":project_core::id(),"workflowId":w.id,"connectionId":"local","values":{"positivePrompt":"","context":"literal string","seed":0,"enabled":false}})).unwrap();
         let mut d = JobDraft {
+            queued_run_id: None,
             id: project_core::id(),
             name: "Exact".into(),
             frame_id: frame,
@@ -825,6 +842,7 @@ mod profile_tests {
             group: "Dimensions".into(),
             hidden: true,
             advanced: false,
+            media_role: None,
         });
         let prepared = for_target(&w, "mac").unwrap();
         assert_eq!(prepared.bindings.len(), 2);

@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 [dependencies]
 studio-contracts.workspace=true
+workflow-core.workspace = true
 job-core.workspace = true
 project-core.workspace = true
 serde_json.workspace = true
@@ -15,6 +16,5 @@ tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
 futures-util = "0.3"
 sha2.workspace=true
 [dev-dependencies]
-workflow-core.workspace = true
 asset-core.workspace = true
 tempfile.workspace = true

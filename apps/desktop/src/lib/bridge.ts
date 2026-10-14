@@ -83,6 +83,8 @@ export async function pickDestination(name: string): Promise<string | null> {
 }
 export const mediaUrl = (_root: string, a: { id: string; path: string }) =>
   native ? `mymovie://localhost/${a.id}` : "";
+export const posterUrl = (a: { id: string }) =>
+  native ? `mymovie://localhost/${a.id}/thumbnail` : "";
 export const jobs = () => call<Job[]>("list_jobs");
 
 export async function exportDestination(name: string): Promise<string | null> {

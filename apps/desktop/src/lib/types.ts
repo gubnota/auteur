@@ -81,6 +81,7 @@ export interface WorkflowLayout {
     group: string;
     hidden: boolean;
     advanced: boolean;
+    mediaRole?: string;
   }[];
   outputs: { nodeId: string; label: string; selected: boolean }[];
 }
@@ -173,6 +174,7 @@ export interface AppSettings {
   connections: Connection[];
   theme: string;
   queueHeight: number;
+  dismissedQueueJobIds?: string[];
   storage: Record<string, unknown>;
   notifications: Diagnostic[];
   logs: Diagnostic[];
@@ -241,6 +243,7 @@ export interface JobItem {
   apiFamily?: string | null;
 }
 export interface JobDraft {
+  queuedRunId?: string | null;
   id: string;
   name: string;
   frameId: string;
@@ -258,6 +261,7 @@ export interface JobRun {
   jobIds: string[];
   state: string;
   createdAt: string;
+  queued?: boolean;
 }
 
 export interface InstallArtifact {

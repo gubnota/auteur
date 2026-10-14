@@ -1,5 +1,60 @@
 //! Catalogue pins and target preparation. Provider I/O never holds the document lock.
 use super::*;
+#[tauri::command]
+pub async fn install_workflow(
+    state: S<'_>,
+    workflow_id: String,
+    connection_id: String,
+) -> Reply<Value> {
+    let (w, c) = {
+        let i = state.inner.lock().await;
+        let p = store(&i).map_err(err)?.read().map_err(err)?;
+        (
+            p.workflows
+                .iter()
+                .find(|w| w.id == workflow_id)
+                .ok_or("Workflow missing")?
+                .clone(),
+            connection(&i, &connection_id).map_err(err)?,
+        )
+    };
+    let source = w
+        .editor_graph
+        .as_ref()
+        .ok_or("Import the original editor workflow first")?;
+    if c.kind == "comfyui" {
+        provider_comfyui::ComfyUi::new(&c.url)
+            .map_err(err)?
+            .install_workflow(&w.name, source)
+            .await
+            .map_err(err)
+    } else if c.kind == "relay" {
+        let r = relay(&c).map_err(err)?;
+        let receipt = r
+            .command(
+                "workflow-install",
+                json!({"source":source,"name":w.name,"publishToComfyui":true}),
+            )
+            .await
+            .map_err(err)?;
+        let id = receipt["id"]
+            .as_str()
+            .ok_or("Runner did not return operation ID")?;
+        for _ in 0..120 {
+            let status = r.get(&format!("/v1/jobs/{id}")).await.map_err(err)?;
+            match status["state"].as_str() {
+                Some("completed") => return Ok(status["report"].clone()),
+                Some("failed" | "lost" | "canceled") => {
+                    return Err(format!("Workflow installation: {}", status["error"]));
+                }
+                _ => tokio::time::sleep(std::time::Duration::from_secs(2)).await,
+            }
+        }
+        Err("Installation timed out; check runner logs before retrying".into())
+    } else {
+        Err("Select a ComfyUI or runner node; RunningHub uses a hosted workflow ID".into())
+    }
+}
 fn hash(v: &Value) -> Result<String> {
     Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(v)?)))
 }
@@ -48,6 +103,22 @@ pub async fn save_workflow_layout(
             .inputs
             .iter()
             .any(|l| l.label.len() > 200 || l.group.len() > 100 || l.label.trim().is_empty())
+        || layout.inputs.iter().any(|l| {
+            l.media_role.as_ref().is_some_and(|r| {
+                ![
+                    "sourceImage",
+                    "startFrame",
+                    "endFrame",
+                    "referenceImage",
+                    "mask",
+                    "referenceVideo",
+                    "referenceAudio",
+                    "sourceVideo",
+                    "sourceAudio",
+                ]
+                .contains(&r.as_str())
+            })
+        })
         || layout
             .outputs
             .iter()
@@ -192,7 +263,7 @@ pub async fn prepare_workflow(
         connection_id: connection_id.clone(),
         source_hash: w.editor_hash.clone().unwrap_or(w.version.clone()),
         api_hash: hash(&graph).map_err(err)?,
-        registry_hash: hash(registry).map_err(err)?,
+        registry_hash: workflow_core::schema::fingerprint(&graph, registry).map_err(err)?,
         frontend_hash: receipt["frontendHash"].as_str().unwrap_or("").into(),
         compiler_version: receipt["compilerVersion"].as_str().unwrap_or("").into(),
         graph,

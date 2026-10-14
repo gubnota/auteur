@@ -3,7 +3,7 @@ import { WorkflowSetup, compatibilityLabel } from "../components/WorkflowSetup";
 import { useState, useEffect } from "react";
 import { Plus, Image, Upload, X, Workflow as WorkflowIcon } from "lucide-react";
 import { Field, Modal, Picker, Empty } from "../components/Controls";
-import { call, mediaUrl } from "../lib/bridge";
+import { call, mediaUrl, posterUrl, native } from "../lib/bridge";
 import {
   uid,
   type Project,
@@ -12,6 +12,11 @@ import {
   type Asset,
   type AppSettings,
 } from "../lib/types";
+import {
+  assetUsage,
+  characterUsage,
+  type FrameLocation,
+} from "../lib/project-usage";
 import type { Update } from "../App";
 export function PageTitle({
   eyebrow,
@@ -36,6 +41,25 @@ export function PageTitle({
   );
 }
 export function Media({ asset, root }: { asset: Asset; root: string }) {
+  const [poster, setPoster] = useState(false),
+    [previewError, setPreviewError] = useState(""),
+    [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let stopped = false;
+    setPoster(false);
+    setPreviewError("");
+    if (asset.kind === "video" && native)
+      void call<boolean>("video_thumbnail", { assetId: asset.id })
+        .then((v) => {
+          if (!stopped) setPoster(v);
+        })
+        .catch((e) => {
+          if (!stopped) setPreviewError(String(e));
+        });
+    return () => {
+      stopped = true;
+    };
+  }, [root, asset.id, asset.sha256, retry]);
   if (
     !mediaUrl(root, asset) &&
     ["image", "video", "audio"].includes(asset.kind)
@@ -47,7 +71,23 @@ export function Media({ asset, root }: { asset: Asset; root: string }) {
     );
   }
   return asset.kind === "video" ? (
-    <video controls preload="metadata" src={mediaUrl(root, asset)} />
+    <div className="video-preview">
+      <video
+        controls
+        preload="metadata"
+        poster={poster ? posterUrl(asset) : undefined}
+        src={mediaUrl(root, asset)}
+      />
+      {previewError && (
+        <button
+          className="text-button"
+          title={previewError}
+          onClick={() => setRetry((v) => v + 1)}
+        >
+          Preview unavailable · retry
+        </button>
+      )}
+    </div>
   ) : asset.kind === "audio" ? (
     <audio controls src={mediaUrl(root, asset)} />
   ) : asset.kind === "image" ? (
@@ -61,7 +101,11 @@ export function Characters({
   root,
   update,
   onImport,
+  onNavigate,
+  onFilterCharacter,
 }: {
+  onNavigate: (f: FrameLocation) => void;
+  onFilterCharacter: (id: string) => void;
   project: Project;
   root: string;
   update: Update;
@@ -127,7 +171,8 @@ export function Characters({
             <strong>{c.name}</strong>
             <p>{c.description || "Add appearance and continuity notes"}</p>
             <small>
-              Revision {c.revision} · {c.assetIds.length} references
+              Revision {c.revision} · {c.assetIds.length} references ·{" "}
+              {characterUsage(p, c.id).length} keyframes
             </small>
           </button>
         ))}
@@ -168,6 +213,28 @@ export function Characters({
                 })
               }
             />
+            <section className="usage-list">
+              <h3>Used in {characterUsage(p, c.id).length} keyframes</h3>
+              <button
+                onClick={() => {
+                  setSelected("");
+                  onFilterCharacter(c.id);
+                }}
+              >
+                Filter keyframes for this character
+              </button>
+              {characterUsage(p, c.id).map((f) => (
+                <button
+                  key={f.frameId}
+                  onClick={() => {
+                    setSelected("");
+                    onNavigate(f);
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </section>
             <div className="row">
               <button
                 className="primary"
@@ -272,13 +339,17 @@ export function Library({
   onImport,
   onCollect,
   onRelink,
+  onNavigate,
 }: {
+  onNavigate: (f: FrameLocation) => void;
   project: Project;
   root: string;
   onImport: () => void;
   onCollect: () => Promise<void>;
   onRelink: (assetId: string) => Promise<void>;
 }) {
+  const [usageId, setUsageId] = useState("");
+  const usage = usageId ? assetUsage(p, usageId) : null;
   const [filter, setFilter] = useState("all");
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
@@ -390,7 +461,9 @@ export function Library({
             .map((a) => (
               <article className="media-card panel" key={a.id}>
                 <Media asset={a} root={root} />
-                <strong>{a.name}</strong>
+                <strong className="asset-name" title={a.name}>
+                  {a.name}
+                </strong>
                 <span className="badge">
                   {a.sourcePath ? "Linked original" : "Inside movie"}
                 </span>
@@ -410,10 +483,44 @@ export function Library({
                 <small>
                   {a.kind} · {(a.size / 1024 / 1024).toFixed(2)} MB
                 </small>
+                <button onClick={() => setUsageId(a.id)}>
+                  Usage · {assetUsage(p, a.id).frames.length} keyframes
+                </button>
                 <code title={a.sha256}>SHA256 {a.sha256.slice(0, 16)}…</code>
               </article>
             ))}
         </div>
+      )}
+      {usage && (
+        <Modal title="Material usage" onClose={() => setUsageId("")}>
+          <div className="usage-list">
+            {!usage.frames.length && (
+              <p>No keyframe placement or assigned character references.</p>
+            )}
+            {usage.frames.map((f) => (
+              <button
+                key={f.frameId}
+                onClick={() => {
+                  setUsageId("");
+                  onNavigate(f);
+                }}
+              >
+                <strong>{f.kind}</strong>
+                <small>{f.label}</small>
+              </button>
+            ))}
+            <h3>Draft references</h3>
+            {usage.drafts.length ? (
+              usage.drafts.map((name, i) => <p key={i}>{name}</p>)
+            ) : (
+              <p>None</p>
+            )}
+            <p className="muted">
+              A character reference is available to the frame; this does not
+              prove it was used by a completed render.
+            </p>
+          </div>
+        </Modal>
       )}
     </>
   );
@@ -764,7 +871,9 @@ export function Renders({
             j.results.map((a) => (
               <article className="media-card panel" key={`${j.id}-${a.id}`}>
                 <Media asset={a} root={root} />
-                <strong>{a.name}</strong>
+                <strong className="asset-name" title={a.name}>
+                  {a.name}
+                </strong>
                 <span className="badge">
                   {a.sourcePath ? "Linked original" : "Inside movie"}
                 </span>

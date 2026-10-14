@@ -4,6 +4,8 @@ import {
   literalInputs,
   resolveInputs,
   readiness,
+  swapMediaInputs,
+  workflowForTarget,
 } from "./job-inputs";
 import type { Project, JobDraft } from "./types";
 const p: Project = {
@@ -242,6 +244,73 @@ describe("standalone generation", () => {
 });
 
 describe("execution profiles", () => {
+  it("swaps exact media slots without changing their frozen bindings or literals", () => {
+    const i = structuredClone(draft.items[0]);
+    i.assets = { "116.image": "source", "127.image": "face" };
+    const before = structuredClone(i.values);
+    swapMediaInputs(i, "116.image", "127.image");
+    expect(i.assets).toEqual({ "116.image": "face", "127.image": "source" });
+    expect(i.values).toEqual(before);
+    delete i.assets["127.image"];
+    swapMediaInputs(i, "116.image", "127.image");
+    expect(i.assets).toEqual({ "127.image": "face" });
+  });
+  it("persists media role and compact visibility against exact prepared addresses", () => {
+    const w = structuredClone(p.workflows[0]);
+    w.bindings = [];
+    w.profiles = [
+      {
+        connectionId: "c",
+        sourceHash: w.version,
+        apiHash: "api",
+        registryHash: "schema",
+        frontendHash: "f",
+        compilerVersion: "test",
+        graph: w.graph,
+        outputs: [],
+        inputs: [
+          {
+            binding: {
+              semantic: "1.image",
+              nodeId: "1",
+              input: "image",
+              valueType: "string",
+              media: { kind: "image", role: "referenceImage", order: 0 },
+            },
+            label: "Image",
+            control: "media",
+            required: true,
+            default: "a.png",
+            choices: [],
+            advanced: false,
+          },
+        ],
+      },
+    ];
+    w.layout = {
+      inputs: [
+        {
+          nodeId: "1",
+          input: "image",
+          label: "Base image",
+          group: "References",
+          advanced: true,
+          hidden: true,
+          mediaRole: "sourceImage",
+        },
+      ],
+      outputs: [],
+    };
+    const restored = workflowForTarget(JSON.parse(JSON.stringify(w)), "c")!;
+    expect(restored.inputs![0]).toMatchObject({
+      label: "Base image",
+      hidden: true,
+      advanced: true,
+      binding: { nodeId: "1", input: "image", media: { role: "sourceImage" } },
+    });
+    expect(restored.bindings[0].media?.role).toBe("sourceImage");
+    expect(w.profiles[0].inputs[0].binding.media?.role).toBe("referenceImage");
+  });
   it("merges schema fields with saved aliases, preserves sources, and isolates targets", () => {
     const project = structuredClone(p);
     const w = project.workflows[0];

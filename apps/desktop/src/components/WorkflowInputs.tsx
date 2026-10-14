@@ -13,6 +13,7 @@ import {
   mediaBinding,
   parseInput,
   resolveInputs,
+  swapMediaInputs,
 } from "../lib/job-inputs";
 import { ratios } from "../lib/types";
 import { Field, Modal, Picker, Toggle } from "./Controls";
@@ -38,6 +39,10 @@ export function WorkflowInputs({
 }) {
   const bindings = item.bindings ?? w.bindings;
   const [advanced, setAdvanced] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const images = bindings.filter(
+    (b) => b.media?.kind === "image" && b.media.role !== "mask",
+  );
   const [dimensionNode, setDimensionNode] = useState("");
   const axis = (b: Binding) => b.input.split(".").at(-1);
   const dimensionKey = (b: Binding) =>
@@ -103,6 +108,19 @@ export function WorkflowInputs({
           Bind literal input
         </button>
       </div>
+      {images.length === 2 && (
+        <button
+          className="swap-inputs"
+          onClick={() =>
+            edit((i) => {
+              const [a, b] = images.map((b) => b.semantic);
+              swapMediaInputs(i, a, b);
+            })
+          }
+        >
+          Swap the two image inputs
+        </button>
+      )}
       {!bindings.length && (
         <p className="muted">
           This graph uses its imported defaults. Add explicit bindings to
@@ -177,6 +195,13 @@ export function WorkflowInputs({
           onChange={setAdvanced}
         />
       )}
+      {w.inputs?.some((d) => d.hidden) && (
+        <Toggle
+          label="Show hidden inputs"
+          checked={hidden}
+          onChange={setHidden}
+        />
+      )}
       {w.inputs
         ?.filter((d) => d.control === "unsupported")
         .map((d) => (
@@ -188,11 +213,7 @@ export function WorkflowInputs({
         const descriptor = w.inputs?.find(
           (d) => d.binding.nodeId === b.nodeId && d.binding.input === b.input,
         );
-        if (
-          (descriptor?.hidden || descriptor?.advanced) &&
-          !advanced &&
-          !dimensions.includes(b)
-        )
+        if (descriptor?.hidden ? !hidden : descriptor?.advanced && !advanced)
           return null;
         let resolved: unknown = defaultValue(b);
         try {
@@ -237,11 +258,15 @@ export function WorkflowInputs({
                 <XIcon />
               </button>
             </div>
-            <small className="muted">
-              Imported default:{" "}
-              {String(JSON.stringify(defaultValue(b))).slice(0, 180)}
-              {String(JSON.stringify(defaultValue(b))).length > 180 ? "…" : ""}
-            </small>
+            {!mediaBinding(b) && advanced && (
+              <small className="muted">
+                Imported default:{" "}
+                {String(JSON.stringify(defaultValue(b))).slice(0, 180)}
+                {String(JSON.stringify(defaultValue(b))).length > 180
+                  ? "…"
+                  : ""}
+              </small>
+            )}
             {mediaBinding(b) ? (
               <div
                 className="generate-media-slot"
@@ -535,6 +560,7 @@ export function WorkflowInputs({
               value={role}
               options={(mediaKind === "image"
                 ? [
+                    "sourceImage",
                     "startFrame",
                     "endFrame",
                     "referenceImage",

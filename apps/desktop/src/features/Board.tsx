@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent } from "react";
+import { useRef, useState, useEffect, type PointerEvent } from "react";
 import {
   Plus,
   Search,
@@ -30,7 +30,13 @@ export function Board({
   root,
   update,
   onGenerate,
+  navigation,
+  characterFilter,
+  clearFilter,
 }: {
+  navigation?: { frameId: string; token: string };
+  characterFilter?: string;
+  clearFilter: () => void;
   project: Project;
   episode: Episode;
   root: string;
@@ -44,6 +50,12 @@ export function Board({
     [sceneEditor, setSceneEditor] = useState(false),
     [newScene, setNewScene] = useState(""),
     [dragged, setDragged] = useState("");
+  useEffect(() => {
+    if (navigation) {
+      setSelected(navigation.frameId);
+      setSceneId("all");
+    }
+  }, [navigation]);
   const frames = episode.scenes.flatMap((s) =>
     s.shots.flatMap((sh) => sh.frames),
   );
@@ -171,6 +183,15 @@ export function Board({
   };
   return (
     <>
+      {characterFilter && (
+        <div className="panel row">
+          <span>
+            Character:{" "}
+            {p.characters.find((c) => c.id === characterFilter)?.name}
+          </span>
+          <button onClick={clearFilter}>Clear character filter</button>
+        </div>
+      )}
       <div className="board-toolbar">
         <div className="row">
           <Picker
@@ -303,110 +324,120 @@ export function Board({
                         />
                       </div>
                       <div className="frames">
-                        {sh.frames.map((f, index) => (
-                          <article
-                            key={f.id}
-                            data-file-drop="frame"
-                            data-frame-id={f.id}
-                            data-sort-shot={sh.id}
-                            data-sort-index={index}
-                            className={`frame-card ${selected === f.id ? "selected" : ""} ${dragged === f.id ? "sorting" : ""}`}
-                          >
-                            <button
-                              className="frame-image"
-                              onClick={() => setSelected(f.id)}
-                              style={{
-                                aspectRatio: (f.ratio ?? p.ratio).replace(
-                                  ":",
-                                  " / ",
-                                ),
-                              }}
+                        {sh.frames
+                          .map((f, index) => ({ f, index }))
+                          .filter(
+                            ({ f }) =>
+                              !characterFilter ||
+                              effectiveCast(
+                                s.characterIds,
+                                f.characterIds,
+                              ).includes(characterFilter),
+                          )
+                          .map(({ f, index }) => (
+                            <article
+                              key={f.id}
+                              data-file-drop="frame"
+                              data-frame-id={f.id}
+                              data-sort-shot={sh.id}
+                              data-sort-index={index}
+                              className={`frame-card ${selected === f.id ? "selected" : ""} ${dragged === f.id ? "sorting" : ""}`}
                             >
-                              {renderAsset(f)}
-                              <span className="frame-counter">
-                                {String(index + 1).padStart(2, "0")}
-                              </span>
-                            </button>
-                            <div className="frame-card-body">
                               <button
-                                className="frame-name"
+                                className="frame-image"
                                 onClick={() => setSelected(f.id)}
+                                style={{
+                                  aspectRatio: (f.ratio ?? p.ratio).replace(
+                                    ":",
+                                    " / ",
+                                  ),
+                                }}
                               >
-                                {f.name || "Untitled frame"}
+                                {renderAsset(f)}
+                                <span className="frame-counter">
+                                  {String(index + 1).padStart(2, "0")}
+                                </span>
                               </button>
-                              <p>
-                                {f.positivePrompt ||
-                                  "Write the moment you want to create."}
-                              </p>
-                              <div className="row tags">
-                                {effectiveCast(
-                                  s.characterIds,
-                                  f.characterIds,
-                                ).map((id) => (
-                                  <span className="badge blush" key={id}>
-                                    {
-                                      p.characters.find((c) => c.id === id)
-                                        ?.name
-                                    }
-                                  </span>
-                                ))}
+                              <div className="frame-card-body">
+                                <button
+                                  className="frame-name"
+                                  onClick={() => setSelected(f.id)}
+                                >
+                                  {f.name || "Untitled frame"}
+                                </button>
+                                <p>
+                                  {f.positivePrompt ||
+                                    "Write the moment you want to create."}
+                                </p>
+                                <div className="row tags">
+                                  {effectiveCast(
+                                    s.characterIds,
+                                    f.characterIds,
+                                  ).map((id) => (
+                                    <span className="badge blush" key={id}>
+                                      {
+                                        p.characters.find((c) => c.id === id)
+                                          ?.name
+                                      }
+                                    </span>
+                                  ))}
+                                </div>
+                                <div className="frame-actions">
+                                  <button
+                                    className="icon-button drag-handle"
+                                    onPointerDown={(e) => {
+                                      e.preventDefault();
+                                      e.currentTarget.setPointerCapture(
+                                        e.pointerId,
+                                      );
+                                      sort.current = {
+                                        id: f.id,
+                                        x: e.clientX,
+                                        y: e.clientY,
+                                        active: false,
+                                      };
+                                    }}
+                                    onPointerMove={sortMove}
+                                    onPointerUp={sortEnd}
+                                    onPointerCancel={clearSort}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Escape") clearSort();
+                                    }}
+                                    aria-label={`Drag ${f.name}`}
+                                  >
+                                    <GripVertical size={15} />
+                                  </button>
+                                  <button
+                                    className="icon-button"
+                                    aria-label={`Move ${f.name} earlier`}
+                                    disabled={index === 0}
+                                    onClick={() => move(f.id, sh.id, index - 1)}
+                                  >
+                                    <ArrowUp size={15} />
+                                  </button>
+                                  <button
+                                    className="icon-button"
+                                    aria-label={`Move ${f.name} later`}
+                                    disabled={index === sh.frames.length - 1}
+                                    onClick={() => move(f.id, sh.id, index + 1)}
+                                  >
+                                    <ArrowDown size={15} />
+                                  </button>
+                                  <span className="spacer" />
+                                  <button
+                                    className="icon-button danger"
+                                    aria-label={`Delete ${f.name}`}
+                                    onClick={() => {
+                                      remove(f.id);
+                                      if (selected === f.id) setSelected("");
+                                    }}
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
                               </div>
-                              <div className="frame-actions">
-                                <button
-                                  className="icon-button drag-handle"
-                                  onPointerDown={(e) => {
-                                    e.preventDefault();
-                                    e.currentTarget.setPointerCapture(
-                                      e.pointerId,
-                                    );
-                                    sort.current = {
-                                      id: f.id,
-                                      x: e.clientX,
-                                      y: e.clientY,
-                                      active: false,
-                                    };
-                                  }}
-                                  onPointerMove={sortMove}
-                                  onPointerUp={sortEnd}
-                                  onPointerCancel={clearSort}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Escape") clearSort();
-                                  }}
-                                  aria-label={`Drag ${f.name}`}
-                                >
-                                  <GripVertical size={15} />
-                                </button>
-                                <button
-                                  className="icon-button"
-                                  aria-label={`Move ${f.name} earlier`}
-                                  disabled={index === 0}
-                                  onClick={() => move(f.id, sh.id, index - 1)}
-                                >
-                                  <ArrowUp size={15} />
-                                </button>
-                                <button
-                                  className="icon-button"
-                                  aria-label={`Move ${f.name} later`}
-                                  disabled={index === sh.frames.length - 1}
-                                  onClick={() => move(f.id, sh.id, index + 1)}
-                                >
-                                  <ArrowDown size={15} />
-                                </button>
-                                <span className="spacer" />
-                                <button
-                                  className="icon-button danger"
-                                  aria-label={`Delete ${f.name}`}
-                                  onClick={() => {
-                                    remove(f.id);
-                                    if (selected === f.id) setSelected("");
-                                  }}
-                                >
-                                  <Trash2 size={15} />
-                                </button>
-                              </div>
-                            </div>
-                          </article>
-                        ))}
+                            </article>
+                          ))}
                         <button
                           className="add-frame-card"
                           data-file-drop="new-frame"
