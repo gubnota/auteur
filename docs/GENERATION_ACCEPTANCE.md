@@ -1,6 +1,14 @@
 # Generation acceptance — current main
 
-Date: 2026-10-14. Checks below distinguish published 0.1.6 from current 0.1.10. Publication is recorded in CI_RELEASES. No paid cloud jobs were submitted by the agent.
+Date: 2026-10-14. Checks below distinguish published 0.1.6 from current 0.1.11. Publication is recorded in CI_RELEASES. No paid cloud jobs were submitted by the agent.
+
+## 0.1.11 RunningHub workflow upload contract
+
+- Latest user receipt 89883f5d-b6a0-49cf-ad80-a6c070f13cd6 confirms the Redux hosted workflow and two image bindings. Creation returned code 605 without a task ID; the original reason is unavailable. No definitive cause is established.
+- Official [workflow-resource upload](https://www.runninghub.ai/runninghub-api-doc-en/api-425761099) requires multipart apiKey/fileType=input/file and returns data.fileName for loader overrides. The previous adapter mixed this contract with [standard-model upload](https://www.runninghub.ai/runninghub-api-doc-en/api-425761098), which returns a download URL. The adapter now uses workflow-resource uploads and the documented 30 MB limit for both hosted families. This is a verified contract correction, not proof that it caused code 605.
+- New errors retain bounded safe plain-language provider reasons from JSON and HTTP rejection responses. Submitted values, secrets, paths, URLs, markup and suspicious tokens are omitted; full raw responses and historical receipts remain untouched.
+- Fourteen provider and six job tests plus doc tests passed against local fixtures, including multipart fields/path/authentication, size rejection, plain/nested/Chinese reasons, private-value omission and HTTP status classification. No real provider retry or private upload performed; successful hosted generation remains unverified.
+- Native ARM64 production build, TypeScript/Vite, version parity and strict ad-hoc signature passed. Installed /Applications/MyMovie Studio.app 0.1.11, preserving 0.1.10 at /private/tmp/MyMovie Studio-0.1.10-before-0.1.11.app. Saved movie reopened with original queue history retained. Private screenshot: /private/tmp/mymovie-workflows-0.1.11.png.
 
 ## 0.1.10 RunningHub refusal diagnostics
 

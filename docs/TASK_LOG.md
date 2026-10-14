@@ -1,5 +1,14 @@
 # Task Log
 
+## 2026-10-14 — RunningHub workflow upload contract, 0.1.11
+
+- Read-only receipt 89883f5d-b6a0-49cf-ad80-a6c070f13cd6 confirms correct Redux deployment/two image bindings, then code 605 at creation without a task ID. Original provider reason was discarded; cause remains unconfirmed.
+- Corrected a documented contract mismatch: workflow/AI App loader overrides now use /task/openapi/upload with multipart apiKey, fileType=input and file, returning data.fileName. The newer standard-model upload API returns a URL for a different input contract. Workflow uploads enforce the documented 30 MB limit.
+- New JSON and HTTP errors retain bounded safe plain-language reasons, including nested message fields. Credentials, submitted values, URLs, paths, markup and suspicious tokens cause whole-field omission. Full provider responses remain excluded; historical receipts and retry semantics unchanged.
+- Fourteen provider and six durable-job tests plus doc tests passed; multipart contract, size rejection, reason retention/redaction and HTTP rejection covered. No live provider submission or private upload performed; 605 resolution and successful hosted generation remain unverified.
+- Version parity, formatting, TypeScript/Vite, native ARM64 production build and strict ad-hoc signature passed. Installed 0.1.11 in /Applications; previous app preserved at /private/tmp/MyMovie Studio-0.1.10-before-0.1.11.app. Saved movie reopened with original history retained. Private screenshot: /private/tmp/mymovie-workflows-0.1.11.png.
+- EN/RU/FR README, API contracts, ADR-0018 and acceptance updated. Public release remains v0.1.6; unrelated cpu-canary.png excluded.
+
 ## 2026-10-14 — RunningHub refusal diagnostics, 0.1.10
 
 - Latest user receipt confirms both image uploads, followed by code 605 at workflow creation without task ID. Provider history/logs unavailable; published error table does not list this code. Root cause remains unresolved.

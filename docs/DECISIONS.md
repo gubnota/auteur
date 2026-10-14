@@ -170,3 +170,13 @@ Context: Repeated job-level binding setup, two editors, duplicate media copies a
 Decision: Configure exact literal bindings/layout once in Workflows; Generate edits all drafts, Jobs owns queue/history. Use asset-ID tile selection and exact-ID native import. Library/Renders share original asset rows and receipt-derived provenance; Trash is reversible metadata. Verify duplicate content before copy and preserve linked policy. Refresh legacy/changed profiles before new review/freeze, retaining layouts, values and final guards.
 Consequences: Supersedes ADR-0016's explicit legacy refresh requirement for new attempts. No schema-version bump; archivedAt defaults absent. Historical references/receipts remain valid; new jobs reject trashed selections. Provider mappings remain explicit per account and unsupported serializers require correction.
 Related files: apps/desktop/src/components/WorkflowForm.tsx, MediaPicker.tsx, features/Generate.tsx, Jobs.tsx, Library.tsx; crates/asset-core/src/lib.rs, workflow-core/src/schema.rs; docs/MEDIA_WORKFLOW_SIMPLIFICATION_PLAN.md.
+
+# ADR-0018: Workflow resource contract and bounded refusal reasons
+
+Date: 2026-10-14
+Status: Accepted
+
+Context: Redux reached creation but received undocumented 605; the previous diagnostic dropped plain-language messages. Public docs distinguish workflow-relative fileName from standard-model v2 download URLs.
+Decision: Use documented workflow upload with apiKey/fileType=input for ComfyUI loader overrides in both hosted families. Preserve bounded non-sensitive reason fields instead of raw provider responses. Keep typed refusal/unknown admission and immutable receipts unchanged.
+Consequences: Tests establish request correctness, not the cause of 605 or live provider acceptance. Suspicious reason fields remain omitted rather than partially redacted; no automatic paid retry.
+Related files: crates/provider-runninghub/src/lib.rs, docs/API_CONTRACTS.md, docs/GENERATION_ACCEPTANCE.md.

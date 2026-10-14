@@ -59,10 +59,18 @@ impl RunningHub {
                 |_| "RunningHub network request failed; reconcile before retrying submission",
             )?;
         let status = response.status();
+        let mut private_values = vec![self.key.as_str()];
+        collect_private_strings(&body, &mut private_values);
         if !status.is_success() {
+            let reason = response
+                .json::<Value>()
+                .await
+                .ok()
+                .map(|v| response_reason(&v, v["code"].as_i64().unwrap_or(0), &private_values));
             let message = format!(
-                "RunningHub HTTP {} at {path}. Check account access, deployment and inputs.",
-                status.as_u16()
+                "RunningHub HTTP {} at {path}. {}",
+                status.as_u16(),
+                reason.unwrap_or_else(|| "No safe provider reason available. Check account access, deployment and inputs.".into())
             );
             if matches!(status.as_u16(), 400 | 401 | 403 | 404 | 422 | 429) {
                 return Err(SubmissionRejected(message).into());
@@ -73,8 +81,6 @@ impl RunningHub {
             .json()
             .await
             .map_err(|_| "RunningHub returned an unreadable response")?;
-        let mut private_values = vec![self.key.as_str()];
-        collect_private_strings(&body, &mut private_values);
         check_response(&v, path, &private_values)?;
         Ok(v)
     }
@@ -208,19 +214,29 @@ impl ExecutionBackend for RunningHub {
                 "RunningHub media staging currently supports verified image inputs only".into(),
             );
         }
+        if bytes.len() > 30_000_000 {
+            return Err("RunningHub workflow inputs must not exceed 30 MB".into());
+        }
         let part = reqwest::multipart::Part::bytes(bytes).file_name(job_core::staging_name(asset)?);
         let v: Value = self
             .client
-            .post(format!("{}/openapi/v2/media/upload/binary", self.endpoint))
+            // ComfyUI loader overrides require workflow fileName paths, not
+            // standard model API download URLs from the v2 media endpoint.
+            .post(format!("{}/task/openapi/upload", self.endpoint))
             .bearer_auth(&self.key)
-            .multipart(reqwest::multipart::Form::new().part("file", part))
+            .multipart(
+                reqwest::multipart::Form::new()
+                    .text("apiKey", self.key.clone())
+                    .text("fileType", "input")
+                    .part("file", part),
+            )
             .send()
             .await
             .map_err(|_| "RunningHub upload failed")?
             .error_for_status()?
             .json()
             .await?;
-        check_response(&v, "/openapi/v2/media/upload/binary", &[self.key.as_str()])?;
+        check_response(&v, "/task/openapi/upload", &[self.key.as_str()])?;
         v["data"]["fileName"]
             .as_str()
             .map(str::to_owned)
@@ -242,7 +258,8 @@ fn check_response(v: &Value, operation: &str, private_values: &[&str]) -> Result
             .or_else(|| code.as_str().and_then(|s| s.parse().ok()))
             .ok_or("RunningHub returned an invalid response code")?;
         if code != 0 {
-            // Translate only documented codes/exact identifiers; never echo provider free text.
+            // Translate documented reasons; retain only bounded, non-sensitive
+            // message fields for undocumented refusals, never the full response.
             let message = format!(
                 "RunningHub API code {code} at {operation}. {}",
                 response_reason(v, code, private_values)
@@ -336,10 +353,24 @@ fn response_reason(v: &Value, code: i64, private_values: &[&str]) -> String {
             "The hosted AI App ID does not exist. Check its saved deployment.",
         ),
     ];
-    let identifier = v["msg"].as_str().or_else(|| v["message"].as_str());
+    let messages: Vec<&str> = [
+        "/msg",
+        "/message",
+        "/error/message",
+        "/error",
+        "/data/msg",
+        "/data/message",
+        "/data/error/message",
+        "/data/error",
+    ]
+    .iter()
+    .filter_map(|path| v.pointer(path).and_then(Value::as_str))
+    .filter(|s| !s.trim().is_empty() && !["error", "failed", "success"].contains(&s.trim()))
+    .collect();
+    let identifier = messages.first().copied();
     let reason = REASONS
         .iter()
-        .find(|(_, name, _)| identifier == Some(*name))
+        .find(|(_, name, _)| messages.contains(name))
         .or_else(|| REASONS.iter().find(|(n, _, _)| *n == code))
         .map(|(_, _, reason)| *reason);
     if let Some(reason) = reason {
@@ -367,9 +398,49 @@ fn response_reason(v: &Value, code: i64, private_values: &[&str]) -> String {
     let identifier_note = safe_identifier
         .map(|s| format!(" Provider identifier: {s}."))
         .unwrap_or_default();
+    if safe_identifier.is_none() {
+        if let Some(message) = messages
+            .iter()
+            .find(|s| safe_reason_text(s, private_values))
+        {
+            let message = message.split_whitespace().collect::<Vec<_>>().join(" ");
+            return format!(
+                "Provider reason: {message}. Code {code} has no documented explanation; review this refusal before retrying."
+            );
+        }
+    }
     format!(
         "The provider's reason is not documented for this code.{identifier_note} Check this refusal before retrying."
     )
+}
+fn safe_reason_text(message: &str, private_values: &[&str]) -> bool {
+    // Omit the whole field when it could contain request echoes, credentials,
+    // private locations, markup or serialized data. No truncation can expose
+    // an unchecked suffix. Plain language (including Chinese) remains useful.
+    let lower = message.to_lowercase();
+    message.chars().count() <= 512
+        && !message.chars().any(|c| {
+            matches!(c, '<' | '>' | '{' | '}' | '[' | ']' | '/' | '\\' | '@')
+                || (c.is_control() && !c.is_whitespace())
+        })
+        && ![
+            "www.",
+            "api_key",
+            "apikey",
+            "authorization",
+            "bearer",
+            "token=",
+            "password",
+            "secret",
+        ]
+        .iter()
+        .any(|s| lower.contains(s))
+        && !private_values
+            .iter()
+            .any(|s| !s.is_empty() && lower.contains(&s.to_lowercase()))
+        && !message
+            .split(|c: char| !c.is_ascii_alphanumeric() && c != '-' && c != '_')
+            .any(|s| s.len() >= 24)
 }
 fn task_state(state: Option<&str>) -> &'static str {
     match state {
@@ -407,6 +478,20 @@ mod tests {
         status: u16,
         reply: Value,
     ) -> (RunningHub, tokio::task::JoinHandle<(String, Value)>) {
+        let (provider, request) = mock_raw(family, status, reply).await;
+        (
+            provider,
+            tokio::spawn(async move {
+                let (head, bytes) = request.await.unwrap();
+                (head, serde_json::from_slice(&bytes).unwrap())
+            }),
+        )
+    }
+    async fn mock_raw(
+        family: &str,
+        status: u16,
+        reply: Value,
+    ) -> (RunningHub, tokio::task::JoinHandle<(String, Vec<u8>)>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let task = tokio::spawn(async move {
@@ -430,11 +515,7 @@ mod tests {
                         .parse()
                         .unwrap();
                     if bytes.len() >= end + 4 + len {
-                        break (
-                            head,
-                            serde_json::from_slice::<Value>(&bytes[end + 4..end + 4 + len])
-                                .unwrap(),
-                        );
+                        break (head, bytes[end + 4..end + 4 + len].to_vec());
                     }
                 }
             };
@@ -483,6 +564,111 @@ mod tests {
         assert!(head.starts_with("POST /task/openapi/create "));
         assert_eq!(body["workflowId"], "123456789");
         assert_eq!(body["apiKey"], "test-only-key");
+    }
+    #[tokio::test]
+    async fn workflow_loaders_use_legacy_upload_paths_for_both_families() {
+        for family in ["workflow", "ai-app"] {
+            let (p, request) = mock_raw(
+                family,
+                200,
+                json!({"code":0,"data":{"fileName":"api/input.png","fileType":"input"}}),
+            )
+            .await;
+            let asset: studio_contracts::Asset = serde_json::from_value(json!({
+                "id":"asset", "name":"private-original.png", "path":"media/originals/input.png",
+                "sha256":"a".repeat(64), "kind":"image", "size":7
+            }))
+            .unwrap();
+            assert_eq!(
+                p.stage_asset(&asset, b"fixture".to_vec()).await.unwrap(),
+                "api/input.png"
+            );
+            let (head, body) = request.await.unwrap();
+            assert!(head.starts_with("POST /task/openapi/upload "));
+            assert!(
+                head.to_lowercase()
+                    .contains("authorization: bearer test-only-key")
+            );
+            let body = String::from_utf8(body).unwrap();
+            for expected in [
+                "name=\"apiKey\"\r\n\r\ntest-only-key",
+                "name=\"fileType\"\r\n\r\ninput",
+                "name=\"file\"",
+                "fixture",
+            ] {
+                assert!(body.contains(expected), "{expected}");
+            }
+            assert!(!body.contains("private-original"));
+            assert!(
+                p.stage_asset(&asset, vec![0; 30_000_000 + 1])
+                    .await
+                    .unwrap_err()
+                    .to_string()
+                    .contains("30 MB")
+            );
+        }
+    }
+    #[test]
+    fn unknown_refusals_retain_safe_plain_language_and_nested_reasons() {
+        for response in [
+            json!({"code":605,"message":"Workflow execution is unavailable"}),
+            json!({"code":605,"msg":"error","data":{"error":{"message":"工作流暂不可用"}}}),
+        ] {
+            let message = check_response(&response, "/task/openapi/create", &[])
+                .unwrap_err()
+                .to_string();
+            assert!(message.contains("Provider reason:"));
+            assert!(!message.contains("not documented"));
+        }
+        let message = check_response(&json!({"code":605,"msg":"error","data":{"message":"WORKFLOW_NOT_SAVED_OR_NOT_RUNNING"}}), "test", &[]).unwrap_err().to_string();
+        assert!(message.contains("manually run"));
+    }
+    #[test]
+    fn unsafe_reason_fields_are_omitted_without_truncating_into_safety() {
+        for reason in [
+            "Rejected test-only-key",
+            "Rejected PRIVATE PROMPT",
+            "See https://private.test/input",
+            "Invalid api/input.png",
+            "Invalid C:\\private\\input.png",
+            "Invalid person@example.test",
+            "<script>private</script>",
+            "{\"prompt\":\"private\"}",
+            "Bearer other-key",
+            "abc0123456789abcdef0123456789abcdef",
+            "Bad\0response",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .chain(["a ".repeat(513)])
+        {
+            let error = check_response(
+                &json!({"code":605,"message":reason}),
+                "test",
+                &["test-only-key", "private prompt"],
+            )
+            .unwrap_err()
+            .to_string();
+            assert!(
+                !error.contains("Provider reason:"),
+                "unsafe response retained"
+            );
+        }
+    }
+    #[tokio::test]
+    async fn http_refusals_keep_safe_provider_details_and_rejection_semantics() {
+        let (p, request) = mock("workflow", 403, json!({"message":"Workflow access denied"})).await;
+        let e = p
+            .submit("local", &json!({"_mymovieNodeInfo":[]}))
+            .await
+            .unwrap_err();
+        assert!(e.to_string().contains("HTTP 403 at /task/openapi/create"));
+        assert!(
+            e.to_string()
+                .contains("Provider reason: Workflow access denied")
+        );
+        assert!(e.downcast_ref::<SubmissionRejected>().is_some());
+        request.await.unwrap();
     }
     #[tokio::test]
     async fn explicit_rejection_is_safe_and_missing_task_id_is_ambiguous() {
