@@ -154,7 +154,17 @@ async fn submit(
     if !allowed(&s, &v["nodeId"])
         || !matches!(
             v["kind"].as_str(),
-            Some("generation" | "doctor" | "inventory" | "drain" | "bootstrap" | "provision")
+            Some(
+                "generation"
+                    | "doctor"
+                    | "inventory"
+                    | "drain"
+                    | "bootstrap"
+                    | "provision"
+                    | "workflow-inspect"
+                    | "workflow-install"
+                    | "workflow-compile"
+            )
         )
     {
         return Err((StatusCode::BAD_REQUEST, "Invalid target or action".into()));

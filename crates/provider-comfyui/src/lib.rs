@@ -24,7 +24,7 @@ impl ComfyUi {
             client: Client::builder().timeout(Duration::from_secs(45)).build()?,
         })
     }
-    async fn get(&self, path: &str) -> Result<Value> {
+    pub async fn get(&self, path: &str) -> Result<Value> {
         Ok(self
             .client
             .get(format!("{}{path}", self.url))
@@ -47,6 +47,17 @@ impl ComfyUi {
 }
 #[async_trait]
 impl ExecutionBackend for ComfyUi {
+    async fn validate_profile(&self, profile: &Value) -> Result<()> {
+        if let Some(expected) = profile["registryHash"].as_str() {
+            use sha2::{Digest, Sha256};
+            let registry = self.get("/object_info").await?;
+            let hash = format!("{:x}", Sha256::digest(serde_json::to_vec(&registry)?));
+            if hash != expected {
+                return Err("ComfyUI registry changed; prepare the workflow again".into());
+            }
+        }
+        Ok(())
+    }
     async fn health(&self) -> Result<Value> {
         let stats = self.get("/system_stats").await?;
         let registry = self.get("/object_info").await?;
@@ -146,16 +157,25 @@ impl ExecutionBackend for ComfyUi {
                     error: Some("ComfyUI execution failed; inspect server diagnostics".into()),
                 });
             }
-            let outputs = record["outputs"]
-                .as_object()
-                .into_iter()
-                .flat_map(|o| o.values())
-                .flat_map(|n| {
-                    ["images", "gifs", "videos", "audio"]
-                        .into_iter()
-                        .flat_map(move |k| n[k].as_array().into_iter().flatten().cloned())
-                })
-                .collect();
+            let outputs =
+                record["outputs"]
+                    .as_object()
+                    .into_iter()
+                    .flat_map(|o| o.iter())
+                    .flat_map(|(node_id, n)| {
+                        ["images", "gifs", "videos", "audio"]
+                            .into_iter()
+                            .flat_map(move |k| {
+                                n[k].as_array().into_iter().flatten().cloned().map(
+                                    move |mut value| {
+                                        value["nodeId"] = json!(node_id);
+                                        value["mediaType"] = json!(k);
+                                        value
+                                    },
+                                )
+                            })
+                    })
+                    .collect();
             return Ok(RemoteStatus {
                 state: if record["status"]["completed"].as_bool().unwrap_or(false) {
                     "collecting"

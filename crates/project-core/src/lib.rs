@@ -174,13 +174,13 @@ impl ProjectStore {
         let db = Connection::open(root.join("project.sqlite"))?;
         db.pragma_update(None, "journal_mode", "WAL")?;
         let version: i64 = db.pragma_query_value(None, "user_version", |r| r.get(0))?;
-        if version > 3 {
+        if version > 4 {
             return Err("Project requires a newer MyMovie Studio".into());
         }
         if version == 0 {
             db.execute_batch(include_str!("../migrations/0001_initial.sql"))?;
         }
-        if version == 1 || version == 2 {
+        if (1..4).contains(&version) {
             // SQLite creates a consistent backup including WAL data before migration.
             let backup = confined(
                 &root,
@@ -200,6 +200,9 @@ impl ProjectStore {
         }
         if version < 3 {
             db.execute_batch(include_str!("../migrations/0003_generate.sql"))?;
+        }
+        if version < 4 {
+            db.execute_batch(include_str!("../migrations/0004_workflow_catalogue.sql"))?;
         }
         Ok(Self {
             root,
@@ -283,7 +286,7 @@ impl ProjectStore {
         // Journal remains pending on failure; opening repairs from authoritative SQLite.
         atomic_json(
             &confined(&self.root, "manifest.json")?,
-            &serde_json::json!({"schemaVersion":3,"id":p.id,"name":p.name,"revision":p.revision,"application":"MyMovie Studio"}),
+            &serde_json::json!({"schemaVersion":4,"id":p.id,"name":p.name,"revision":p.revision,"application":"MyMovie Studio"}),
         )?;
         for ep in &p.episodes {
             for scene in &ep.scenes {
@@ -557,7 +560,7 @@ mod jobs_migration_tests {
                 .db
                 .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
                 .unwrap(),
-            3
+            4
         );
         let backups = || {
             fs::read_dir(path.join("backups"))

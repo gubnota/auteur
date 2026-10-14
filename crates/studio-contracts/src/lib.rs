@@ -119,6 +119,79 @@ pub struct Workflow {
     pub deployments: Vec<WorkflowDeployment>,
     #[serde(default)]
     pub requirements: WorkflowRequirements,
+    #[serde(default)]
+    pub inputs: Vec<WorkflowInput>,
+    #[serde(default)]
+    pub outputs: Vec<WorkflowOutput>,
+    #[serde(default)]
+    pub profiles: Vec<CompiledProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_target: Option<String>,
+    #[serde(default)]
+    pub layout: WorkflowLayout,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowLayout {
+    pub inputs: Vec<InputLayout>,
+    pub outputs: Vec<OutputLayout>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InputLayout {
+    pub node_id: String,
+    pub input: String,
+    pub label: String,
+    pub group: String,
+    pub hidden: bool,
+    pub advanced: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OutputLayout {
+    pub node_id: String,
+    pub label: String,
+    pub selected: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowInput {
+    pub binding: Binding,
+    pub label: String,
+    pub required: bool,
+    pub control: String,
+    pub default: Value,
+    #[serde(default)]
+    pub choices: Vec<Value>,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    pub step: Option<f64>,
+    #[serde(default)]
+    pub advanced: bool,
+    #[serde(default)]
+    pub group: String,
+    #[serde(default)]
+    pub hidden: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowOutput {
+    pub node_id: String,
+    pub label: String,
+    pub class_type: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompiledProfile {
+    pub connection_id: String,
+    pub source_hash: String,
+    pub api_hash: String,
+    pub registry_hash: String,
+    pub frontend_hash: String,
+    pub compiler_version: String,
+    pub graph: Value,
+    pub inputs: Vec<WorkflowInput>,
+    pub outputs: Vec<WorkflowOutput>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

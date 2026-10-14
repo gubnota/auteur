@@ -41,7 +41,7 @@ fn preflight(i: &Inner, draft: &JobDraft) -> Result<Vec<Job>> {
             id: project_core::id(),
             frame_id: draft.frame_id.clone(),
             workflow_id: w.id.clone(),
-            workflow_version: w.version.clone(),
+            workflow_version: workflow_core::for_target(w, &item.connection_id)?.version,
             connection_id: c.id.clone(),
             state: "waiting".into(),
             remote_id: None,
@@ -161,6 +161,7 @@ async fn dispatch(
     let result: Result<Value> = async {
         let bindings: Vec<Binding> = serde_json::from_value(j.snapshot["bindings"].clone())?;
         b.validate_compatibility(j.snapshot["compatibility"].as_str().unwrap_or("unspecified")).await?;
+        b.validate_profile(&j.snapshot["compiledProfile"]).await?;
         b.validate_media(&j.snapshot["originalGraph"], &bindings).await?;
         let mut staged: std::collections::HashMap<String,String> = std::collections::HashMap::new();
         for (key, asset, bytes) in uploads {
@@ -240,6 +241,15 @@ async fn poll(
     let mut collection_error = None;
     if status.state == "collecting" {
         for o in &status.outputs {
+            if o["nodeId"].as_str().is_some_and(|id| {
+                j.snapshot["outputLayout"].as_array().is_some_and(|layout| {
+                    layout
+                        .iter()
+                        .any(|l| l["nodeId"] == id && l["selected"] == false)
+                })
+            }) {
+                continue;
+            }
             match b.collect(o).await {
                 Ok((name, bytes)) => {
                     let hash = format!("{:x}", Sha256::digest(&bytes));
@@ -273,7 +283,7 @@ async fn poll(
         return Ok(());
     }
     if status.state == "collecting" {
-        if status.outputs.is_empty() {
+        if outputs.is_empty() && collection_error.is_none() {
             j.error = Some("Execution completed without collectable output".into());
             job_core::transition(&mut j, "failed")?;
         } else if let Some(error) = collection_error {

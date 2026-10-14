@@ -7,6 +7,7 @@ pub struct Relay {
     pub token: String,
     pub node: String,
     client: reqwest::Client,
+    profile: std::sync::Mutex<Value>,
 }
 impl Relay {
     pub fn new(url: &str, token: String, node: &str) -> Result<Self> {
@@ -18,6 +19,7 @@ impl Relay {
             url: url.trim_end_matches('/').into(),
             token,
             node: node.into(),
+            profile: std::sync::Mutex::new(Value::Null),
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
                 .redirect(reqwest::redirect::Policy::none())
@@ -36,7 +38,18 @@ impl Relay {
             .await?)
     }
     pub async fn command(&self, action: &str, payload: Value) -> Result<Value> {
-        if !["doctor", "inventory", "drain", "bootstrap", "provision"].contains(&action) {
+        if ![
+            "doctor",
+            "inventory",
+            "drain",
+            "bootstrap",
+            "provision",
+            "workflow-inspect",
+            "workflow-install",
+            "workflow-compile",
+        ]
+        .contains(&action)
+        {
             return Err("Unknown runner action".into());
         }
         let attempt = project_core::id();
@@ -77,14 +90,28 @@ impl ExecutionBackend for Relay {
         }
         Ok(())
     }
+    async fn validate_profile(&self, profile: &Value) -> Result<()> {
+        *self.profile.lock().map_err(|_| "Profile lock failed")? = profile.clone();
+        Ok(())
+    }
     async fn validate_job(&self, graph: &Value) -> Result<()> {
         workflow_core_validate(graph)
     }
     async fn submit(&self, attempt: &str, graph: &Value) -> Result<String> {
+        let profile = self
+            .profile
+            .lock()
+            .map_err(|_| "Profile lock failed")?
+            .clone();
+        let payload = if profile.is_null() {
+            graph.clone()
+        } else {
+            json!({"graph":graph,"compiledProfile":profile})
+        };
         self.client
             .post(format!("{}/v1/jobs", self.url))
             .bearer_auth(&self.token)
-            .json(&json!({"id":attempt,"nodeId":self.node,"kind":"generation","payload":graph}))
+            .json(&json!({"id":attempt,"nodeId":self.node,"kind":"generation","payload":payload}))
             .send()
             .await?
             .error_for_status()?;

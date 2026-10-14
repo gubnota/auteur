@@ -8,14 +8,40 @@ use studio_contracts::{Job, JobDraft, JobItem, Workflow};
 #[tokio::main]
 async fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.len() != 4 {
-        return Err("Usage: live_workflow SETUP.json MEDIA_MAP.json NEW.mymovie COMFY_URL".into());
+    if !(4..=5).contains(&args.len()) {
+        return Err("Usage: live_workflow SETUP.json MEDIA_MAP.json NEW.mymovie COMFY_URL [COMPILER_RECEIPT.json]".into());
     }
     let setups: Vec<Workflow> = serde_json::from_slice(&std::fs::read(&args[0])?)?;
     if setups.len() != 1 {
         return Err("Supply one reviewed workflow".into());
     }
-    let workflow = setups[0].clone();
+    let mut workflow = setups[0].clone();
+    if let Some(path) = args.get(4) {
+        use sha2::{Digest, Sha256};
+        let receipt: serde_json::Value = serde_json::from_slice(&std::fs::read(path)?)?;
+        let (inputs, outputs) =
+            workflow_core::schema::describe(&receipt["graph"], &receipt["registry"])?;
+        workflow.profiles.push(studio_contracts::CompiledProfile {
+            connection_id: "local-acceptance".into(),
+            source_hash: workflow
+                .editor_hash
+                .clone()
+                .unwrap_or(workflow.version.clone()),
+            api_hash: format!(
+                "{:x}",
+                Sha256::digest(serde_json::to_vec(&receipt["graph"])?)
+            ),
+            registry_hash: format!(
+                "{:x}",
+                Sha256::digest(serde_json::to_vec(&receipt["registry"])?)
+            ),
+            frontend_hash: receipt["frontendHash"].as_str().unwrap_or("").into(),
+            compiler_version: receipt["compilerVersion"].as_str().unwrap_or("").into(),
+            graph: receipt["graph"].clone(),
+            inputs,
+            outputs,
+        });
+    }
     let media: std::collections::BTreeMap<String, String> =
         serde_json::from_slice(&std::fs::read(&args[1])?)?;
     let mut store = ProjectStore::create(&args[2], "Local generation acceptance", false)?;
@@ -35,7 +61,9 @@ async fn main() -> Result<()> {
     project.job_drafts.push(draft.clone());
     project = store.save(project, 0)?;
     let snapshot = workflow_core::resolve_item(&project, &draft, &draft.items[0])?;
+    let workflow = workflow_core::for_target(&workflow, "local-acceptance")?;
     let comfy = provider_comfyui::ComfyUi::new(&args[3])?;
+    comfy.validate_profile(&snapshot["compiledProfile"]).await?;
     comfy
         .validate_compatibility(&workflow.requirements.compatibility)
         .await?;

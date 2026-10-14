@@ -22,6 +22,9 @@ pub struct RemoteStatus {
 pub trait ExecutionBackend: Send + Sync {
     async fn health(&self) -> Result<Value>;
     async fn validate_job(&self, graph: &Value) -> Result<()>;
+    async fn validate_profile(&self, _profile: &Value) -> Result<()> {
+        Ok(())
+    }
     async fn validate_media(&self, _graph: &Value, _bindings: &[Binding]) -> Result<()> {
         Ok(())
     }
@@ -181,6 +184,11 @@ mod tests {
             name: "Safe".into(),
             version: "a".repeat(64),
             graph: json!({}),
+            inputs: vec![],
+            outputs: vec![],
+            profiles: vec![],
+            last_target: None,
+            layout: Default::default(),
             bindings: vec![],
             media_kind: "other".into(),
             editor_graph: None,

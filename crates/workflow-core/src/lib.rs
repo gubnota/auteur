@@ -1,3 +1,4 @@
+pub mod schema;
 use project_core::{Result, id};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -32,6 +33,11 @@ pub fn import(name: &str, graph: Value) -> Result<Workflow> {
         name: name.into(),
         version,
         graph,
+        inputs: vec![],
+        outputs: vec![],
+        profiles: vec![],
+        last_target: None,
+        layout: Default::default(),
         bindings: vec![],
         media_kind: "other".into(),
         editor_graph: None,
@@ -42,6 +48,77 @@ pub fn import(name: &str, graph: Value) -> Result<Workflow> {
             artifacts: vec![],
         },
     })
+}
+/// An editor source is retained even when its target is offline/unprepared.
+pub fn import_source(name: &str, source: Value) -> Result<Workflow> {
+    if source["nodes"].is_array() {
+        if source["nodes"].as_array().unwrap().is_empty() {
+            return Err("Empty editor workflow".into());
+        }
+        let mut w = import(
+            name,
+            serde_json::json!({"placeholder":{"class_type":"PendingCompilation","inputs":{}}}),
+        )?;
+        w.graph = serde_json::json!({});
+        w.version = format!("{:x}", Sha256::digest(serde_json::to_vec(&source)?));
+        w.editor_hash = Some(w.version.clone());
+        w.editor_graph = Some(source);
+        Ok(w)
+    } else {
+        import(name, source)
+    }
+}
+pub fn for_target(w: &Workflow, connection: &str) -> Result<Workflow> {
+    let mut result = w.clone();
+    if let Some(profile) = w.profiles.iter().find(|p| p.connection_id == connection) {
+        if profile.source_hash != w.editor_hash.as_ref().unwrap_or(&w.version).as_str() {
+            return Err("Compiled source changed; prepare workflow again".into());
+        }
+        validate_graph(&profile.graph)?;
+        if profile.api_hash != format!("{:x}", Sha256::digest(serde_json::to_vec(&profile.graph)?))
+        {
+            return Err("Compiled API hash mismatch".into());
+        }
+        result.graph = profile.graph.clone();
+        result.version = profile.api_hash.clone();
+        result.inputs = profile.inputs.clone();
+        result.outputs = profile.outputs.clone();
+        for descriptor in &result.inputs {
+            if descriptor.control != "unsupported"
+                && !result.bindings.iter().any(|b| {
+                    b.node_id == descriptor.binding.node_id && b.input == descriptor.binding.input
+                })
+            {
+                result.bindings.push(descriptor.binding.clone());
+            }
+        }
+    } else if w.graph.as_object().is_none_or(|g| g.is_empty()) {
+        return Err("Prepare this editor workflow on the selected execution target first".into());
+    }
+    for input in &mut result.inputs {
+        if let Some(layout) = w
+            .layout
+            .inputs
+            .iter()
+            .find(|l| l.node_id == input.binding.node_id && l.input == input.binding.input)
+        {
+            input.label = layout.label.clone();
+            input.group = layout.group.clone();
+            input.hidden = layout.hidden;
+            input.advanced = layout.advanced;
+        }
+    }
+    for output in &mut result.outputs {
+        if let Some(layout) = w
+            .layout
+            .outputs
+            .iter()
+            .find(|l| l.node_id == output.node_id)
+        {
+            output.label = layout.label.clone();
+        }
+    }
+    Ok(result)
 }
 pub fn preset(kind: &str) -> Result<Workflow> {
     let (name, api, editor) = match kind {
@@ -466,6 +543,7 @@ pub fn resolve_item(
         .iter()
         .find(|w| w.id == item.workflow_id)
         .ok_or("Workflow missing")?;
+    let w = for_target(w, &item.connection_id)?;
     validate_graph(&w.graph)?;
     let bindings = item.bindings.as_ref().unwrap_or(&w.bindings);
     let mut seen = std::collections::HashSet::new();
@@ -577,9 +655,35 @@ pub fn resolve_item(
             };
         }
     }
+    for descriptor in &w.inputs {
+        let alias = bindings
+            .iter()
+            .find(|b| {
+                b.node_id == descriptor.binding.node_id && b.input == descriptor.binding.input
+            })
+            .map(|b| &b.semantic)
+            .unwrap_or(&descriptor.binding.semantic);
+        if let Some(value) = semantic.get(alias) {
+            if descriptor.control == "choice" && !descriptor.choices.contains(value) {
+                return Err(format!("{}: choose a listed value", descriptor.label).into());
+            }
+            if let Some(number) = value.as_f64() {
+                if descriptor.min.is_some_and(|min| number < min)
+                    || descriptor.max.is_some_and(|max| number > max)
+                {
+                    return Err(format!("{}: outside allowed range", descriptor.label).into());
+                }
+                if descriptor.step == Some(1.0) && number.fract() != 0.0 {
+                    return Err(format!("{}: enter a whole number", descriptor.label).into());
+                }
+            }
+        }
+    }
     let graph = bind_exact(&w.graph, bindings, &semantic)?;
     Ok(
         json!({"graph":graph,"originalGraph":w.graph,"semantic":semantic,"media":media,
+        "compiledProfile":w.profiles.iter().find(|p|p.connection_id==item.connection_id),
+        "outputLayout":w.layout.outputs,"outputs":w.outputs,
         "compatibility":w.requirements.compatibility,"requirements":w.requirements,
         "frame":target.map(|(_,f)|f),"sceneId":target.map(|(s,_)|&s.id),"context":draft.context,"bindings":bindings,
         "characters":p.characters.iter().filter(|c| cast.contains(&c.id)).collect::<Vec<_>>() }),
@@ -680,5 +784,63 @@ mod jobs_tests {
             media: None,
         }]);
         assert!(resolve_item(&reopened, &d, &media).is_err());
+    }
+}
+
+#[cfg(test)]
+mod profile_tests {
+    use super::*;
+    use studio_contracts::CompiledProfile;
+    #[test]
+    fn target_profiles_preserve_sources_merge_aliases_and_reject_tampering() {
+        let source = serde_json::json!({"nodes":[{"id":1,"type":"Custom"}],"links":[]});
+        let mut w = import_source("Editor".into(), source.clone()).unwrap();
+        assert!(for_target(&w, "mac").is_err());
+        let graph =
+            serde_json::json!({"1":{"class_type":"Custom","inputs":{"width":64,"height":64}}});
+        let reg = serde_json::json!({"Custom":{"input":{"required":{"width":["INT",{"min":16,"max":2048,"step":8}],"height":["INT"]}}}});
+        let (inputs, outputs) = schema::describe(&graph, &reg).unwrap();
+        w.bindings.push(Binding {
+            semantic: "customWidth".into(),
+            node_id: "1".into(),
+            input: "width".into(),
+            value_type: "number".into(),
+            media: None,
+        });
+        w.profiles.push(CompiledProfile {
+            connection_id: "mac".into(),
+            source_hash: w.editor_hash.clone().unwrap(),
+            api_hash: format!("{:x}", Sha256::digest(serde_json::to_vec(&graph).unwrap())),
+            registry_hash: "registry".into(),
+            frontend_hash: "frontend".into(),
+            compiler_version: "test".into(),
+            graph,
+            inputs,
+            outputs,
+        });
+        w.layout.inputs.push(studio_contracts::InputLayout {
+            node_id: "1".into(),
+            input: "width".into(),
+            label: "Image width".into(),
+            group: "Dimensions".into(),
+            hidden: true,
+            advanced: false,
+        });
+        let prepared = for_target(&w, "mac").unwrap();
+        assert_eq!(prepared.bindings.len(), 2);
+        assert_eq!(prepared.bindings[0].semantic, "customWidth");
+        assert_eq!(prepared.inputs[1].label, "Image width");
+        assert_eq!(prepared.inputs[1].group, "Dimensions");
+        assert!(prepared.inputs[1].hidden);
+        assert_eq!(w.editor_graph, Some(source));
+        assert!(w.graph.as_object().unwrap().is_empty());
+        assert!(for_target(&w, "other").is_err());
+        w.profiles[0].graph["1"]["inputs"]["width"] = serde_json::json!(128);
+        assert!(
+            for_target(&w, "mac")
+                .unwrap_err()
+                .to_string()
+                .contains("hash mismatch")
+        );
     }
 }

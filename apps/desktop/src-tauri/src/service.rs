@@ -1,4 +1,6 @@
+mod catalogue;
 mod jobs;
+pub use catalogue::*;
 use integration_core::SettingsStore;
 use job_core::ExecutionBackend;
 pub use jobs::*;
@@ -121,8 +123,8 @@ pub async fn open_project(
     let manifest = project_core::confined(Path::new(&path), "manifest.json").map_err(err)?;
     let format: Value =
         serde_json::from_slice(&std::fs::read(manifest).map_err(err)?).map_err(err)?;
-    if format["schemaVersion"].as_u64().is_some_and(|v| v < 3) && !allow_upgrade.unwrap_or(false) {
-        return Err("UPGRADE_REQUIRED: Generate needs document format 3. A consistent SQLite and manifest backup will be saved inside backups/ first. Older MyMovie Studio versions cannot open the upgraded document.".into());
+    if format["schemaVersion"].as_u64().is_some_and(|v| v < 4) && !allow_upgrade.unwrap_or(false) {
+        return Err("UPGRADE_REQUIRED: Workflow catalogue needs document format 4. A consistent SQLite and manifest backup will be saved inside backups/ first. Older MyMovie Studio versions cannot open the upgraded document.".into());
     }
     let new = ProjectStore::open(path).map_err(err)?;
     select(&app, &mut i, new).map_err(err)
@@ -207,13 +209,12 @@ pub async fn import_character_references(
 #[tauri::command]
 pub async fn import_workflow(state: S<'_>, path: String) -> Reply<Project> {
     let mut i = state.inner.lock().await;
-    let s = i.project.as_mut().ok_or("No movie open")?;
     let file = Path::new(&path);
     if std::fs::metadata(file).map_err(err)?.len() > 16 * 1024 * 1024 {
         return Err("Workflow exceeds 16 MiB limit".into());
     }
     let graph = serde_json::from_slice(&std::fs::read(file).map_err(err)?).map_err(err)?;
-    let w = workflow_core::import(
+    let mut w = workflow_core::import_source(
         file.file_stem()
             .unwrap_or_default()
             .to_string_lossy()
@@ -221,8 +222,21 @@ pub async fn import_workflow(state: S<'_>, path: String) -> Reply<Project> {
         graph,
     )
     .map_err(err)?;
+    if let Some(existing) = i
+        .settings
+        .catalogue()
+        .map_err(err)?
+        .into_iter()
+        .find(|x| x.version == w.version && x.editor_hash == w.editor_hash)
+    {
+        w = existing;
+    }
+    i.settings.put_workflow(&w).map_err(err)?;
+    let s = i.project.as_mut().ok_or("No movie open")?;
     let mut p = s.read().map_err(err)?;
-    p.workflows.push(w);
+    if !p.workflows.iter().any(|x| x.id == w.id) {
+        p.workflows.push(w);
+    }
     let r = p.revision;
     s.save(p, r).map_err(err)
 }
@@ -530,7 +544,9 @@ pub async fn plan_deployment(
             .workflows
             .into_iter()
             .filter(|w| workflow_ids.contains(&w.id))
-            .collect();
+            .map(|w| workflow_core::for_target(&w, &connection_id))
+            .collect::<Result<Vec<_>>>()
+            .map_err(err)?;
         (c, workflows, i.settings.read().map_err(err)?)
     };
     relay(&c).map_err(err)?.command("provision",json!({"workflows":workflows,"runtimeLock":settings.storage["runtimeLock"],"profile":settings.storage["provisionProfile"],"apply":apply.unwrap_or(false)})).await.map_err(err)
@@ -743,10 +759,11 @@ pub async fn relink_asset(state: S<'_>, asset_id: String, path: String) -> Reply
 
 #[tauri::command]
 pub async fn export_workflow_setup(
-    state: State<'_, Studio>,
+    state: S<'_>,
     path: String,
     workflow_id: String,
     requirements: studio_contracts::WorkflowRequirements,
+    connection_id: Option<String>,
 ) -> Reply<()> {
     let inner = state.inner.lock().await;
     let project = inner
@@ -761,6 +778,9 @@ pub async fn export_workflow_setup(
         .find(|w| w.id == workflow_id)
         .ok_or("Unknown workflow")?
         .clone();
+    if let Some(target) = connection_id {
+        workflow = workflow_core::for_target(&workflow, &target).map_err(err)?;
+    }
     for a in &requirements.artifacts {
         a.validate().map_err(err)?;
     }

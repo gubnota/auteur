@@ -1,3 +1,4 @@
+mod catalogue;
 use project_core::Result;
 use rusqlite::Connection as Db;
 use serde_json::json;

@@ -1,4 +1,5 @@
 mod provision;
+mod workflow;
 use clap::Parser;
 use job_core::ExecutionBackend;
 use project_core::{Result, atomic_json};
@@ -8,7 +9,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(version)]
 struct Args {
-    #[arg(value_parser=["doctor","inventory","bootstrap","provision","serve"])]
+    #[arg(value_parser=["doctor","inventory","bootstrap","provision","workflow-inspect","workflow-install","workflow-compile","serve"])]
     command: String,
     #[arg(long, default_value = "http://127.0.0.1:8188")]
     comfy_url: String,
@@ -24,6 +25,12 @@ struct Args {
     comfy_root: Option<PathBuf>,
     #[arg(long, default_value = "python3")]
     python: String,
+    #[arg(long)]
+    workflow_source: Option<PathBuf>,
+    #[arg(long)]
+    workflow_compiler: Option<PathBuf>,
+    #[arg(long)]
+    compiler_browser: Option<PathBuf>,
     #[arg(long)]
     runtime_helper: Option<PathBuf>,
     #[arg(long)]
@@ -79,7 +86,11 @@ async fn execute(
     kind: &str,
     payload: &Value,
 ) -> Result<Value> {
-    provision::control(args, comfy, kind, payload).await
+    if kind.starts_with("workflow-") {
+        workflow::control(args, kind, payload).await
+    } else {
+        provision::control(args, comfy, kind, payload).await
+    }
 }
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -99,6 +110,9 @@ async fn main() -> Result<()> {
         }
         if let Some(path) = &args.workflows {
             payload["workflows"] = serde_json::from_slice(&std::fs::read(path)?)?;
+        }
+        if let Some(path) = &args.workflow_source {
+            payload["source"] = serde_json::from_slice(&std::fs::read(path)?)?;
         }
         payload["apply"] = json!(args.apply);
         println!(
@@ -173,11 +187,18 @@ async fn main() -> Result<()> {
                     receipt["state"] = json!("completed");
                     receipt["report"] = r;
                 }
-                Err(_) => {
+                Err(error) => {
                     receipt["state"] = json!("failed");
-                    receipt["error"] = json!(
-                        "Runner validation failed; review runtime paths, dependency pins and connection status"
-                    );
+                    receipt["error"] = if job["kind"]
+                        .as_str()
+                        .is_some_and(|k| k.starts_with("workflow-"))
+                    {
+                        json!(error.to_string().chars().take(2000).collect::<String>())
+                    } else {
+                        json!(
+                            "Runner validation failed; review runtime paths, dependency pins and connection status"
+                        )
+                    };
                 }
             }
             atomic_json(&receipt_path, &receipt)?;
@@ -191,8 +212,10 @@ async fn main() -> Result<()> {
             post(&client, &report_url, &token, receipt).await?;
             continue;
         }
-        let mut graph = job["payload"].clone();
+        let payload = &job["payload"];
+        let mut graph = payload.get("graph").unwrap_or(payload).clone();
         let prepared:Result<()> = async {
+            comfy.validate_profile(&payload["compiledProfile"]).await?;
             let initialized=provision::generation_ready(&args,&graph).await?;
             comfy.validate_media(&graph,&initialized.bindings).await?;
             let mut staged:std::collections::HashMap<String,(String,String)>=std::collections::HashMap::new();
