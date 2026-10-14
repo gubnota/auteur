@@ -190,3 +190,13 @@ Context: Users need named media slots, output selection, visual guides and hardw
 Decision: Preserve graphs immutably; attach reusable presentation metadata, independently prepared platform families and credential-free portable collections. Keep Generate as the composer and Jobs as selective task control. Accept pending sources for reviewed dependency installation; require restart/preparation/current-session verification before readiness. Remove the retired hosted adapter while retaining history.
 Consequences: Schema v5 upgrade is backed up. Optional defaults require actual files on the node. Variant badges do not convert graphs. Setup is typed and hash-pinned; no arbitrary remote shell or stale-marker readiness.
 Related files: workflow-core/src/bundle.rs, studio-contracts, job-core/src/runs.rs, WorkflowEditor.tsx, WorkflowBootstrap.tsx, agent/src/provision.rs.
+
+# ADR-0020: Shared notebook test defaults and local relay tunnel
+
+Date: 2026-10-15
+Status: Accepted
+
+Context: User explicitly requests predefined token values in UI/notebooks and a Colab-side tunnel on a custom port; required Secrets and external relay setup blocked first connection.
+Decision: Keep the user-selected pair as public test defaults in deploy/node-auth.defaults.json. Generate active Python assignments with optional env/Secrets overrides commented out. Native stores private overrides atomically in the OS vault. New notebook connections inherit only the desktop credential. Bundle relay in CI client archives; notebook can own relay and cloudflared while ComfyUI/agents stay on loopback. Explicit temporary mode uses existing desktop REST polling.
+Consequences: Defaults provide no private access protection; private deployments must replace both values consistently. Existing connection credentials remain independent. Temporary URLs/session IDs change and notebook disk is ephemeral; live cloud acceptance is separate from fixture tests. No general remote shell or automatic generation added.
+Related files: apps/desktop/src/components/RunnerTokens.tsx, apps/desktop/src-tauri/src/service/runner_tokens.rs, scripts/generate-notebooks.py, scripts/notebook-bootstrap.py, scripts/package-agent.py.

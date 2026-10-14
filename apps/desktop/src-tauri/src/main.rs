@@ -63,6 +63,8 @@ fn main() {
             get_settings,
             save_settings,
             save_credential,
+            get_runner_tokens,
+            save_runner_tokens,
             list_jobs,
             submit_job,
             preview_job_draft,

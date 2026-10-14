@@ -119,7 +119,7 @@ jobs:
       - run: cargo build --locked --release -p mymovie-agent -p mymovie-relay
       - name: Native agent binary smoke test
         run: target/release/mymovie-agent --help && target/release/mymovie-agent --version
-      - run: python3 scripts/package-agent.py target/release/mymovie-agent release-assets --architecture ${{ matrix.architecture }} --platform ${{ matrix.platform }} --build-os ${{ matrix.runner }}
+      - run: python3 scripts/package-agent.py target/release/mymovie-agent release-assets --relay-binary target/release/mymovie-relay --architecture ${{ matrix.architecture }} --platform ${{ matrix.platform }} --build-os ${{ matrix.runner }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: comfyui-agent-${{ matrix.platform }}-${{ matrix.architecture }}

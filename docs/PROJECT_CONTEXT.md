@@ -67,7 +67,9 @@
 
 ## Connections and jobs
 - One Connections route for ComfyUI, private relay and optional prompt/configuration APIs.
-- Multiple connection/account records; secrets stay in Keychain.
+- Multiple connection/account records; custom secrets stay in Keychain. Settings → Node access and the notebook connection dialog share editable defaults.
+- Public test pair: deploy/node-auth.defaults.json, intentionally embedded in notebooks/UI; custom pairs stay out of movie/settings files.
+- Colab/Kaggle can host their own bundled relay and cloudflared tunnel on a custom port; temporary addresses use explicit REST polling mode. Live cloud acceptance remains open.
 - Execution adapters: ComfyUI and private relay; retired destinations remain archived and disabled.
 - Google, DeepSeek and OpenRouter optional prompt assistance implemented.
 - fal/custom API generation adapters remain configuration-only.

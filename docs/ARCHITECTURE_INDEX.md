@@ -19,6 +19,9 @@
 - components/WorkflowInputs.tsx / WorkflowSetup.tsx: shared media slots, hardware flags and pinned dependency editor.
 - lib/job-inputs.ts / job-inputs.test.ts: typed input resolution/readiness.
 - features/Connections.tsx: endpoint types, credentials, runtime/storage settings.
+- components/RunnerTokens.tsx / lib/node-auth.ts: shared token fields, notebook config copy, explicit temporary-relay URL validation.
+- src-tauri/src/service/runner_tokens.rs: atomic OS-vault pair with public-default fallback.
+- deploy/node-auth.defaults.json: public test defaults shared by UI, native and notebook generation.
 - features/PromptAssistant.tsx: optional provider prompt assistance.
 - components/Controls.tsx: styled controls, modal pickers and dialogs.
 - components/AppSymbol.tsx / assets/app-symbol.svg: original symbol.

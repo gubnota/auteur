@@ -56,7 +56,7 @@ HTTPS access but no public IP or exposed ComfyUI port. The relay's asset transpo
 uses persistent disk. Explicit S3 transfer manifests support model/LoRA downloads;
 full private cloud/S3/GPU acceptance still needs a running deployment.
 
-Build/deploy `mymovie-relay` separately from this repository. Configure persistent
+Current CI client archives include `mymovie-relay`; deploy it as a separate service for persistent RunPod use. Alternatively build it from this repository. Configure persistent
 `MYMOVIE_RELAY_DATA`, `MYMOVIE_RELAY_BIND` behind your HTTPS reverse proxy,
 distinct 24+ character `MYMOVIE_DESKTOP_TOKEN` and `MYMOVIE_AGENT_TOKEN`, and
 `MYMOVIE_NODE_IDS=runpod-gpu0` (comma-separated for multiple workers). These
@@ -108,26 +108,30 @@ host's authenticated HTTPS reverse proxy with persistent data and the environmen
 above. On RunPod a proxied HTTP port can host this relay separately; copy its HTTPS
 Connect URL. Never use a public raw ComfyUI tunnel as the private relay URL.
 
-For a disposable Colab test with the relay on your Mac: run the relay listening
-on loopback port 8787, then use an installed `cloudflared` binary:
+For a disposable Colab/Kaggle test, use the bundled notebook. Its Configure cell uses
+editable public test defaults matching **Settings → Node access**; no Secrets are
+required by default. Environment and Secrets overrides are commented out. For a
+private deployment replace both values consistently; the app stores overrides in
+the OS vault. Existing connection credentials are updated separately.
 
-```sh
-cloudflared tunnel --url http://127.0.0.1:8787
-```
+Install `cloudflared` in the notebook environment, configure the verified current
+client archive/checksum, existing ComfyUI checkout and pinned revision, then run
+Install and Start. `START_LOCAL_RELAY = True` starts the bundled relay on
+`http://127.0.0.1:RELAY_PORT` (8787 by default) and supplies its node allowlist.
+The agent connects locally; cloudflared exposes **only the authenticated relay**.
+ComfyUI remains on loopback. Start prints the public relay URL and node IDs, never
+tokens. In **Connections → Colab / Kaggle**, enable **Temporary Cloudflare tunnel ·
+polling only**, paste that URL/IDs, check the token pair and add the connection.
 
-Copy only the `https://…trycloudflare.com` origin from its output into the notebook
-and the app relay connection. Tokens remain required. Quick Tunnels are temporary
-and do not support SSE; enable the notebook's explicit quick-test polling option.
-No custom ngrok utility is required. For a durable deployment use a named tunnel
-or your HTTPS reverse proxy. See [Cloudflare's limits](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
-and [RunPod port exposure](https://docs.runpod.io/pods/configuration/expose-ports).
+Quick Tunnels are temporary and do not support SSE; desktop progress uses REST
+polling. Stop kills owned agents, relay, tunnel and managed ComfyUI; Attach leaves
+an existing ComfyUI running. Reconnect with new addresses/IDs after a new session.
+For a persistent deployment use an external relay or a named tunnel with durable
+data. No custom ngrok utility is needed. See [Cloudflare’s limits](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
 
-Open the supplied notebook in Colab with GPU enabled, install the verified new
-agent artifact, set the relay URL and agent token through Secrets, and start the
-runner with its pinned ComfyUI commit. The notebook reports the node ID and port;
-allowlist that ID at the relay and add it to Connections. Keep the notebook alive.
-Start with `mask-canary_api.json`, then the reviewed u2netp profile. Two Kaggle
-GPUs use two independent workers/ports and parallel jobs, not shared VRAM.
+Start with `mask-canary_api.json`, then the reviewed u2netp profile. Two Kaggle GPUs
+use independent workers/ports and parallel jobs, with no shared VRAM. Model/plugin
+installation remains an explicit, reviewed operation from the app.
 
 ### Editor workflow compilation
 

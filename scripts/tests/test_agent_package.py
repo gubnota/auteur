@@ -12,6 +12,21 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class AgentPackageTests(unittest.TestCase):
+    def test_relay_is_bundled_with_matching_architecture(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp); binary = directory / 'agent'; relay = directory / 'mymovie-relay'
+            elf = b'\x7fELF\x02\x01' + bytes(12) + b'\x3e\x00' + b'fixture'
+            binary.write_bytes(elf); relay.write_bytes(elf); relay.chmod(0o755)
+            dest = directory / 'dist'
+            result = self.run_packager(binary, dest)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with tarfile.open(dest / 'mymovie-agent-linux-x86_64.tar.gz') as tar:
+                self.assertEqual(tar.extractfile('mymovie-relay').read(), elf)
+            metadata = json.loads((dest / 'mymovie-agent-linux-x86_64.json').read_text())
+            self.assertEqual(metadata['relayBinarySha256'], hashlib.sha256(elf).hexdigest())
+            relay.write_bytes(b'wrong')
+            self.assertNotEqual(self.run_packager(binary, dest).returncode, 0)
+
     def run_packager(self, binary, dest, architecture="x86_64"):
         return subprocess.run([sys.executable, str(ROOT / "scripts/package-agent.py"), str(binary), str(dest), "--architecture", architecture], capture_output=True, text=True)
 

@@ -1,5 +1,14 @@
 # Task Log
 
+## 2026-10-15 — Shared node token defaults and notebook relay tunnel
+
+- Implemented the authorized token/setup scope on main. Settings → Node access and Connections → Colab / Kaggle expose masked editable MYMOVIE_AGENT_TOKEN / MYMOVIE_DESKTOP_TOKEN fields, populated from the user-selected public test pair. Copy notebook assignments and reset-to-default actions included; custom pairs save atomically in the OS vault.
+- deploy/node-auth.defaults.json supplies UI, native fallback and both generated notebooks. Active notebook assignments use that pair; environment/Secrets alternatives are commented out. Existing per-connection credentials are not silently rotated; new notebook records save only the desktop token in their credential vault entry.
+- Notebook Start owns a local authenticated relay on a configurable port, an optional cloudflared tunnel, agents and managed ComfyUI processes. Explicit temporary-address mode uses REST polling; ComfyUI stays loopback. Attach preserves existing ComfyUI. No model/plugin downloads or generation are added to startup.
+- Current GitHub client packaging includes matching relay binaries and compiler/runtime sidecars. Old published archives without mymovie-relay cannot use local tunnel mode; a new CI artifact/release is required. Pre-existing user changes to .gitlab-ci.yml were preserved.
+- Verification: 50 Rust tests, 37 Python tests, 27 frontend unit tests and 16 mocked browser tests passed; typecheck, frontend production build, Rust formatting, deterministic notebook regeneration and diff whitespace checks passed. Browser evidence: screenshots/node-access.png (synthetic masked values).
+- EN/RU/FR README and compact contracts/ownership/setup/release docs updated. Live Colab/Kaggle cloudflared/GPU acceptance, new public release and installed-app replacement were not performed in this scope.
+
 ## 2026-10-15 — Runtime installation CI conflict regression
 
 - CI reported a same-size changed model being reused instead of rejected. Local baseline passed; timestamp-based hash caching can conceal rewrites on coarse-clock filesystems.

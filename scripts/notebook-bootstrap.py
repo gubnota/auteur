@@ -1,6 +1,6 @@
 """Verified Linux agent deployment and two independent notebook GPU workers.
 
-Stdlib only. No tunnels, model downloads, package installers or anti-idle code.
+Stdlib only. Optional authenticated relay tunnel; no model downloads or installers.
 """
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -112,18 +113,21 @@ def install_artifact(source: str, digest: str, destination: Path, download_token
         try:
             with tarfile.open(archive, "r:gz") as tar:
                 members = tar.getmembers()
-                if len(members) > 16:
+                if len(members) > 128 or sum(m.size for m in members) > MAX_ARTIFACT:
                     raise SetupError("Unexpected artifact contents.")
-                binaries = []; auxiliary = {}
+                binaries = []; auxiliary = {}; seen = set()
                 for member in members:
                     path = Path(member.name)
                     if path.is_absolute() or ".." in path.parts or member.issym() or member.islnk() or not (member.isfile() or member.isdir()):
                         raise SetupError("Unsafe artifact archive; nothing was extracted.")
                     if member.size > MAX_BINARY:
                         raise SetupError("Artifact member exceeds the size limit.")
+                    if member.name in seen:
+                        raise SetupError("Duplicate artifact member.")
+                    seen.add(member.name)
                     if member.name == "mymovie-agent" and member.isfile():
                         binaries.append(member)
-                    elif member.isfile() and (member.name in {"mymovie_runtime.py", "prepare-workflow-profile.py", "mask-canary.template.json", "rembg-u2netp.model.json", "mymovie-rembg.plugin.json", "mask-canary_api.json", "mask-canary_editor.json", "rembg-u2netp_api.json", "rembg-u2netp_editor.json"} or re.fullmatch(r"mymovie-rembg-[a-f0-9]{40,64}\.tar\.gz", member.name)):
+                    elif member.isfile() and (member.name in {"mymovie-relay", "mymovie_workflow_compiler.py", "workflow-compiler-requirements.txt", "mymovie_runtime.py", "prepare-workflow-profile.py", "mask-canary.template.json", "rembg-u2netp.model.json", "mymovie-rembg.plugin.json", "mask-canary_api.json", "mask-canary_editor.json", "rembg-u2netp_api.json", "rembg-u2netp_editor.json"} or re.fullmatch(r"mymovie-rembg-[a-f0-9]{40,64}\.tar\.gz", member.name)):
                         if member.name in auxiliary: raise SetupError("Duplicate runtime helper.")
                         auxiliary[member.name] = tar.extractfile(member).read(MAX_BINARY+1)
                 if len(binaries) != 1:
@@ -136,6 +140,9 @@ def install_artifact(source: str, digest: str, destination: Path, download_token
         # ELF64 little-endian x86_64: reject a GUI/Mach-O/wrong-target artifact early.
         if data[:6] != b"\x7fELF\x02\x01" or data[18:20] != b"\x3e\x00":
             raise SetupError("The artifact binary is not Linux x86_64 ELF.")
+        relay = auxiliary.get("mymovie-relay")
+        if relay is not None and (relay[:6] != b"\x7fELF\x02\x01" or relay[18:20] != b"\x3e\x00"):
+            raise SetupError("The relay binary is not Linux x86_64 ELF.")
         final_dir = destination / digest.lower()
         final_dir.mkdir(exist_ok=True)
         final = final_dir / "mymovie-agent"
@@ -147,7 +154,7 @@ def install_artifact(source: str, digest: str, destination: Path, download_token
             path = final_dir / name
             if path.is_symlink(): raise SetupError("Symlink runtime helper destination.")
             staged = Path(temporary.name) / name
-            staged.write_bytes(contents); staged.chmod(0o600); os.replace(staged,path)
+            staged.write_bytes(contents); staged.chmod(0o700 if name == "mymovie-relay" else 0o600); os.replace(staged,path)
         return final
     finally:
         temporary.cleanup()
@@ -197,24 +204,77 @@ class NotebookRunner:
         self.children = []
         self.lock = None
         self.started = None
+        self.public_relay = None
 
     def configuration(self) -> dict:
-        return {"relay": self.relay, "nodes": [{"nodeId": w["nodeId"], "comfyUrl": f'http://127.0.0.1:{w["port"]}', "gpu": w["gpu"]} for w in self.workers], "relayAllowlist": ",".join(w["nodeId"] for w in self.workers)}
+        return {"relay": self.public_relay or self.relay, "nodes": [{"nodeId": w["nodeId"], "comfyUrl": f'http://127.0.0.1:{w["port"]}', "gpu": w["gpu"]} for w in self.workers], "relayAllowlist": ",".join(w["nodeId"] for w in self.workers)}
 
-    def _spawn(self, args, env, cwd=None):
+    def _spawn(self, args, env, cwd=None, log=None):
         # Raw subprocess logs are never copied into shared notebook outputs.
         try:
-            child = subprocess.Popen(args, cwd=cwd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            child = subprocess.Popen(args, cwd=cwd, env=env, stdout=log if log is not None else subprocess.DEVNULL, stderr=log if log is not None else subprocess.DEVNULL, start_new_session=True)
         except Exception:
             raise SetupError("Unable to start the client. Check Linux runtime compatibility and executable permissions.") from None
         self.children.append(child)
         return child
 
-    def start(self, token: str, *, comfy_root=None, expected_revision=None, attach=False, model_paths=None, timeout=120):
+    def _start_relay(self, token, desktop_token, port):
+        if not isinstance(desktop_token, str) or not re.fullmatch(r"[!-~]{24,512}", desktop_token) or token == desktop_token:
+            raise SetupError("Use a distinct desktop token of 24–512 printable characters.")
+        if not isinstance(port, int) or not 1024 <= port <= 65535 or port in [w["port"] for w in self.workers]:
+            raise SetupError("Choose an unused relay port from 1024 to 65535, separate from ComfyUI.")
+        if self.relay != f"http://127.0.0.1:{port}":
+            raise SetupError("Local relay URL must match http://127.0.0.1:RELAY_PORT.")
+        binary = self.binary.parent / "mymovie-relay"
+        if not binary.is_file():
+            raise SetupError("Install a current client archive containing mymovie-relay for local tunnel mode.")
+        with socket.socket() as sock:
+            if sock.connect_ex(("127.0.0.1", port)) == 0:
+                raise SetupError("Relay port is occupied. Choose another RELAY_PORT; existing processes are left running.")
+        env = dict(os.environ)
+        env.update(MYMOVIE_AGENT_TOKEN=token, MYMOVIE_DESKTOP_TOKEN=desktop_token,
+                   MYMOVIE_NODE_IDS=self.configuration()["relayAllowlist"], MYMOVIE_RELAY_BIND=f"127.0.0.1:{port}",
+                   MYMOVIE_RELAY_DATA=str(self.root / "relay-data"))
+        child = self._spawn([str(binary)], env)
+        deadline = time.monotonic() + 15
+        request = urllib.request.Request(f'{self.relay}/v1/nodes/{self.workers[0]["nodeId"]}', headers={"Authorization": f"Bearer {desktop_token}"})
+        while time.monotonic() < deadline:
+            if child.poll() is not None:
+                raise SetupError("Local relay exited. Check the artifact and relay port.")
+            try:
+                with urllib.request.urlopen(request, timeout=2) as response:
+                    if response.status == 200: return
+            except Exception:
+                time.sleep(0.25)
+        raise SetupError("Local authenticated relay did not become ready.")
+
+    def _start_tunnel(self, binary):
+        executable = shutil.which(binary)
+        if not executable:
+            raise SetupError("Install cloudflared in this notebook before Start, or use an external relay.")
+        path = self.root / "cloudflared.log"
+        if path.is_symlink(): raise SetupError("Symlink tunnel log destination.")
+        env = {k: v for k, v in os.environ.items() if k not in ("MYMOVIE_AGENT_TOKEN", "MYMOVIE_DESKTOP_TOKEN", "MYMOVIE_TRANSFER_MANIFEST")}
+        with path.open("w") as log:
+            path.chmod(0o600)
+            child = self._spawn([executable, "--no-autoupdate", "tunnel", "--url", self.relay], env, log=log)
+        deadline = time.monotonic() + 45
+        while time.monotonic() < deadline:
+            if child.poll() is not None: raise SetupError("Cloudflare tunnel exited. Check notebook Internet access and cloudflared installation.")
+            match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com\b", path.read_text(errors="replace")[-65536:])
+            if match:
+                self.public_relay = match.group(0)
+                return
+            time.sleep(0.5)
+        raise SetupError("Cloudflare did not return a public relay address. Retry Start or use an external relay.")
+
+    def start(self, token: str, *, comfy_root=None, expected_revision=None, attach=False, model_paths=None, timeout=120, desktop_token=None, relay_port=8787, cloudflared=None):
         if self.lock or self.children:
             raise SetupError("This runner is already started. Stop it before starting again.")
-        if not isinstance(token, str) or len(token) < 24 or any(c.isspace() for c in token):
-            raise SetupError("Grant access to a valid MYMOVIE_AGENT_TOKEN Secret.")
+        if not isinstance(token, str) or not re.fullmatch(r"[!-~]{24,512}", token):
+            raise SetupError("Set MYMOVIE_AGENT_TOKEN to 24–512 printable characters without spaces.")
+        if cloudflared and desktop_token is None:
+            raise SetupError("Local tunnel mode requires the desktop token to start its authenticated relay.")
         self.lock = (self.root / "runner.lock").open("a+")
         try:
             fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -228,6 +288,8 @@ class NotebookRunner:
             if not helper.is_file(): raise SetupError("This feature requires the new agent archive containing mymovie_runtime.py; rebuild with CI.")
             repo = Path(comfy_root or "").resolve()
             if not (repo / "folder_paths.py").is_file(): raise SetupError("Choose the actual ComfyUI root, including for Attach.")
+            if desktop_token is not None:
+                self._start_relay(token, desktop_token, relay_port)
             devices = gpu_indices()
             if len(devices) < len(self.workers):
                 raise SetupError("Two GPUs were requested, but fewer than two are available. Select one GPU or change the runtime.")
@@ -261,7 +323,7 @@ class NotebookRunner:
                     if model_paths:
                         args.extend(["--extra-model-paths-config", str(Path(model_paths).resolve())])
                     # Only agent processes inherit the relay Secret.
-                    env = {k: v for k, v in os.environ.items() if k not in ("MYMOVIE_AGENT_TOKEN","MYMOVIE_TRANSFER_MANIFEST")}
+                    env = {k: v for k, v in os.environ.items() if k not in ("MYMOVIE_AGENT_TOKEN","MYMOVIE_DESKTOP_TOKEN","MYMOVIE_TRANSFER_MANIFEST")}
                     self._spawn(args, env, cwd=repo)
             deadline = time.monotonic() + timeout
             for w in self.workers:
@@ -284,11 +346,14 @@ class NotebookRunner:
                         time.sleep(1)
             for w in self.workers:
                 data = w["root"] / "agent"; data.mkdir(parents=True, exist_ok=True)
-                env = dict(os.environ); env["MYMOVIE_AGENT_TOKEN"] = token
+                env = {k: v for k, v in os.environ.items() if k != "MYMOVIE_DESKTOP_TOKEN"}; env["MYMOVIE_AGENT_TOKEN"] = token
                 agent_args = [str(self.binary), "serve", "--comfy-url", f'http://127.0.0.1:{w["port"]}', "--relay", self.relay, "--node-id", w["nodeId"], "--data", str(data), "--comfy-root", str(repo), "--python", sys.executable, "--runtime-helper", str(helper), "--cache", str(self.root / "dependency-cache")]
                 if not attach: agent_args.append("--managed-runtime")
                 if model_paths: agent_args.extend(["--model-paths",str(Path(model_paths).resolve())])
+                compiler = self.binary.parent / "mymovie_workflow_compiler.py"
+                if compiler.is_file(): agent_args.extend(["--workflow-compiler", str(compiler)])
                 self._spawn(agent_args, env)
+            if cloudflared: self._start_tunnel(cloudflared)
             self.started = time.monotonic()
             (self.root / "session.json").write_text(json.dumps({**self.configuration(), "comfyRevision": revision}, indent=2))
         except Exception as e:
@@ -327,6 +392,7 @@ class NotebookRunner:
                     except ProcessLookupError: pass
                     p.wait(timeout=5)
         self.children.clear()
+        self.public_relay = None
         if self.lock:
             fcntl.flock(self.lock, fcntl.LOCK_UN); self.lock.close(); self.lock = None
         return self.status()

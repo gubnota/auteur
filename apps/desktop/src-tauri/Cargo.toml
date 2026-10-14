@@ -20,6 +20,7 @@ provider-relay= {path="../../../crates/provider-relay"}
 provision-core= {path="../../../crates/provision-core"}
 storage-s3= {path="../../../crates/storage-s3"}
 serde_json.workspace=true
+serde.workspace=true
 chrono.workspace=true
 sha2.workspace=true
 tokio.workspace=true

@@ -28,7 +28,8 @@
 - asset/workflow/job core may depend on contracts/project primitives.
 - Providers implement job-core interfaces; domain code does not import desktop/UI.
 - Desktop orchestrates providers, persistence and OS APIs; React calls the bridge.
-- Secrets pass only through native secure settings; never through project DTOs.
+- Custom secrets pass only through native secure settings; never through project DTOs. Public user-selected test defaults are the explicit exception (deploy/node-auth.defaults.json).
+- Native runner_tokens owns atomic vault storage; UI fields and notebook generator consume the same public defaults. Per-connection credentials remain separate.
 - Package sourcePath changes occur only through native import/collect/relink commands.
 - Frontend save cannot create imported originals or change asset identity.
 - Scene cast is inherited; frame cast extends it; workflow-core owns resolution.

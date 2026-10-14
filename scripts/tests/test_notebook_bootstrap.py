@@ -1,6 +1,7 @@
 import hashlib
 import importlib.util
 import io
+import ast
 import json
 from pathlib import Path
 import sys
@@ -124,6 +125,84 @@ class BootstrapTests(unittest.TestCase):
             for cell in data["cells"]:
                 if cell["cell_type"] == "code":
                     self.assertEqual(cell["outputs"],[]); compile("".join(cell["source"]),"notebook","exec")
+
+    def test_notebook_defaults_match_app_without_active_secrets_lookup(self):
+        defaults = json.loads((ROOT / "deploy/node-auth.defaults.json").read_text())
+        for host in ["colab", "kaggle"]:
+            notebook = json.loads((ROOT / f"deploy/{host}/MyMovie_ComfyUI.ipynb").read_text())
+            config = "".join(notebook["cells"][3]["source"])
+            tree = ast.parse(config)
+            values = {n.targets[0].id: ast.literal_eval(n.value) for n in tree.body
+                      if isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Name)
+                      and n.targets[0].id in defaults}
+            # Avoid including default values in an assertion failure.
+            self.assertTrue(values == defaults)
+            self.assertNotIn('secret(', ast.unparse(tree))
+            start = "".join(notebook["cells"][7]["source"])
+            self.assertNotIn('secret(', start)
+            self.assertIn('desktop_token=MYMOVIE_DESKTOP_TOKEN', start)
+
+    def test_packaged_relay_and_compiler_extract_and_reject_invalid_relay(self):
+        for bad in [False, True]:
+            path = self.root / 'full.tar.gz'
+            elf = b"\x7fELF\x02\x01" + bytes(12) + b"\x3e\x00" + b'fixture'
+            entries = {'mymovie-agent': elf, 'mymovie-relay': b'wrong' if bad else elf,
+                       'mymovie_workflow_compiler.py': b'# fixture', 'workflow-compiler-requirements.txt': b''}
+            with tarfile.open(path, 'w:gz') as tar:
+                for name, data in entries.items():
+                    item = tarfile.TarInfo(name); item.size = len(data); tar.addfile(item, io.BytesIO(data))
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            if bad:
+                with self.assertRaisesRegex(b.SetupError, 'relay binary'): self.install(path, digest)
+            else:
+                binary = self.install(path, digest)
+                self.assertEqual((binary.parent / 'mymovie-relay').stat().st_mode & 0o777, 0o700)
+                self.assertTrue((binary.parent / 'mymovie_workflow_compiler.py').is_file())
+
+    def test_local_relay_auth_and_tunnel_lifecycle_no_token_leaks(self):
+        from unittest.mock import MagicMock
+        binary = self.root / 'mymovie-agent'; binary.touch()
+        for name in ['mymovie_runtime.py', 'mymovie-relay', 'mymovie_workflow_compiler.py']:
+            (self.root / name).touch()
+        repo = self.root / 'ComfyUI'; repo.mkdir(); (repo / 'folder_paths.py').touch()
+        runner = b.NotebookRunner(binary, 'http://127.0.0.1:8791', self.root / 'session', first_port=8190)
+        fake = types.SimpleNamespace(pid=100, poll=lambda: None, wait=lambda timeout: None)
+        sock = MagicMock(); sock.__enter__.return_value.connect_ex.return_value = 1
+        response = MagicMock(); response.__enter__.return_value.status = 200
+        agent_token = 'a'*32; desktop_token = 'd'*32
+        def spawn(args, **kwargs):
+            if args[0] == '/fixture/cloudflared':
+                kwargs['stderr'].write('https://fixture-node.trycloudflare.com\n'); kwargs['stderr'].flush()
+            return fake
+        with patch.object(b, 'gpu_indices', return_value=[0]), patch.object(b, 'comfy_info', return_value={'stats': {'devices': [{'type': 'cuda'}]}, 'nodeCount': 3}), patch.object(b.socket, 'socket', return_value=sock), patch.object(b.urllib.request, 'urlopen', return_value=response) as http, patch.object(b.subprocess, 'Popen', side_effect=spawn) as processes, patch.object(b.shutil, 'which', return_value='/fixture/cloudflared'), patch.object(b.os, 'killpg') as kill, patch.dict(b.os.environ, {'MYMOVIE_DESKTOP_TOKEN': desktop_token}):
+            status = runner.start(agent_token, attach=True, comfy_root=repo, desktop_token=desktop_token, relay_port=8791, cloudflared='cloudflared')
+            self.assertEqual(status['relay'], 'https://fixture-node.trycloudflare.com')
+            self.assertEqual(status['processesAlive'], 3)
+            relay, agent, tunnel = processes.call_args_list
+            self.assertEqual(relay.kwargs['env']['MYMOVIE_DESKTOP_TOKEN'], desktop_token)
+            self.assertEqual(relay.kwargs['env']['MYMOVIE_AGENT_TOKEN'], agent_token)
+            self.assertNotIn('MYMOVIE_DESKTOP_TOKEN', agent.kwargs['env'])
+            self.assertEqual(agent.args[0][agent.args[0].index('--relay')+1], runner.relay)
+            self.assertIn('--workflow-compiler', agent.args[0])
+            self.assertNotIn('MYMOVIE_DESKTOP_TOKEN', tunnel.kwargs['env'])
+            self.assertEqual(http.call_args.args[0].get_header('Authorization'), f'Bearer {desktop_token}')
+            self.assertNotIn(agent_token, json.dumps(status)); self.assertNotIn(desktop_token, json.dumps(status))
+            self.assertNotIn(desktop_token, (runner.root / 'session.json').read_text())
+            runner.stop(); self.assertEqual(kill.call_count, 3)
+
+    def test_tunnel_failure_stops_owned_relay_and_agent(self):
+        from unittest.mock import MagicMock
+        binary = self.root / 'mymovie-agent'; binary.touch()
+        (self.root / 'mymovie_runtime.py').touch()
+        repo = self.root / 'ComfyUI'; repo.mkdir(); (repo / 'folder_paths.py').touch()
+        runner = b.NotebookRunner(binary, 'http://127.0.0.1:8787', self.root / 'session')
+        fake = types.SimpleNamespace(pid=100, poll=lambda: None, wait=lambda timeout: None)
+        def relay(*args): runner.children.append(fake)
+        with patch.object(runner, '_start_relay', side_effect=relay), patch.object(b, 'gpu_indices', return_value=[0]), patch.object(b, 'comfy_info', return_value={'stats': {'devices': [{'type': 'cuda'}]}, 'nodeCount': 3}), patch.object(b.subprocess, 'Popen', return_value=fake), patch.object(b.shutil, 'which', return_value=None), patch.object(b.os, 'killpg') as kill:
+            with self.assertRaisesRegex(b.SetupError, 'Install cloudflared'):
+                runner.start('a'*32, attach=True, comfy_root=repo, desktop_token='d'*32, cloudflared='cloudflared')
+            self.assertEqual(kill.call_count, 2)
+            self.assertEqual(runner.children, []); self.assertIsNone(runner.lock)
 
 
 if __name__ == "__main__": unittest.main()

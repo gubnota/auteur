@@ -18,6 +18,18 @@ import {
   type Project,
 } from "../lib/types";
 import { Field, Modal, Picker, Toggle } from "../components/Controls";
+import {
+  RunnerTokenFields,
+  RunnerTokenSettings,
+} from "../components/RunnerTokens";
+import {
+  defaultRunnerTokens,
+  loadRunnerTokens,
+  saveRunnerTokens,
+  tokenError,
+  notebookRelayUrl,
+  notebookTokenConfig,
+} from "../lib/node-auth";
 import { PageTitle } from "./Library";
 import type { Update } from "../App";
 const connectionTypes: Record<
@@ -51,8 +63,20 @@ export function Connections({
   const [host, setHost] = useState<"colab" | "kaggle">("colab");
   const [nodeIds, setNodeIds] = useState("");
   const [relayUrl, setRelayUrl] = useState("https://");
-  const [notebookSecret, setNotebookSecret] = useState("");
+  const [tokens, setTokens] = useState({ ...defaultRunnerTokens });
+  const [tokensReady, setTokensReady] = useState(false);
+  const [temporaryTunnel, setTemporaryTunnel] = useState(false);
   const [savingNotebook, setSavingNotebook] = useState(false);
+  const openNotebook = async () => {
+    setTokensReady(false);
+    setNotebook(true);
+    try {
+      setTokens(await loadRunnerTokens());
+      setTokensReady(true);
+    } catch {
+      notify("Unable to read node tokens from the system vault.");
+    }
+  };
   const addNotebook = async () => {
     const ids = nodeIds
       .split(",")
@@ -70,35 +94,24 @@ export function Connections({
       return;
     }
     try {
-      const url = new URL(relayUrl);
-      if (
-        url.protocol !== "https:" ||
-        url.username ||
-        url.password ||
-        url.search ||
-        url.hash ||
-        url.hostname.endsWith("trycloudflare.com")
-      )
-        throw new Error(
-          "Use a stable HTTPS relay URL without credentials. Quick Tunnels do not support SSE.",
-        );
-      if (notebookSecret.length < 24)
-        throw new Error(
-          "Enter the studio relay token (24+ characters). The agent uses a separate notebook Secret.",
-        );
+      if (!tokensReady) return;
+      const url = notebookRelayUrl(relayUrl, temporaryTunnel);
+      const error = tokenError(tokens);
+      if (error) throw new Error(error);
       setSavingNotebook(true);
+      await saveRunnerTokens(tokens);
       const connections: Connection[] = [];
       for (const [i, nodeId] of ids.entries()) {
         const id = uid();
         const credentialRef = await call<string>("save_credential", {
           connectionId: id,
-          secret: notebookSecret,
+          secret: tokens.MYMOVIE_DESKTOP_TOKEN,
         });
         connections.push({
           id,
           name: `${host === "colab" ? "Colab" : "Kaggle"} · GPU ${i}`,
           kind: "relay",
-          url: relayUrl.replace(/\/$/, ""),
+          url,
           credentialRef,
           deploymentId: nodeId,
           apiFamily: null,
@@ -110,7 +123,6 @@ export function Connections({
         ...settings,
         connections: [...settings.connections, ...connections],
       });
-      setNotebookSecret("");
       setNotebook(false);
       notify(
         `Added ${connections.length} independent notebook GPU node${connections.length === 1 ? "" : "s"}. Check connection after starting the notebook client.`,
@@ -227,7 +239,7 @@ export function Connections({
         description="Local ComfyUI and private outbound runners."
         action={
           <div className="row">
-            <button onClick={() => setNotebook(true)}>
+            <button onClick={() => void openNotebook()}>
               <Cloud size={18} />
               Colab / Kaggle
             </button>
@@ -423,7 +435,6 @@ export function Connections({
           onClose={() => {
             if (!savingNotebook) {
               setNotebook(false);
-              setNotebookSecret("");
             }
           }}
         >
@@ -448,14 +459,26 @@ export function Connections({
             Open the bundled{" "}
             {host === "colab" ? "deploy/colab" : "deploy/kaggle"}
             /MyMovie_ComfyUI.ipynb notebook. Install the verified Linux client
-            artifact, then copy its generated node IDs here and into the relay
-            allowlist.
+            artifact, then Start. Copy the public relay address and generated
+            node IDs here. The notebook configures its local relay allowlist.
           </p>
           <Field
             label="Authenticated HTTPS relay"
             value={relayUrl}
             onChange={setRelayUrl}
           />
+          <Toggle
+            label="Temporary Cloudflare tunnel · polling only"
+            checked={temporaryTunnel}
+            onChange={setTemporaryTunnel}
+          />
+          {temporaryTunnel && (
+            <p className="muted">
+              Paste the notebook's https://…trycloudflare.com address. Keep the
+              session running; reconnect with its new address after a restart.
+              This mode uses polling, without SSE.
+            </p>
+          )}
           <Field
             label={
               host === "kaggle"
@@ -465,17 +488,28 @@ export function Connections({
             value={nodeIds}
             onChange={setNodeIds}
           />
-          <Field
-            label="Studio relay token · stored in system vault"
-            type="password"
-            value={notebookSecret}
-            onChange={setNotebookSecret}
-          />
+          <RunnerTokenFields tokens={tokens} change={setTokens} />
+          <button
+            disabled={!tokensReady || !!tokenError(tokens)}
+            onClick={() =>
+              void navigator.clipboard
+                .writeText(notebookTokenConfig(tokens))
+                .then(() =>
+                  notify(
+                    "Token assignments copied for the notebook Configure cell.",
+                  ),
+                )
+                .catch(() => notify("Unable to copy token assignments."))
+            }
+          >
+            Copy notebook token configuration
+          </button>
           <p className="muted">
-            The notebook reads its separate MYMOVIE_AGENT_TOKEN from Secrets.
-            ComfyUI stays on loopback. Two Kaggle nodes have separate queues and
-            concurrency 1; send one lightweight job to each for parallel
-            execution. Their GPU memory is not combined.
+            The notebook uses the same predefined pair unless you edit it. The
+            app sends only MYMOVIE_DESKTOP_TOKEN; the agent uses
+            MYMOVIE_AGENT_TOKEN. ComfyUI stays on loopback. Two Kaggle nodes
+            have separate queues and concurrency 1; send one lightweight job to
+            each for parallel execution. Their GPU memory is not combined.
           </p>
           <p className="muted">
             A fresh notebook session gets new node IDs. Collect results before
@@ -485,7 +519,11 @@ export function Connections({
           <button
             className="primary"
             disabled={
-              !native || savingNotebook || !nodeIds.trim() || !notebookSecret
+              !native ||
+              !tokensReady ||
+              savingNotebook ||
+              !nodeIds.trim() ||
+              !!tokenError(tokens)
             }
             onClick={() => void addNotebook()}
           >
@@ -696,6 +734,7 @@ export function Preferences({
           "S3 & LoRA",
           "RunPod",
           "App Runner",
+          "Node access",
           "Language",
         ].map((name) => (
           <button
@@ -710,6 +749,7 @@ export function Preferences({
         ))}
       </div>
       <div className="settings-grid">
+        {tab === "Node access" && <RunnerTokenSettings notify={notify} />}
         {tab === "General" && (
           <article className="panel">
             <h2>Movie defaults</h2>

@@ -109,10 +109,14 @@ export async function openFixture(
     let project = ${JSON.stringify(movie)};
     let settings = JSON.parse(sessionStorage.getItem("fixture-settings") ?? "null") ?? ${JSON.stringify(connections)};
     let catalogue = structuredClone(project.workflows);
+    let runnerTokens = { MYMOVIE_AGENT_TOKEN: 'fixture-agent-'.repeat(3), MYMOVIE_DESKTOP_TOKEN: 'fixture-desktop-'.repeat(3) };
     let runs = []; let jobs = JSON.parse(sessionStorage.getItem("fixture-jobs") ?? "[]");
     let recents = Array.from({length: 12}, (_, i) => ({name: "Recent movie " + i, path: "/tmp/movie-" + i + ".mymovie", opened: "2026-10-14T10:00:00Z"}));
     window.fixture = { submissions: [], enqueued: [], installs: [], thumbnails: [], setResults: results => { jobs.forEach((job, i) => { job.results = results[i] ?? []; job.state = "succeeded"; }); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, setJobStates: states => { jobs.forEach((job, i) => job.state = states[i]); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, jobHistory: () => jobs };
     export async function call(command, args = {}) {
+      if (command === 'get_runner_tokens') return structuredClone(runnerTokens);
+      if (command === 'save_runner_tokens') { runnerTokens = structuredClone(args.tokens); return; }
+      if (command === 'save_credential') { if (args.secret !== runnerTokens.MYMOVIE_DESKTOP_TOKEN) throw new Error('Wrong desktop token'); return 'connection:' + args.connectionId; }
       if (command === 'get_settings') return settings;
       if (command === 'save_settings') { settings = args.settings; sessionStorage.setItem("fixture-settings", JSON.stringify(settings)); return settings; }
       if (command === 'recent_projects') return recents;

@@ -73,7 +73,12 @@
 - Agent node ID is allowlisted by relay; claims/reports/heartbeats are scoped to that node.
 - One agent per GPU worker, CUDA visibility and ComfyUI port isolated; receipt before remote submission.
 - Runtime loss -> offline node/unknown attempt, never automatic replay.
-- Verified Linux x86_64 artifact + authenticated HTTPS relay + notebook Secrets required.
+- Verified Linux x86_64 archive; current CI bundles mymovie-agent, mymovie-relay and runtime/compiler helpers. SHA256 required before extraction; bounded, architecture-validated binaries.
+- Notebook defaults to local authenticated relay on custom RELAY_PORT, agent → loopback relay and cloudflared → relay only. ComfyUI stays loopback. Stop owns relay/tunnel/agents/managed servers; Attach leaves an existing ComfyUI alive.
+- Temporary trycloudflare.com addresses require explicit desktop polling selection; desktop uses REST polling, without SSE. Session/tunnel changes require new address/node IDs.
+- get_runner_tokens() -> {MYMOVIE_AGENT_TOKEN, MYMOVIE_DESKTOP_TOKEN}; save_runner_tokens({tokens}) -> void. Distinct 24–512 printable ASCII characters, no spaces. Atomic OS vault entry runner-token-pair; only a missing entry falls back to public test defaults.
+- deploy/node-auth.defaults.json is the single public, user-selected test pair, embedded into UI/native and generated notebook configuration. Optional env/Secrets overrides are commented out. Custom pairs never enter settings/project JSON or logs.
+- New notebook connections store only the desktop token in their connection vault entry; agents receive only the agent token. Updating global defaults does not rotate existing connections; edit those credentials explicitly.
 
 ## Release artifact contract (v0.1.5)
 - Desktop targets: macOS aarch64/x86_64 DMG; Windows x64 MSI/NSIS EXE; Linux x86_64/aarch64 DEB/AppImage.
