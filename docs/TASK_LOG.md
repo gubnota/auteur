@@ -1,5 +1,12 @@
 # Task Log
 
+## 2026-10-14 — RunningHub refusal diagnostics, 0.1.10
+
+- Latest user receipt confirms both image uploads, followed by code 605 at workflow creation without task ID. Provider history/logs unavailable; published error table does not list this code. Root cause remains unresolved.
+- New errors retain the failed API operation, translate documented reasons and retain safe symbolic identifiers. Free text, credentials and submitted values are excluded; no speculative balance advice. Existing receipts and submission/retry semantics remain intact.
+- Ten provider and six job tests plus doc tests passed with local mock servers; no paid provider task submitted. EN/RU/FR README and compact contracts/acceptance updated.
+- Native ARM64 production build, TypeScript/Vite and version parity passed. Strict ad-hoc signature verified; installed 0.1.10 in /Applications after backing up 0.1.9 to /private/tmp/MyMovie Studio-0.1.9-before-0.1.10.app. Saved movie reopened and original Jobs history retained. Private screenshot: /private/tmp/mymovie-jobs-0.1.10.png.
+
 ## 2026-10-14 — RunningHub CUDA admission hotfix, 0.1.9
 
 - Redux/r01 failed before staging or provider submission: the default backend hardware guard rejected its CUDA declaration; no remote task ID was created.

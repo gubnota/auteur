@@ -49,6 +49,7 @@
 - Active/unknown attempts consume a normalized endpoint lane slot; ComfyUI allows one, relay uses URL+node and configured capacity, RunningHub uses account capacity.
 - SubmissionRejected denotes definitive provider refusal; transport/ambiguous outcomes stay unknown.
 - reconcile_job(jobId,remoteId?,confirmedAbsent): unknown/no-ID only; verify task in original account or explicitly confirm absent in provider history. Duplicate task attachment is rejected.
+- RunningHub refusal receipts include the API operation, documented reason translations and bounded symbolic provider identifiers. Free-form provider text, credentials and submitted values are never echoed. Unknown code 605 has no inferred cause; old receipts are immutable. Retry/admission semantics are unchanged.
 - RunningHub endpoint allowlist: https://www.runninghub.ai or https://www.runninghub.cn; no arbitrary credential forwarding.
 - Legacy workflow create + v2 AI App run use typed nodeInfoList; usePersonalQueue is JSON boolean.
 - Desktop refresh polls every five seconds; ComfyUI transport also exposes WS support.

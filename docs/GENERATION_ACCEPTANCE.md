@@ -1,10 +1,17 @@
 # Generation acceptance — current main
 
-Date: 2026-10-14. Checks below distinguish published 0.1.6 from current 0.1.9. Publication is recorded in CI_RELEASES. No paid cloud jobs ran.
+Date: 2026-10-14. Checks below distinguish published 0.1.6 from current 0.1.10. Publication is recorded in CI_RELEASES. No paid cloud jobs were submitted by the agent.
+
+## 0.1.10 RunningHub refusal diagnostics
+
+- User attempt 56bccb6a-4df5-403f-b4f4-4aab7b39b528 reached `/task/openapi/create` after both image uploads. Provider code 605, no task ID; the old receipt did not preserve its reason. User reports no provider history/logs.
+- Official error table (`runninghub-api-doc-en/doc-8287467`) does not list 605. No balance/account/deployment cause is established. New receipts record the operation and safe symbolic identifiers or documented translations, excluding free text and submitted private values.
+- Ten provider and six durable-job tests plus doc tests passed against local fixtures. No real provider retry performed; successful hosted generation remains unverified.
+- Native ARM64 production build, TypeScript/Vite and version parity passed. Strict ad-hoc signature verified; installed 0.1.10 in /Applications after backing up 0.1.9 to /private/tmp/MyMovie Studio-0.1.9-before-0.1.10.app. Saved movie reopened and original Jobs history retained. Private screenshot: /private/tmp/mymovie-jobs-0.1.10.png.
 
 ## 0.1.9 RunningHub compatibility regression
 
-- Latest Redux/r01 failure stopped at the app hardware guard before any media staging or task creation; remote ID absent. The workflow's CUDA flag had inherited the default backend restriction.
+- Earlier Redux/r01 failure stopped at the app hardware guard before any media staging or task creation; remote ID absent. The workflow's CUDA flag had inherited the default backend restriction.
 - RunningHub Workflow and AI App now accept unspecified/universal/cuda; Apple Silicon/ROCm/CPU/invalid remain rejected. Seven provider tests and six job tests plus doc tests passed. Direct ComfyUI/relay behavior unchanged.
 - No paid provider retry performed; this proves admission and mocked provider contracts, not live hosted execution. Old failure receipts remain in history.
 - Native ARM64 build, installed version 0.1.9 and strict ad-hoc signature verified; saved movie reopened. Previous app preserved at `/private/tmp/MyMovie Studio-0.1.8-before-0.1.9.app`.

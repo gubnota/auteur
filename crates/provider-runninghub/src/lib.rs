@@ -61,7 +61,7 @@ impl RunningHub {
         let status = response.status();
         if !status.is_success() {
             let message = format!(
-                "RunningHub HTTP {}. Check account access, deployment and inputs.",
+                "RunningHub HTTP {} at {path}. Check account access, deployment and inputs.",
                 status.as_u16()
             );
             if matches!(status.as_u16(), 400 | 401 | 403 | 404 | 422 | 429) {
@@ -73,7 +73,9 @@ impl RunningHub {
             .json()
             .await
             .map_err(|_| "RunningHub returned an unreadable response")?;
-        check_response(&v)?;
+        let mut private_values = vec![self.key.as_str()];
+        collect_private_strings(&body, &mut private_values);
+        check_response(&v, path, &private_values)?;
         Ok(v)
     }
 }
@@ -218,23 +220,32 @@ impl ExecutionBackend for RunningHub {
             .error_for_status()?
             .json()
             .await?;
-        check_response(&v)?;
+        check_response(&v, "/openapi/v2/media/upload/binary", &[self.key.as_str()])?;
         v["data"]["fileName"]
             .as_str()
             .map(str::to_owned)
             .ok_or_else(|| "Upload has no file name".into())
     }
 }
-fn check_response(v: &Value) -> Result<()> {
+fn collect_private_strings<'a>(v: &'a Value, strings: &mut Vec<&'a str>) {
+    match v {
+        Value::String(s) => strings.push(s),
+        Value::Array(a) => a.iter().for_each(|v| collect_private_strings(v, strings)),
+        Value::Object(o) => o.values().for_each(|v| collect_private_strings(v, strings)),
+        _ => {}
+    }
+}
+fn check_response(v: &Value, operation: &str, private_values: &[&str]) -> Result<()> {
     if let Some(code) = v.get("code") {
         let code = code
             .as_i64()
             .or_else(|| code.as_str().and_then(|s| s.parse().ok()))
             .ok_or("RunningHub returned an invalid response code")?;
         if code != 0 {
-            // Never expose provider free text, which may echo API keys or submitted prompts.
+            // Translate only documented codes/exact identifiers; never echo provider free text.
             let message = format!(
-                "RunningHub API code {code}. Check the provider’s account, deployment, input schema and balance."
+                "RunningHub API code {code} at {operation}. {}",
+                response_reason(v, code, private_values)
             );
             if v["taskId"].is_null() && v["data"]["taskId"].is_null() && !(500..600).contains(&code)
             {
@@ -244,6 +255,121 @@ fn check_response(v: &Value) -> Result<()> {
         }
     }
     Ok(())
+}
+fn response_reason(v: &Value, code: i64, private_values: &[&str]) -> String {
+    // Official error table: runninghub-api-doc-en/doc-8287467. Unknown codes,
+    // including 605, cannot be diagnosed from a number alone.
+    const REASONS: &[(i64, &str, &str)] = &[
+        (
+            301,
+            "PARAMS_INVALID",
+            "Required parameters are missing or invalid.",
+        ),
+        (
+            380,
+            "WORKFLOW_NOT_EXISTS",
+            "The hosted workflow ID does not exist. Check its saved deployment.",
+        ),
+        (
+            412,
+            "TOKEN_INVALID",
+            "The API token or request URL is invalid. Check Connections.",
+        ),
+        (
+            416,
+            "TASK_CREATE_FAILED_BY_NOT_ENOUGH_WALLET",
+            "RunningHub reports insufficient wallet balance.",
+        ),
+        (
+            421,
+            "TASK_QUEUE_MAXED",
+            "RunningHub reports that the account concurrency limit is reached.",
+        ),
+        (
+            433,
+            "VALIDATE_PROMPT_FAILED",
+            "RunningHub rejected the workflow's nodes or connections. Check its validation details in API call history.",
+        ),
+        (
+            801,
+            "APIKEY_UNSUPPORTED_FREE_USER",
+            "This account needs an API-enabled membership.",
+        ),
+        (
+            802,
+            "APIKEY_UNAUTHORIZED",
+            "The API key is invalid or disabled. Update it securely in Connections.",
+        ),
+        (
+            803,
+            "APIKEY_INVALID_NODE_INFO",
+            "The saved input node IDs or field names do not match the hosted workflow. Check Workflows bindings.",
+        ),
+        (
+            808,
+            "APIKEY_UPLOAD_FAILED",
+            "RunningHub could not store the uploaded input.",
+        ),
+        (
+            809,
+            "APIKEY_FILE_SIZE_EXCEEDED",
+            "The input exceeds RunningHub's upload size limit.",
+        ),
+        (
+            810,
+            "WORKFLOW_NOT_SAVED_OR_NOT_RUNNING",
+            "Save and manually run this workflow once in RunningHub, then verify its saved deployment ID in Workflows.",
+        ),
+        (
+            811,
+            "CORPAPIKEY_INVALID",
+            "The enterprise key is invalid or lacks permission.",
+        ),
+        (
+            812,
+            "CORPAPIKEY_INSUFFICIENT_FUNDS",
+            "RunningHub reports insufficient enterprise balance.",
+        ),
+        (
+            901,
+            "WEBAPP_NOT_EXISTS",
+            "The hosted AI App ID does not exist. Check its saved deployment.",
+        ),
+    ];
+    let identifier = v["msg"].as_str().or_else(|| v["message"].as_str());
+    let reason = REASONS
+        .iter()
+        .find(|(_, name, _)| identifier == Some(*name))
+        .or_else(|| REASONS.iter().find(|(n, _, _)| *n == code))
+        .map(|(_, _, reason)| *reason);
+    if let Some(reason) = reason {
+        return reason.to_owned();
+    }
+    let safe_identifier = identifier.filter(|s| {
+        (8..=96).contains(&s.len())
+            && s.bytes().all(|b| b.is_ascii_uppercase() || b == b'_')
+            && [
+                "WORKFLOW_",
+                "TASK_",
+                "APIKEY_",
+                "CORPAPIKEY_",
+                "PARAMS_",
+                "WEBAPP_",
+                "TOKEN_",
+                "UPLOAD_",
+            ]
+            .iter()
+            .any(|prefix| s.starts_with(prefix))
+            && !private_values
+                .iter()
+                .any(|private| !private.is_empty() && s.contains(*private))
+    });
+    let identifier_note = safe_identifier
+        .map(|s| format!(" Provider identifier: {s}."))
+        .unwrap_or_default();
+    format!(
+        "The provider's reason is not documented for this code.{identifier_note} Check this refusal before retrying."
+    )
 }
 fn task_state(state: Option<&str>) -> &'static str {
     match state {
@@ -412,7 +538,87 @@ mod tests {
     fn account_can_be_checked_before_mapping_and_credentials_cannot_go_to_other_hosts() {
         assert!(RunningHub::at("test".into(), "", "workflow", "https://www.runninghub.ai").is_ok());
         assert!(RunningHub::at("test".into(), "123", "workflow", "https://example.com").is_err());
-        assert!(check_response(&json!({"code":"0"})).is_ok());
-        assert!(check_response(&json!({"code":"secret"})).is_err());
+        assert!(check_response(&json!({"code":"0"}), "test", &[]).is_ok());
+        assert!(check_response(&json!({"code":"secret"}), "test", &[]).is_err());
+    }
+    #[tokio::test]
+    async fn undocumented_refusal_preserves_operation_without_guessing_or_leaking() {
+        let (p, request) = mock(
+            "workflow",
+            200,
+            json!({"code":605,"msg":"test-only-key private prompt https://private.test/input.png"}),
+        )
+        .await;
+        let error = p
+            .submit("local", &json!({"_mymovieNodeInfo":[]}))
+            .await
+            .unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("code 605 at /task/openapi/create"));
+        assert!(message.contains("not documented"));
+        for private in ["test-only-key", "private prompt", "private.test", "balance"] {
+            assert!(!message.contains(private));
+        }
+        assert!(error.downcast_ref::<SubmissionRejected>().is_some());
+        request.await.unwrap();
+    }
+    #[test]
+    fn symbolic_reasons_are_retained_only_when_not_private() {
+        let response = json!({"code":605,"msg":"WORKFLOW_ACCESS_DENIED"});
+        let message = check_response(&response, "/task/openapi/create", &[])
+            .unwrap_err()
+            .to_string();
+        assert!(message.contains("Provider identifier: WORKFLOW_ACCESS_DENIED"));
+        for private in ["WORKFLOW_ACCESS_DENIED", "ACCESS_DENIED"] {
+            let message = check_response(&response, "test", &[private])
+                .unwrap_err()
+                .to_string();
+            assert!(!message.contains("WORKFLOW_ACCESS_DENIED"));
+        }
+        let mut private = Vec::new();
+        let body = json!({"nested":[{"fieldValue":"WORKFLOW_ACCESS_DENIED"}]});
+        collect_private_strings(&body, &mut private);
+        assert_eq!(private, vec!["WORKFLOW_ACCESS_DENIED"]);
+        assert!(
+            !check_response(&response, "test", &private)
+                .unwrap_err()
+                .to_string()
+                .contains("WORKFLOW_ACCESS_DENIED")
+        );
+    }
+    #[test]
+    fn documented_reasons_are_translated_without_exposing_free_text() {
+        for (code, expected) in [
+            (416, "wallet balance"),
+            (802, "invalid or disabled"),
+            (803, "input node IDs"),
+            (810, "manually run"),
+        ] {
+            let error = check_response(&json!({"code":code,"msg":"private response"}), "test", &[])
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains(expected));
+            assert!(!error.contains("private response"));
+        }
+        assert!(
+            check_response(
+                &json!({"code":605,"msg":"WORKFLOW_NOT_SAVED_OR_NOT_RUNNING"}),
+                "test",
+                &[]
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("manually run")
+        );
+        assert!(
+            check_response(
+                &json!({"code":605,"msg":"APIKEY_UNAUTHORIZED test-only-key"}),
+                "test",
+                &[]
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("not documented")
+        );
     }
 }

@@ -1,6 +1,6 @@
 {
   "productName": "MyMovie Studio",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "identifier": "net.fenki.mymovie-studio",
   "build": {
     "beforeDevCommand": "npm run dev",
