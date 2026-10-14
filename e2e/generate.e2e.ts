@@ -151,6 +151,7 @@ test("workflow compatibility and pinned dependency validation use custom dialogs
   page,
 }) => {
   await openFixture(page, movie, nodes);
+  await page.getByRole("tab", { name: "Setup", exact: true }).click();
   await page
     .getByRole("button", { name: "Workflow compatibility", exact: true })
     .click();
@@ -180,7 +181,7 @@ test("workflow compatibility and pinned dependency validation use custom dialogs
     .getByRole("button", { name: "Portable setup instructions", exact: true })
     .click();
   await expect(
-    page.getByText(/mymovie-agent inventory/, { exact: false }),
+    page.getByRole("textbox", { name: "Complete setup script" }),
   ).toBeVisible();
   await expect(page.locator("select")).toHaveCount(0);
 });

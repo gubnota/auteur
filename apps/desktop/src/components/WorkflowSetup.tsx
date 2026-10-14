@@ -1,3 +1,4 @@
+import { WorkflowBootstrap } from "./WorkflowBootstrap";
 import { useState } from "react";
 import { Field, Modal, Picker } from "./Controls";
 import { native, call, exportDestination } from "../lib/bridge";
@@ -334,72 +335,12 @@ export function WorkflowSetup({
         </Modal>
       )}
       {commands && (
-        <Modal
-          title="Portable workflow setup"
+        <WorkflowBootstrap
+          workflow={w}
+          requirements={requirements}
+          connectionId={connectionId ?? ""}
           onClose={() => setCommands(false)}
-        >
-          <p>
-            On the ComfyUI machine, use its own Python interpreter and actual
-            root. The bundled helper resolves extra model paths on macOS, Linux
-            and Windows. It never installs into an external runtime.
-          </p>
-          <ol>
-            <li>
-              Export this workflow setup; get the agent and mymovie_runtime.py
-              from the same feature build.
-            </li>
-            <li>
-              Run Inventory. Copy the runtimeFingerprint into the native profile
-              in Settings → App Runner, or pin the actual Docker image digest.
-              Add a small canary graph.
-            </li>
-            <li>
-              For your existing Mac ComfyUI, keep read-only mode. For an
-              app-managed session, add --managed-runtime to permit verified
-              installs. Restart after plugin/wheel changes, inspect again and
-              initialize.
-            </li>
-            <li>
-              In Connections select this workflow, Review initialization, then
-              Initialize reviewed workflows. The runner merges this workflow’s
-              requirements into the profile and verifies downloaded bytes before
-              placing them.
-            </li>
-          </ol>
-          <pre className="setup-code">{`mymovie-agent inventory --comfy-root "PATH_TO_COMFYUI" --python "PATH_TO_COMFY_PYTHON" --runtime-helper "PATH_TO/mymovie_runtime.py" --comfy-url "http://127.0.0.1:8188"\n\nmymovie-agent provision --comfy-root "PATH_TO_COMFYUI" --python "PATH_TO_COMFY_PYTHON" --runtime-helper "PATH_TO/mymovie_runtime.py" --profile "profile.json" --workflows "workflow-setup.json"\n\n# Managed sessions only: append --apply --managed-runtime after reviewing.\n# Extra model configuration: append --model-paths "extra_model_paths.yaml".`}</pre>
-          <p className="muted">
-            Model → first effective category folder / relative destination.
-            Plugin → custom_nodes / destination. Wheel → .mymovie-wheels /
-            filename, then the same Python environment. Private signed sources
-            are supplied to the agent through MYMOVIE_TRANSFER_MANIFEST, never
-            this document.
-          </p>
-          <button
-            disabled={!native}
-            onClick={() =>
-              void (async () => {
-                try {
-                  const path = await exportDestination("workflow-setup.json");
-                  if (!path) return;
-                  await call("export_workflow_setup", {
-                    path,
-                    workflowId: w.id,
-                    connectionId,
-                    requirements,
-                  });
-                  setNotice(
-                    "Setup exported. Save profile.json separately in Settings.",
-                  );
-                } catch (e) {
-                  setNotice(String(e));
-                }
-              })()
-            }
-          >
-            Export workflow setup
-          </button>
-          <p role="status">{notice}</p>
-        </Modal>
+        />
       )}
     </section>
   );

@@ -6,9 +6,11 @@ export function Modal({
   title,
   children,
   onClose,
+  footer,
 }: {
   title: string;
   children: ReactNode;
+  footer?: ReactNode;
   onClose: () => void;
 }) {
   return (
@@ -27,7 +29,8 @@ export function Modal({
               <X size={20} />
             </Dialog.Close>
           </header>
-          {children}
+          <div className="modal-body">{children}</div>
+          {footer && <footer className="modal-footer">{footer}</footer>}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -39,12 +42,14 @@ export function Picker({
   options,
   onChange,
   multiple = false,
+  onClear,
 }: {
   title: string;
   value: string | string[];
   options: { id: string; label: string; description?: string }[];
   onChange: (v: string) => void;
   multiple?: boolean;
+  onClear?: () => void;
 }) {
   const [show, setShow] = useState(false);
   const [q, setQ] = useState("");
@@ -79,6 +84,7 @@ export function Picker({
               onChange={(e) => setQ(e.target.value)}
             />
           </label>
+          {onClear && <button onClick={() => {onClear();setShow(false);}}>Clear selection</button>}
           <div className="choices">
             {options
               .filter((o) =>

@@ -1,8 +1,7 @@
+import { WorkflowEditor } from "../components/WorkflowEditor";
 import { Media } from "../components/Media";
 export { Media } from "../components/Media";
 import { MediaPicker } from "../components/MediaPicker";
-import { WorkflowForm } from "../components/WorkflowForm";
-import { WorkflowTarget } from "../components/WorkflowTarget";
 import { WorkflowSetup, compatibilityLabel } from "../components/WorkflowSetup";
 import { useState, useEffect } from "react";
 import { Plus, Image, Upload, X, Workflow as WorkflowIcon } from "lucide-react";
@@ -609,7 +608,7 @@ export function Workflows({
         title="Preparation target"
         value={targetId}
         options={settings.connections
-          .filter((c) => ["comfyui", "relay", "runninghub"].includes(c.kind))
+          .filter((c) => ["comfyui", "relay"].includes(c.kind))
           .map((c) => ({ id: c.id, label: c.name, description: c.kind }))}
         onChange={setTargetId}
       />
@@ -647,8 +646,9 @@ export function Workflows({
                 key={w.id}
                 onClick={() => setSelected(w.id)}
               >
-                <WorkflowIcon size={28} />
+                {w.wrapper?.illustration ? <img className="workflow-card-cover" src={w.wrapper.illustration} alt=""/> : <WorkflowIcon size={28} />}
                 <strong>{w.name}</strong>
+                {w.wrapper?.collection && <small>{w.wrapper.collection} · {w.wrapper.variantName}</small>}
                 <small>
                   {Object.keys(w.graph).length
                     ? `${Object.keys(w.graph).length} nodes · ${w.bindings.length} bindings`
@@ -664,22 +664,8 @@ export function Workflows({
       )}
       {w && (
         <Modal title={w.name} onClose={() => setSelected("")}>
-          <WorkflowTarget
-            workflow={w}
-            connection={settings.connections.find((c) => c.id === targetId)}
-            prepare={prepare}
-            notify={notify}
-          />
-          <WorkflowSetup
-            workflow={w}
-            connectionId={targetId}
-            change={(requirements) =>
-              update((p) => {
-                p.workflows.find((x) => x.id === w.id)!.requirements =
-                  requirements;
-              })
-            }
-          />
+          <WorkflowEditor key={`${w.id}:${targetId}`} workflow={w} workflows={p.workflows} connection={settings.connections.find((c) => c.id === targetId)} selectVariant={setSelected} change={(fn) => update((p) => fn(p.workflows.find((x) => x.id===w.id)!))} prepare={prepare} saveForm={(bindings,layout) => saveForm(w.id,bindings,layout,targetId)} notify={notify}/>
+          <details className="workflow-job-entry"><summary>Create a job</summary>
           <h3>Generate a keyframe</h3>
           <Picker
             title="Target keyframe"
@@ -695,6 +681,7 @@ export function Workflows({
               ),
             )}
             onChange={setFrameId}
+            onClear={() => setFrameId("")}
           />
           <button
             className="primary"
@@ -710,79 +697,6 @@ export function Workflows({
             Choose a keyframe, then review the account and job inputs before
             submission.
           </p>
-          <h3>RunningHub deployments</h3>
-          <p className="muted">
-            An API export contains the graph, not its hosted deployment ID. Use
-            the Workflow ID from RunningHub for this same graph, or an AI App ID
-            with matching published inputs. Each account can use a different
-            deployment.
-          </p>
-          {settings.connections.filter((c) => c.kind === "runninghub")
-            .length === 0 && (
-            <p>
-              Add a RunningHub account and its API key in Connections first.
-            </p>
-          )}
-          {settings.connections
-            .filter((c) => c.kind === "runninghub")
-            .map((c) => {
-              const d = w.deployments?.find((d) => d.connectionId === c.id);
-              const setDeployment = (change: {
-                deploymentId?: string;
-                apiFamily?: string;
-              }) =>
-                update((p) => {
-                  const x = p.workflows.find((x) => x.id === w.id)!;
-                  const next = {
-                    connectionId: c.id,
-                    deploymentId: d?.deploymentId ?? c.deploymentId ?? "",
-                    apiFamily: d?.apiFamily ?? c.apiFamily ?? "workflow",
-                    ...change,
-                  };
-                  x.deployments = [
-                    ...(x.deployments ?? []).filter(
-                      (d) => d.connectionId !== c.id,
-                    ),
-                    next,
-                  ];
-                });
-              return (
-                <section className="panel" key={c.id}>
-                  <h4>{c.name}</h4>
-                  <Picker
-                    title="RunningHub API family"
-                    value={d?.apiFamily ?? c.apiFamily ?? "workflow"}
-                    options={[
-                      { id: "workflow", label: "Hosted ComfyUI workflow" },
-                      { id: "ai-app", label: "Published AI App (v2)" },
-                    ]}
-                    onChange={(apiFamily) => setDeployment({ apiFamily })}
-                  />
-                  <Field
-                    label="RunningHub page URL or Workflow / AI App ID"
-                    value={d?.deploymentId ?? c.deploymentId ?? ""}
-                    onChange={(deploymentId) =>
-                      setDeployment(parseDeployment(deploymentId))
-                    }
-                  />
-                  <p className="muted">
-                    Saved in this movie. The API key stays in the system
-                    credential store.
-                  </p>
-                </section>
-              );
-            })}
-          <WorkflowForm
-            key={`${w.id}:${targetId}`}
-            workflow={w}
-            connectionId={targetId}
-            save={async (bindings, layout) => {
-              await saveForm(w.id, bindings, layout, targetId);
-            }}
-          />
-          <details>
-            <summary>Preserved graph</summary>
-            <pre>{JSON.stringify(w.graph, null, 2)}</pre>
           </details>
         </Modal>
       )}
@@ -791,18 +705,4 @@ export function Workflows({
 }
 export function Renders(props: React.ComponentProps<typeof Library>) {
   return <Library {...props} rendersOnly />;
-}
-
-export function parseDeployment(text: string) {
-  const value = text.trim();
-  const match = value.match(
-    /^https:\/\/(?:www\.)?runninghub\.ai\/workflow\/(\d+)(?:[/?#]|$)/,
-  );
-  if (match) return { deploymentId: match[1], apiFamily: "workflow" };
-  const app = value.match(
-    /^https:\/\/(?:www\.)?runninghub\.ai\/call-api\/api-detail\/(\d+)(?:[/?#]|$)/,
-  );
-  return app
-    ? { deploymentId: app[1], apiFamily: "ai-app" }
-    : { deploymentId: value };
 }

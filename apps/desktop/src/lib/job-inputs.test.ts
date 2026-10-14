@@ -450,4 +450,18 @@ describe("reusable forms", () => {
       assetId: "asset",
     });
   });
+  it("keeps optional media defaults but rejects an explicitly missing asset", () => {
+    const movie = structuredClone(p);
+    const w = movie.workflows[0];
+    w.bindings = [{semantic:"reference",nodeId:"1",input:"text",valueType:"string",media:{kind:"image",role:"referenceImage",order:0}}];
+    w.layout = {inputs:[{nodeId:"1",input:"text",label:"Reference",group:"",hidden:false,advanced:false,optional:true}],outputs:[]};
+    const item = {...draft.items[0],values:{},assets:{}};
+    const result = resolveInputs(movie,draft,item);
+    expect(result.graph["1"].inputs.text).toBe("original");
+    expect(result.media).toEqual({});
+    expect(() => resolveInputs(movie,draft,{...item,assets:{reference:"missing"}})).toThrow();
+    w.layout.inputs[0].optional = false;
+    expect(() => resolveInputs(movie,draft,item)).toThrow();
+  });
+
 });

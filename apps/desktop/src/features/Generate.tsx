@@ -302,7 +302,7 @@ export function Generate({
                     value={item.connectionId}
                     options={settings.connections
                       .filter((c) =>
-                        ["comfyui", "relay", "runninghub"].includes(c.kind),
+                        ["comfyui", "relay"].includes(c.kind),
                       )
                       .map((c) => ({
                         id: c.id,
@@ -447,6 +447,7 @@ export function Generate({
               saved={() =>
                 editDraft((d) => {
                   d.queuedRunId = null;
+                  d.queuedJobIds = [];
                 })
               }
             />

@@ -25,7 +25,6 @@ const connectionTypes: Record<
   { label: string; url: string; pending?: boolean }
 > = {
   comfyui: { label: "ComfyUI", url: "http://127.0.0.1:8188" },
-  runninghub: { label: "RunningHub", url: "https://www.runninghub.ai" },
   relay: { label: "Private runner", url: "https://" },
   google: {
     label: "Google AI Studio · Gemini",
@@ -225,7 +224,7 @@ export function Connections({
       <PageTitle
         eyebrow="EXECUTION NETWORK"
         title="Connections"
-        description="Local ComfyUI, isolated RunningHub accounts and private outbound runners."
+        description="Local ComfyUI and private outbound runners."
         action={
           <div className="row">
             <button onClick={() => setNotebook(true)}>
@@ -252,13 +251,15 @@ export function Connections({
       </div>
       <div className="connection-grid">
         {settings.connections
-          .filter((c) => filter === "all" || c.kind === filter)
+          .filter(
+            (c) =>
+              c.kind !== "retired" && (filter === "all" || c.kind === filter),
+          )
           .map((c) => (
             <article className="panel connection" key={c.id}>
               <header>
                 <span className="connection-icon">
                   {[
-                    "runninghub",
                     "google",
                     "deepseek",
                     "openrouter",
@@ -530,7 +531,7 @@ export function Connections({
                 url: connectionTypes[v].url,
                 deploymentId: null,
                 credentialRef: null,
-                apiFamily: v === "runninghub" ? "ai-app" : null,
+                apiFamily: null,
               })
             }
           />
@@ -539,39 +540,14 @@ export function Connections({
             value={editing.url}
             onChange={(v) => setEditing({ ...editing, url: v })}
           />
-          {(editing.kind === "runninghub" || editing.kind === "relay") && (
-            <>
-              {editing.kind === "runninghub" && (
-                <Picker
-                  title="RunningHub API family"
-                  value={editing.apiFamily ?? "ai-app"}
-                  options={[
-                    {
-                      id: "ai-app",
-                      label: "AI App · verified deployment inputs",
-                    },
-                    { id: "workflow", label: "Workflow · API-format bindings" },
-                  ]}
-                  onChange={(v) => setEditing({ ...editing, apiFamily: v })}
-                />
-              )}
-              <Field
-                label={
-                  editing.kind === "relay"
-                    ? "Runner node ID"
-                    : "Default deployment ID (optional)"
-                }
-                value={editing.deploymentId ?? ""}
-                onChange={(v) =>
-                  setEditing({ ...editing, deploymentId: v || null })
-                }
-              />
-              <p className="muted">
-                {editing.kind === "relay"
-                  ? "Use the node ID printed by your authenticated runner."
-                  : "Set per-workflow RunningHub deployments in Workflows. Workflow and AI App IDs are separate; use the matching API input schema."}
-              </p>
-            </>
+          {editing.kind === "relay" && (
+            <Field
+              label="Runner node ID"
+              value={editing.deploymentId ?? ""}
+              onChange={(v) =>
+                setEditing({ ...editing, deploymentId: v || null })
+              }
+            />
           )}
           <Field
             label="Concurrent jobs"

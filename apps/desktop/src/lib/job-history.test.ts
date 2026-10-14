@@ -52,4 +52,15 @@ describe("frozen batch editing", () => {
       "no restorable inputs",
     );
   });
+  it("edits only selected idle tasks and never links a started receipt", () => {
+    const idle = {...job,state:"paused",remoteId:null};
+    const active = {...job,id:"started",state:"submitted",remoteId:"remote"};
+    const mixed = {...run,state:"active",jobIds:[idle.id,active.id]};
+    const draft = draftFromRun(mixed,[idle,active],[idle.id]);
+    expect(draft.queuedJobIds).toEqual([idle.id]);
+    expect(draft.queuedRunId).toBeNull();
+    expect(draft.items).toHaveLength(1);
+    expect(draftFromRun(mixed,[idle,active],[active.id]).queuedJobIds).toEqual([]);
+  });
+
 });

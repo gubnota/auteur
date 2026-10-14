@@ -9,8 +9,8 @@ import {
 } from "./types";
 
 // Restore frozen inputs, never a source draft that may have changed after queuing.
-export function draftFromRun(run: JobRun, jobs: Job[]): JobDraft {
-  const attempts = run.jobIds.map((id) => {
+export function draftFromRun(run: JobRun, jobs: Job[], selectedIds?: string[]): JobDraft {
+  const attempts = run.jobIds.filter((id) => !selectedIds || selectedIds.includes(id)).map((id) => {
     const job = jobs.find((j) => j.id === id);
     if (!job)
       throw new Error("Job receipt missing; cannot restore this batch.");
@@ -50,7 +50,8 @@ export function draftFromRun(run: JobRun, jobs: Job[]): JobDraft {
   const context = (attempts[0].snapshot as { context?: JobDraft["context"] })
     .context;
   return {
-    queuedRunId: run.queued && run.state === "paused" ? run.id : null,
+    queuedRunId: !selectedIds && run.queued && run.state === "paused" ? run.id : null,
+    queuedJobIds: selectedIds && attempts.every((j) => j.state === "paused" && !j.remoteId) ? attempts.map((j) => j.id) : [],
     id: uid(),
     name: `${run.name} edit`,
     frameId: attempts[0].frameId,

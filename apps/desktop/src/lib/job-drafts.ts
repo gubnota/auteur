@@ -25,7 +25,7 @@ export function newJobDraft(
             ? workflow?.lastTarget
             : undefined) ??
           settings.connections.find((c) =>
-            ["comfyui", "runninghub", "relay"].includes(c.kind),
+            ["comfyui", "relay"].includes(c.kind),
           )?.id ??
           "",
         values: {},

@@ -222,6 +222,11 @@ export function resolveInputs(p: Project, draft: JobDraft, item: JobItem) {
           ? frame?.assetId
           : refs[Number(b.semantic.replace("characterReference", "")) - 1]?.id);
       const asset = p.assets.find((a) => a.id === id);
+      const optional = w.layout?.inputs.some((l) => l.nodeId === b.nodeId && l.input === b.input && l.optional);
+      if (!id && optional) {
+        values[b.semantic] = defaults[b.input];
+        continue;
+      }
       if (asset?.archivedAt)
         throw new Error(
           `Restore ${asset.name} from Library Trash before queueing`,
@@ -287,34 +292,8 @@ export function readiness(
       p.workflows.find((w) => w.id === item.workflowId),
       item.connectionId,
     );
-    if (!c || !["comfyui", "runninghub", "relay"].includes(c.kind))
+    if (!c || !["comfyui", "relay"].includes(c.kind))
       errors.push("Select an execution connection");
-    if (c?.kind === "runninghub") {
-      const d = w?.deployments?.find((d) => d.connectionId === c.id);
-      if (!c.credentialRef)
-        errors.push("Add this account’s API key in Connections.");
-      if (
-        !/^\d+$/.test(
-          item.deploymentId ?? d?.deploymentId ?? c.deploymentId ?? "",
-        ) ||
-        !["workflow", "ai-app"].includes(
-          item.apiFamily ?? d?.apiFamily ?? c.apiFamily ?? "",
-        )
-      )
-        errors.push(
-          "Configure a hosted Workflow / AI App ID and API family. Importing JSON alone does not create a hosted deployment.",
-        );
-      if (
-        (item.bindings ?? w?.bindings ?? []).some(
-          (b) => b.media && b.media.kind !== "image",
-        )
-      )
-        errors.push(
-          "RunningHub video/audio uploads are not verified. Use a ComfyUI node for these inputs.",
-        );
-      if (!(item.bindings ?? w?.bindings ?? []).length)
-        errors.push("Configure verified provider bindings first");
-    }
     try {
       resolveInputs(p, draft, item);
     } catch (e) {

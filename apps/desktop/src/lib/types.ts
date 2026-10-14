@@ -74,8 +74,12 @@ export interface WorkflowInput {
   group?: string;
   hidden?: boolean;
 }
+export interface WorkflowWrapper {
+  familyId: string; variantName: string; collection: string; description: string; readme: string; illustration?: string | null; os: string; architecture: string; precision: string;
+}
 export interface WorkflowLayout {
   inputs: {
+    optional?: boolean;
     nodeId: string;
     input: string;
     label: string;
@@ -99,6 +103,7 @@ export interface CompiledProfile {
 }
 export interface Workflow {
   layout?: WorkflowLayout;
+  wrapper?: WorkflowWrapper;
   outputs?: CompiledProfile["outputs"];
   inputs?: WorkflowInput[];
   profiles?: CompiledProfile[];
@@ -245,6 +250,7 @@ export interface JobItem {
 }
 export interface JobDraft {
   queuedRunId?: string | null;
+  queuedJobIds?: string[];
   id: string;
   name: string;
   frameId: string;

@@ -222,6 +222,9 @@ export function WorkflowInputs({
           !Object.prototype.hasOwnProperty.call(item.values, b.semantic);
         const value = item.values[b.semantic] ?? resolved;
         const key = `${b.semantic}:${b.nodeId}.${b.input}`;
+        const optional = w.layout?.inputs.some(
+          (l) => l.nodeId === b.nodeId && l.input === b.input && l.optional,
+        );
         return (
           <article className="jobs-input" key={key}>
             <div className="jobs-toolbar">
@@ -233,6 +236,20 @@ export function WorkflowInputs({
                   {b.valueType}
                 </small>
               </div>
+              {optional && (
+                <button
+                  onClick={() =>
+                    edit((i) => {
+                      delete i.assets[b.semantic];
+                      delete i.values[b.semantic];
+                      delete i.inputErrors?.[key];
+                      delete i.inputText?.[key];
+                    })
+                  }
+                >
+                  Use workflow default
+                </button>
+              )}
               {item.bindings && (
                 <button
                   aria-label={`Remove binding ${b.semantic}`}

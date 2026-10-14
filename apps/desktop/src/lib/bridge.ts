@@ -51,7 +51,7 @@ export async function pickFile(
     multiple: false,
     filters:
       kind === "workflow"
-        ? [{ name: "API workflow", extensions: ["json"] }]
+        ? [{ name: "ComfyUI workflow or wrapped collection", extensions: ["json"] }]
         : undefined,
   });
   return typeof path === "string" ? path : null;

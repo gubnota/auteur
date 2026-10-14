@@ -3,7 +3,7 @@ import type { Project, AppSettings } from "../../apps/desktop/src/lib/types";
 
 export const project: Project = {
   id: "movie",
-  name: "RunningHub Verification",
+  name: "ComfyUI Verification",
   revision: 0,
   ratio: "16:9",
   positivePrompt: "Cinematic lighting",
@@ -72,11 +72,11 @@ export const settings: AppSettings = {
   storage: {},
   notifications: [],
   logs: [],
-  connections: ["Studio account", "Second account"].map((name, i) => ({
+  connections: ["Local ComfyUI", "Second node"].map((name, i) => ({
     id: `account-${i}`,
     name,
-    kind: "runninghub",
-    url: "https://www.runninghub.ai",
+    kind: "comfyui",
+    url: "http://localhost:8188",
     credentialRef: "test-vault-reference",
     deploymentId: null,
     apiFamily: "workflow",
@@ -151,7 +151,9 @@ export async function openFixture(
       if (command === 'save_project') { project = {...args.project, revision: args.expectedRevision + 1}; window.fixture.saved = project; return project; }
       if (command === 'list_jobs' || command === 'refresh_jobs') return jobs;
       if (command === 'list_job_runs') return runs;
-      if (command === 'enqueue_job_draft' || command === 'replace_queued_job_run') { if (command === 'replace_queued_job_run') { const old = runs.find(r => r.id === args.runId); if (!old?.queued || old.state !== 'paused') throw new Error('Batch already started'); old.queued = false; old.state = 'canceled'; jobs.forEach(j => { if (j.runId === old.id) j.state = 'canceled'; }); } window.fixture.enqueued.push(args); const draft = project.jobDrafts.find(d => d.id === args.draftId); const id = 'run-' + runs.length; const ids = draft.items.map((item, index) => { const jobId = id + '-job-' + index; jobs.push({id:jobId, runId:id, workflowId:item.workflowId, connectionId:item.connectionId, frameId:draft.frameId, workflowVersion:project.workflows.find(w => w.id === item.workflowId).version, state:'paused', progress:0, error:null, results:[], snapshot:{semantic:structuredClone(item.values),media:Object.fromEntries(Object.entries(item.assets).map(([k,id]) => [k,project.assets.find(a => a.id === id)])),bindings:structuredClone(item.bindings ?? project.workflows.find(w => w.id === item.workflowId).bindings),context:structuredClone(draft.context),connection:structuredClone(settings.connections.find(c => c.id === item.connectionId))}}); return jobId; }); runs.push({id, name:draft.name, draftId:draft.id, jobIds:ids, state:'paused', queued:true, createdAt:'2026-10-14'}); return jobs; }
+      if (command === 'enqueue_job_draft' || command === 'replace_queued_job_run') { if (command === 'replace_queued_job_run') { const old = runs.find(r => r.id === args.runId); if (!old?.queued || old.state !== 'paused') throw new Error('Batch already started'); old.queued = false; old.state = 'canceled'; jobs.forEach(j => { if (j.runId === old.id) j.state = 'canceled'; }); } window.fixture.enqueued.push(args); const draft = project.jobDrafts.find(d => d.id === args.draftId); if (draft.queuedJobIds?.length) {jobs.forEach(j => {if(draft.queuedJobIds.includes(j.id)) j.state='canceled';});} const id = 'run-' + runs.length; const ids = draft.items.map((item, index) => { const jobId = id + '-job-' + index; jobs.push({id:jobId, runId:id, workflowId:item.workflowId, connectionId:item.connectionId, frameId:draft.frameId, workflowVersion:project.workflows.find(w => w.id === item.workflowId).version, state:'paused', progress:0, error:null, results:[], snapshot:{semantic:structuredClone(item.values),media:Object.fromEntries(Object.entries(item.assets).map(([k,id]) => [k,project.assets.find(a => a.id === id)])),bindings:structuredClone(item.bindings ?? project.workflows.find(w => w.id === item.workflowId).bindings),context:structuredClone(draft.context),connection:structuredClone(settings.connections.find(c => c.id === item.connectionId))}}); return jobId; }); runs.push({id, name:draft.name, draftId:draft.id, jobIds:ids, state:'paused', queued:true, createdAt:'2026-10-14'}); return jobs; }
+      if (command === 'control_job_tasks') { const picked = jobs.filter(j => args.jobIds.includes(j.id)); if (picked.length !== args.jobIds.length || picked.some(j => j.state !== 'paused' || j.remoteId)) throw new Error('Only idle tasks'); picked.forEach(j => j.state = args.action === 'resume' ? 'submitted' : 'canceled'); if (args.action === 'resume') window.fixture.submissions.push(args); runs.forEach(r => { const children = jobs.filter(j => j.runId === r.id); r.queued = children.some(j => j.state === 'paused'); r.state = children.some(j => j.state === 'submitted') ? 'active' : r.queued ? 'paused' : 'finished'; }); return jobs; }
+      if (command === 'notebook_setup_script') return '# Configure; install verified artifact; start workers';
       if (command === 'control_job_run') { const r = runs.find(r => r.id === args.runId); if (args.action === 'resume') { r.queued = false; r.state = 'submitted'; window.fixture.submissions.push(args); jobs.forEach(j => { if (j.runId === r.id) j.state = 'submitted'; }); } return jobs; }
       if (command === 'preview_job_draft') return { items: args.draft.items.map(item => ({ semantic: item.values, frameId: args.draft.frameId, workflowId: item.workflowId, connectionId: item.connectionId, deployment: project.workflows.find(w => w.id === item.workflowId).deployments?.find(d => d.connectionId === item.connectionId) })) };
       if (command === 'start_job_draft') { window.fixture.submissions.push(args); return []; }
@@ -170,4 +172,5 @@ export async function openFixture(
   await page.getByRole("button", { name: /Open a movie/ }).click();
   await page.getByRole("button", { name: "Workflows", exact: true }).click();
   await page.getByRole("button", { name: /Imported image workflow/ }).click();
+  await page.locator(".workflow-job-entry summary").click();
 }

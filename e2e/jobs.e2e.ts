@@ -49,7 +49,7 @@ test("queued batches stay idle across reopening until explicitly started", async
     .click();
   await page.getByRole("button", { name: "Jobs", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Run queued batch", exact: true }),
+    page.getByRole("button", { name: "Run selected", exact: true }),
   ).toBeVisible();
   expect(
     await page.evaluate(() => (window as any).fixture.submissions),
@@ -61,14 +61,15 @@ test("queued batches stay idle across reopening until explicitly started", async
     await page.evaluate(() => (window as any).fixture.submissions),
   ).toEqual([]);
   await page
-    .getByRole("button", { name: "Run all queued", exact: true })
+    .getByRole("button", { name: "Select queued", exact: true })
     .click();
+  await page.getByRole("button", { name: "Run selected", exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => (window as any).fixture.submissions.length))
     .toBe(1);
   await expect(
-    page.getByRole("button", { name: "Run all queued", exact: true }),
-  ).toHaveCount(0);
+    page.getByRole("button", { name: "Run selected", exact: true }),
+  ).toBeDisabled();
 });
 
 test("exact empty prompt, zero, false and parsed JSON survive batch duplication", async ({
@@ -214,10 +215,12 @@ test("collapse editor, edit a queued node and save an idle replacement", async (
   expect(state.submissions).toEqual([]);
   await page.getByRole("button", { name: "Jobs", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Run queued batch", exact: true }),
+    page.getByRole("button", { name: "Run selected", exact: true }),
   ).toHaveCount(1);
   await page.getByRole("button", { name: "Jobs", exact: true }).click();
-  await expect(page.getByText(/ComfyUI 2: paused/)).toBeVisible();
+  await expect(
+    page.locator(".jobs-task").filter({ hasText: "ComfyUI 2" }),
+  ).toBeVisible();
   await page.screenshot({
     path: "docs/screenshots/jobs-queue-edit.png",
     fullPage: true,
@@ -269,4 +272,57 @@ test("clear finished queue entries persists without removing history or active j
   await expect(
     page.getByRole("button", { name: "Clear finished", exact: true }),
   ).toBeDisabled();
+});
+
+test("selection starts only one task and removes another without submitting it", async ({
+  page,
+}) => {
+  await openFixture(page, movie(), local);
+  await page
+    .getByRole("button", { name: "Target keyframe", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Pilot / Coast / Frame 01" }).click();
+  await page.getByRole("button", { name: "Create generation job" }).click();
+  await page
+    .getByRole("button", { name: "Duplicate item", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Duplicate item", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Review exact inputs" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Add to queue", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Jobs", exact: true }).click();
+  await page.locator(".jobs-run summary").click();
+  await expect(page.getByLabel(/^Select task/).first()).not.toBeVisible();
+  await page.locator(".jobs-run summary").click();
+  await page
+    .getByLabel(/^Select task/)
+    .first()
+    .check();
+  await page.getByRole("button", { name: "Run selected", exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).fixture
+            .jobHistory()
+            .filter((j: any) => j.state === "submitted").length,
+      ),
+    )
+    .toBe(1);
+  await expect(page.getByLabel(/^Select task/)).toHaveCount(2);
+  await page
+    .getByLabel(/^Select task/)
+    .first()
+    .check();
+  await page
+    .getByRole("button", { name: "Remove selected from queue", exact: true })
+    .click();
+  const states = await page.evaluate(() =>
+    (window as any).fixture.jobHistory().map((j: any) => j.state),
+  );
+  expect(states.sort()).toEqual(["canceled", "paused", "submitted"]);
 });

@@ -95,10 +95,12 @@ test("saved catalogue prepares a two-image form, maps ratio and reuses its layou
     .getByText("Workflow preparation & exports", { exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Prepare / refresh inputs", exact: true })
+    .getByRole("button", { name: "Prepare inputs", exact: true })
     .click();
   await expect(
-    page.getByText("Prepared · 6 inputs · 1 outputs", { exact: true }),
+    page.getByText("Prepared for Local Mac · 6 inputs · 1 outputs", {
+      exact: true,
+    }),
   ).toBeVisible();
   for (const [slot, name] of [
     ["1.image", "Source image"],
@@ -125,7 +127,6 @@ test("saved catalogue prepares a two-image form, maps ratio and reuses its layou
       ),
     )
     .toBe("image-1");
-  await page.getByText("Workflow tools", { exact: true }).click();
   await page
     .getByRole("button", { name: "Install in ComfyUI", exact: true })
     .click();
@@ -153,20 +154,18 @@ test("saved catalogue prepares a two-image form, maps ratio and reuses its layou
       ),
     )
     .toBe(912);
+  await page.getByRole("button", { name: "Workflows", exact: true }).click();
+  await page.getByRole("button", { name: /Imported image workflow/ }).click();
+  await page.locator(".workflow-form details summary").first().click();
   await page
-    .getByRole("button", { name: "Customize input form", exact: true })
-    .click();
-  await page
-    .getByLabel("Input label", { exact: true })
+    .getByLabel("Display label", { exact: true })
     .first()
     .fill("Source photograph");
   await page
-    .getByLabel("Group", { exact: true })
-    .first()
-    .fill("Face swap references");
-  await page
-    .getByRole("button", { name: "Save reusable form", exact: true })
+    .getByRole("button", { name: "Save reusable inputs", exact: true })
     .click();
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await page.getByRole("button", { name: "Generate", exact: true }).click();
   await expect(
     page.getByText("Source photograph", { exact: true }),
   ).toBeVisible();
@@ -220,13 +219,6 @@ test("configure API media slots once, mark used fields, reuse searched gallery I
       inputs: { images: ["19", 0], other: ["86", 0] },
     },
   };
-  w.deployments = [
-    {
-      connectionId: "account-0",
-      deploymentId: "2110376761482002434",
-      apiFamily: "workflow",
-    },
-  ];
   await openFixture(page, movie, settings);
   for (const [id, label] of [
     ["19", "Base photograph"],
@@ -304,4 +296,71 @@ test("configure API media slots once, mark used fields, reuse searched gallery I
   expect(
     await page.evaluate(() => (window as any).fixture.submissions),
   ).toEqual([]);
+});
+
+test("wrapper guide, optional input and output selection persist independently of the graph", async ({
+  page,
+}) => {
+  const movie = structuredClone(project);
+  const w = movie.workflows[0];
+  w.outputs = [
+    { nodeId: "8", label: "Image", classType: "SaveImage" },
+    { nodeId: "9", label: "Preview", classType: "PreviewImage" },
+  ];
+  const original = structuredClone(w.graph);
+  await openFixture(page, movie, settings);
+  await page.locator(".workflow-form details summary").first().click();
+  await page
+    .getByLabel("Optional (keep original default if unassigned)", {
+      exact: true,
+    })
+    .first()
+    .check();
+  await page
+    .getByRole("button", { name: "Save reusable inputs", exact: true })
+    .click();
+  await page.getByRole("tab", { name: "Outputs", exact: true }).click();
+  await page
+    .getByLabel("Output 8 label", { exact: true })
+    .fill("Final artwork");
+  await page.getByLabel("Collect output 9", { exact: true }).uncheck();
+  await page
+    .getByRole("button", { name: "Save output selection", exact: true })
+    .click();
+  await page.getByRole("tab", { name: "Guide", exact: true }).click();
+  await page.getByRole("button", { name: "Edit guide", exact: true }).click();
+  await page
+    .getByLabel("Collection name", { exact: true })
+    .fill("Portrait collection");
+  await page
+    .getByLabel("README (Markdown)", { exact: true })
+    .fill(
+      "# Portrait guide\nDrop a source and a reference.\n- Use the CUDA variant on Linux.",
+    );
+  await page
+    .getByRole("button", { name: "Preview guide", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Portrait guide", exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as any).fixture.saved.workflows[0].wrapper?.collection,
+      ),
+    )
+    .toBe("Portrait collection");
+  const saved = await page.evaluate(
+    () => (window as any).fixture.saved.workflows[0],
+  );
+  expect(saved.graph).toEqual(original);
+  expect(saved.layout.inputs[0].optional).toBe(true);
+  expect(saved.layout.outputs).toEqual([
+    { nodeId: "8", label: "Final artwork", selected: true },
+    { nodeId: "9", label: "Preview", selected: false },
+  ]);
+  await page.screenshot({
+    path: "docs/screenshots/workflow-wrapper-guide.png",
+    fullPage: true,
+  });
 });

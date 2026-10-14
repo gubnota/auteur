@@ -5,6 +5,7 @@ import type { AppSettings, Job, JobRun, Project } from "../lib/types";
 import { draftFromRun } from "../lib/job-history";
 import { newJobDraft } from "../lib/job-drafts";
 import { call } from "../lib/bridge";
+import { Toggle } from "../components/Controls";
 export function Jobs({
   project: p,
   settings,
@@ -23,7 +24,16 @@ export function Jobs({
   notify: (message: string) => void;
 }) {
   const [runs, setRuns] = useState<JobRun[]>([]),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [selected, setSelected] = useState<string[]>([]),
+    [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const queued = jobs.filter(
+    (j) =>
+      j.state === "paused" &&
+      !j.remoteId &&
+      runs.some((r) => r.queued && r.jobIds.includes(j.id)),
+  );
+  const chosen = queued.filter((j) => selected.includes(j.id));
   useEffect(() => {
     let alive = true;
     void call<JobRun[]>("list_job_runs")
@@ -34,6 +44,13 @@ export function Jobs({
     return () => {
       alive = false;
     };
+  }, [p.id, jobs]);
+  useEffect(() => {
+    setSelected((ids) =>
+      ids.filter((id) =>
+        jobs.some((j) => j.id === id && j.state === "paused" && !j.remoteId),
+      ),
+    );
   }, [p.id, jobs]);
   const act = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -50,9 +67,20 @@ export function Jobs({
       onJobs(await call<Job[]>("control_job_run", { runId: run.id, action }));
       setRuns(await call("list_job_runs"));
     });
-  const editRun = (run: JobRun) => {
+  const controlSelected = (action: string) =>
+    void act(async () => {
+      onJobs(
+        await call<Job[]>("control_job_tasks", {
+          jobIds: chosen.map((j) => j.id),
+          action,
+        }),
+      );
+      setSelected([]);
+      setRuns(await call("list_job_runs"));
+    });
+  const edit = (run: JobRun, ids?: string[]) => {
     try {
-      const d = draftFromRun(run, jobs);
+      const d = draftFromRun(run, jobs, ids);
       update((p) => {
         (p.jobDrafts ??= []).push(d);
       });
@@ -67,8 +95,8 @@ export function Jobs({
         <div>
           <h1>Jobs</h1>
           <p className="muted">
-            Queue and history. Same node runs in order; different nodes run in
-            parallel.
+            Select tasks to start. One node runs in order; different nodes run
+            in parallel.
           </p>
         </div>
         <button
@@ -98,33 +126,36 @@ export function Jobs({
       <section className="panel jobs-history">
         <div className="jobs-toolbar">
           <h2>Queue & run history</h2>
-          {runs.some((r) => r.queued && r.state === "paused") && (
-            <button
-              className="primary"
-              disabled={busy}
-              onClick={() =>
-                void act(async () => {
-                  for (const run of runs
-                    .filter((r) => r.queued && r.state === "paused")
-                    .reverse()) {
-                    onJobs(
-                      await call<Job[]>("control_job_run", {
-                        runId: run.id,
-                        action: "resume",
-                      }),
-                    );
-                  }
-                  setRuns(await call("list_job_runs"));
-                })
-              }
-            >
-              Run all queued
-            </button>
-          )}
+          <span>{chosen.length} selected</span>
+          <button
+            disabled={busy || !queued.length}
+            onClick={() => setSelected(queued.map((j) => j.id))}
+          >
+            Select queued
+          </button>
+          <button disabled={!selected.length} onClick={() => setSelected([])}>
+            Clear selection
+          </button>
+          <button
+            className="primary"
+            disabled={busy || !chosen.length}
+            onClick={() => controlSelected("resume")}
+          >
+            <Play size={16} />
+            Run selected
+          </button>
+          <button
+            disabled={busy || !chosen.length}
+            onClick={() => controlSelected("cancel")}
+          >
+            <Trash2 size={16} />
+            Remove selected from queue
+          </button>
         </div>
         {!runs.length && (
           <p className="muted">
-            Started batches and their durable attempts appear here.
+            Add a batch from Generate. Queueing keeps every task paused until
+            you start it here.
           </p>
         )}
         {runs.map((run) => {
@@ -134,73 +165,122 @@ export function Jobs({
           const done = attempts.every((j) =>
             ["completed", "failed", "canceled"].includes(j.state),
           );
+          const idle = attempts.filter((j) =>
+            queued.some((q) => q.id === j.id),
+          );
+          const selectedInRun = idle.filter((j) => selected.includes(j.id));
           return (
-            <article key={run.id} className="jobs-run">
-              <div>
+            <details
+              className="jobs-run"
+              key={run.id}
+              open={expanded[run.id] ?? (run.queued && !done)}
+              onToggle={(e) => {
+                const open = e.currentTarget.open;
+                setExpanded((state) =>
+                  state[run.id] === open ? state : { ...state, [run.id]: open },
+                );
+              }}
+            >
+              <summary>
                 <strong>{run.name}</strong>
                 <small>
-                  {run.id.slice(0, 8)} ·{" "}
                   {done
                     ? "finished"
                     : run.queued
                       ? "queued · awaiting start"
-                      : run.state}
+                      : run.state}{" "}
+                  · {attempts.length} tasks
                 </small>
-              </div>
-              <div className="jobs-run-items">
-                {attempts.map((j) => (
-                  <span
-                    key={j.id}
-                    className={`job-state state-${j.state}`}
-                    title={j.error ?? j.id}
-                  >
-                    {p.workflows.find((w) => w.id === j.workflowId)?.name ??
-                      "Workflow"}{" "}
-                    ·{" "}
-                    {settings.connections.find((c) => c.id === j.connectionId)
-                      ?.name ?? "Connection"}
-                    : {j.state}
-                    {j.error && <small>{j.error}</small>}
-                  </span>
-                ))}
-              </div>
-              <button
-                disabled={busy || !attempts.length}
-                onClick={() => editRun(run)}
-              >
-                <Pencil size={16} />
-                {run.queued && run.state === "paused"
-                  ? "Edit queued batch"
-                  : "Reuse as draft"}
-              </button>
-              {!done && (
-                <div className="jobs-toolbar">
+              </summary>
+              <div className="jobs-toolbar">
+                <button
+                  disabled={busy || !attempts.length}
+                  onClick={() => edit(run)}
+                >
+                  <Pencil size={16} />
+                  {run.queued && run.state === "paused"
+                    ? "Edit queued batch"
+                    : "Reuse as draft"}
+                </button>
+                {!!selectedInRun.length && (
                   <button
-                    disabled={busy || run.state === "canceled"}
+                    disabled={busy}
                     onClick={() =>
-                      control(run, run.state === "paused" ? "resume" : "pause")
+                      edit(
+                        run,
+                        selectedInRun.map((j) => j.id),
+                      )
                     }
                   >
-                    {run.state === "paused" ? (
-                      <Play size={16} />
-                    ) : (
+                    Edit selected tasks / destination
+                  </button>
+                )}
+                {!done && !run.queued && (
+                  <>
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        control(
+                          run,
+                          run.state === "paused" ? "resume" : "pause",
+                        )
+                      }
+                    >
                       <Pause size={16} />
-                    )}{" "}
-                    {run.state === "paused"
-                      ? run.queued
-                        ? "Run queued batch"
-                        : "Resume"
-                      : "Pause waiting"}
-                  </button>
-                  <button
-                    disabled={busy || run.state === "canceled"}
-                    onClick={() => control(run, "cancel")}
+                      {run.state === "paused" ? "Resume" : "Pause waiting"}
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={() => control(run, "cancel")}
+                    >
+                      Cancel run
+                    </button>
+                  </>
+                )}
+              </div>
+              <div className="jobs-task-grid">
+                {attempts.map((j) => (
+                  <article
+                    className="jobs-task"
+                    data-selected={selected.includes(j.id)}
+                    key={j.id}
                   >
-                    Cancel run
-                  </button>
-                </div>
-              )}
-            </article>
+                    <div className="jobs-toolbar">
+                      {idle.some((q) => q.id === j.id) && (
+                        <Toggle
+                          label={`Select task ${j.id.slice(0, 8)}`}
+                          checked={selected.includes(j.id)}
+                          onChange={(v) =>
+                            setSelected((ids) =>
+                              v
+                                ? [...ids, j.id]
+                                : ids.filter((id) => id !== j.id),
+                            )
+                          }
+                        />
+                      )}
+                      <span className={`job-state state-${j.state}`}>
+                        {j.state}
+                      </span>
+                    </div>
+                    <strong>
+                      {p.workflows.find((w) => w.id === j.workflowId)?.name ??
+                        "Workflow"}
+                    </strong>
+                    <small>
+                      {settings.connections.find((c) => c.id === j.connectionId)
+                        ?.name ?? "Connection"}
+                    </small>
+                    {j.error && <small className="error">{j.error}</small>}
+                    <button disabled={busy} onClick={() => edit(run, [j.id])}>
+                      {idle.some((q) => q.id === j.id)
+                        ? "Edit task / destination"
+                        : "Reuse task"}
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </details>
           );
         })}
       </section>

@@ -67,13 +67,15 @@ export function WorkflowForm({
             (d) => d.binding.nodeId === nodeId && d.binding.input === input,
           );
           const kind =
-            /LoadImage/.test(f.classType) && input === "image"
+            descriptor?.binding.media?.kind ??
+            (/LoadImage/.test(f.classType) && input === "image"
               ? "image"
               : /LoadAudio/.test(f.classType) && input === "audio"
                 ? "audio"
                 : /LoadVideo/.test(f.classType) && input === "video"
                   ? "video"
-                  : undefined;
+                  : undefined);
+          setField("");
           setBindings((bs) => [
             ...bs,
             {
@@ -93,7 +95,9 @@ export function WorkflowForm({
                 ? {
                     media: {
                       kind,
-                      role: `reference${kind[0].toUpperCase()}${kind.slice(1)}`,
+                      role:
+                        descriptor?.binding.media?.role ??
+                        `reference${kind[0].toUpperCase()}${kind.slice(1)}`,
                       order: bs.length,
                     },
                   }
@@ -124,6 +128,7 @@ export function WorkflowForm({
                 group: l?.group ?? "",
                 hidden: l?.hidden ?? false,
                 advanced: l?.advanced ?? false,
+                optional: l?.optional ?? false,
                 ...value,
               },
             ],
@@ -209,6 +214,11 @@ export function WorkflowForm({
                 }}
               />
             )}
+            <Toggle
+              label="Optional (keep original default if unassigned)"
+              checked={l?.optional ?? false}
+              onChange={(optional) => changeLayout({ optional })}
+            />
             <Toggle
               label="Advanced"
               checked={l?.advanced ?? false}

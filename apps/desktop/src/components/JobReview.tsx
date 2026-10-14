@@ -87,7 +87,7 @@ export function JobReview({
           disabled={busy || !native || !!issues.length}
           onClick={() => submit(false)}
         >
-          {draft.queuedRunId ? "Save queue changes" : "Add to queue"}
+          {draft.queuedRunId || draft.queuedJobIds?.length ? "Save queue changes" : "Add to queue"}
         </button>
       </div>
       {preview != null && (
@@ -104,10 +104,10 @@ export function JobReview({
               disabled={busy}
               onClick={() => submit(false)}
             >
-              {draft.queuedRunId ? "Save queue changes" : "Add to queue"}
+              {draft.queuedRunId || draft.queuedJobIds?.length ? "Save queue changes" : "Add to queue"}
             </button>
             <button
-              disabled={busy || !!draft.queuedRunId}
+              disabled={busy || !!draft.queuedRunId || !!draft.queuedJobIds?.length}
               onClick={() => submit(true)}
             >
               Run now · {draft.items.length} jobs
