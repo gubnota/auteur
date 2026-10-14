@@ -57,6 +57,19 @@ Generated sources: `scripts/generate-notebooks.py` and `scripts/notebook-bootstr
 
 Sources: [GitLab macOS runners](https://docs.gitlab.com/ci/runners/hosted_runners/macos/), [Generic packages](https://docs.gitlab.com/user/packages/generic_packages/), [Release API](https://docs.gitlab.com/api/releases/).
 
-## 0.1.12 local delivery
+## Preparing a release
 
-The desktop, agent and package versions remain 0.1.12; no existing tag or published asset is replaced by this fix. The current reduced matrix is documented above. Published v0.1.12 lacks the relay; use a new relay-inclusive CI archive or publish a new source version before testing local notebook tunneling. Live GitLab and cloud GPU acceptance remain unverified.
+Version tags refer to committed files. `git add` only stages changes: tagging before committing still releases the previous source. Tags v0.1.13 and v0.1.14 both refer to source 0.1.12 and failed version validation. Preserve those tags; use the new 0.1.15 source version with its own commit/tag.
+
+Update Cargo workspace, npm workspace and Tauri versions together, including Cargo.lock and package-lock.json. Then validate, commit and publish the exact new tag:
+
+```sh
+RELEASE_TAG=v0.1.15 python3 scripts/check-release-version.py
+# Review and stage the intended release changes before committing.
+git commit -m "Release 0.1.15 with notebook relay setup"
+git tag v0.1.15
+git push origin main
+git push origin v0.1.15
+```
+
+The checker reports the requested tag and expected version when they differ. A tag push starts hosted builds; downloads appear only after all required jobs succeed. Do not force-move existing published tags or upload replacements under an old version. The installed app remains unchanged until a new desktop build is installed. Live GitLab and cloud GPU acceptance remain unverified.

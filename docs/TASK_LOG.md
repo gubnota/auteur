@@ -1,5 +1,11 @@
 # Task Log
 
+## 2026-10-15 — Release tag/source version recovery
+
+- v0.1.13/v0.1.14 point to e2d1a8c, which declares 0.1.12; staging the notebook/CI fixes did not include them in either tag. Preserve existing tags and prepare 0.1.15 on main with matching Cargo/npm/Tauri versions and lockfiles.
+- Retain strict tag validation; improve mismatch diagnostics with the actual tag, expected version and commit-before-tag guidance. Document the release sequence and separate hosted build status from published assets.
+- Verification: 43 Python tests, expected v0.1.15 tag validation, Cargo locked/offline workspace metadata, npm lockfile parity, deterministic notebook regeneration/Python 3.10 syntax, all three CI YAML parses and diff whitespace checks passed. Preparing a fresh v0.1.15 tag; hosted build/publication remains pending.
+
 ## 2026-10-15 — Notebook checksum setup and CI target reduction
 
 - Continued approved node setup/release scope on main. Both notebooks default to resolving a public GitHub release (including prereleases) and its metadata SHA256. Custom artifacts still require explicit source/checksum; downloads remain hash-verified before extraction. Metadata network failures omit secrets and distinguish public access from private authentication.

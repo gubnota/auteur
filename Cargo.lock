@@ -110,7 +110,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "asset-core"
-version = "0.1.12"
+version = "0.1.15"
 dependencies = [
  "project-core",
  "serde_json",
@@ -2091,7 +2091,7 @@ dependencies = [
 
 [[package]]
 name = "integration-core"
-version = "0.1.12"
+version = "0.1.15"
 dependencies = [
  "chrono",
  "project-core",
@@ -2243,7 +2243,7 @@ dependencies = [
 
 [[package]]
 name = "job-core"
-version = "0.1.12"
+version = "0.1.15"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2532,7 +2532,7 @@ dependencies = [
 
 [[package]]
 name = "mymovie-agent"
-version = "0.1.12"
+version = "0.1.15"
 dependencies = [
  "clap",
  "fs2",
@@ -2551,7 +2551,7 @@ dependencies = [
 
 [[package]]
 name = "mymovie-relay"
-version = "0.1.12"
+version = "0.1.15"
 dependencies = [
  "async-stream",
  "axum",
@@ -2565,7 +2565,7 @@ dependencies = [
 
 [[package]]
 name = "mymovie-studio"
-version = "0.1.12"
+version = "0.1.15"
 dependencies = [
  "asset-core",
  "async-trait",
@@ -3303,7 +3303,7 @@ dependencies = [
 
 [[package]]
 name = "project-core"
-version = "0.1.12"
+version = "0.1.15"
 dependencies = [
  "chrono",
  "fs2",
@@ -3318,7 +3318,7 @@ dependencies = [
 
 [[package]]
 name = "provider-comfyui"
-version = "0.1.12"
+version = "0.1.15"
 dependencies = [
  "asset-core",
  "async-trait",
@@ -3337,7 +3337,7 @@ dependencies = [
 
 [[package]]
 name = "provider-relay"
-version = "0.1.12"
+version = "0.1.15"
 dependencies = [
  "async-trait",
  "job-core",
@@ -3350,7 +3350,7 @@ dependencies = [
 
 [[package]]
 name = "provision-core"
-version = "0.1.12"
+version = "0.1.15"
 dependencies = [
  "project-core",
  "serde",
@@ -4297,7 +4297,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "storage-s3"
-version = "0.1.12"
+version = "0.1.15"
 dependencies = [
  "project-core",
  "reqwest 0.12.28",
@@ -4340,7 +4340,7 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "studio-contracts"
-version = "0.1.12"
+version = "0.1.15"
 dependencies = [
  "chrono",
  "serde",
@@ -6002,7 +6002,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "workflow-core"
-version = "0.1.12"
+version = "0.1.15"
 dependencies = [
  "project-core",
  "serde_json",

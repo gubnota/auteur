@@ -2,7 +2,7 @@
 
 Un studio de cinéma portable pour macOS : documents Finder `.mymovie`, épisodes et storyboard, personnages et médias partagés, workflows ComfyUI réutilisables et tâches traçables.
 
-Version des sources/de l’application : **0.1.12**. Les [téléchargements publiés](https://github.com/gubnota/auteur/releases/tag/v0.1.6) restent **v0.1.6**. La compilation locale macOS utilise une signature ad-hoc ; notarisation et validation sur les autres plateformes restent à faire.
+Version des sources/de l’application : **0.1.15**. Les [téléchargements publiés](https://github.com/gubnota/auteur/releases/tag/v0.1.12) restent **v0.1.12** jusqu’au succès des nouvelles compilations. Commitez les versions avant de créer le tag correspondant ; git add prépare seulement les changements. La compilation locale macOS utilise une signature ad-hoc ; notarisation et validation sur les autres plateformes restent à faire.
 
 ## Parcours unique
 

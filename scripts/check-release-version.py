@@ -12,9 +12,16 @@ def check(root, tag):
         assert json.loads((root / name).read_text())['version'] == version, f'Version mismatch: {name}'
     if tag:
         assert re.fullmatch(r'v\d+\.\d+\.\d+', tag), 'Release tag must be vX.Y.Z'
-        assert tag == f'v{version}', 'Tag must match all package versions'
+        assert tag == f'v{version}', (
+            f'Release tag {tag} does not match source version {version}; expected v{version}. '
+            'Update all package versions and lockfiles, commit the changes, then create a new matching tag. '
+            'git add only stages files; tags point to commits.'
+        )
     return version
 
 
 if __name__ == '__main__':
-    print('Version:', check(Path(__file__).resolve().parents[1], os.environ.get('CI_COMMIT_TAG') or os.environ.get('RELEASE_TAG', '')))
+    try:
+        print('Version:', check(Path(__file__).resolve().parents[1], os.environ.get('CI_COMMIT_TAG') or os.environ.get('RELEASE_TAG', '')))
+    except AssertionError as error:
+        raise SystemExit(f'Release validation failed: {error}') from None

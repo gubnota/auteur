@@ -2,7 +2,7 @@
 
 A portable film studio for macOS: Finder `.mymovie` packages, scenes and keyframes, shared characters and media, reusable ComfyUI workflows and traceable jobs.
 
-Current source/app version: **0.1.12**. [Published downloads](https://github.com/gubnota/auteur/releases/tag/v0.1.6) remain **v0.1.6** until a new tag passes all release builds. Local macOS builds use an ad-hoc signature; notarization and foreign-platform launch acceptance remain pending.
+Current source/app version: **0.1.15**. [Published downloads](https://github.com/gubnota/auteur/releases/tag/v0.1.12) remain **v0.1.12** until the new tag passes all release builds. Commit version changes before creating a matching tag; staging alone does not update a tag. Local macOS builds use an ad-hoc signature; notarization and foreign-platform launch acceptance remain pending.
 
 ## One workflow, many jobs
 

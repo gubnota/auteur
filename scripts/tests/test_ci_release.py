@@ -60,6 +60,20 @@ class ReleaseTests(unittest.TestCase):
         for tag in ['v99.0.0', 'v1.0', 'v1.0.0;cmd', '../v1.0.0']:
             with self.assertRaises(AssertionError): version.check(ROOT, tag)
 
+    def test_tag_mismatch_explains_versions_and_commit_order_in_ci(self):
+        current = version.check(ROOT, '')
+        env = dict(os.environ, RELEASE_TAG='v99.0.0', CI_COMMIT_TAG='')
+        result = subprocess.run(
+            [sys.executable, str(ROOT / 'scripts/check-release-version.py')],
+            env=env, capture_output=True, text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(f'Release tag v99.0.0 does not match source version {current}', result.stderr)
+        self.assertIn(f'expected v{current}', result.stderr)
+        self.assertIn('commit the changes', result.stderr)
+        self.assertIn('git add only stages files', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+
     def test_checksums_cover_all_artifacts_and_missing_binaries_block_publish(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); assets = root / 'release-assets'; assets.mkdir()
