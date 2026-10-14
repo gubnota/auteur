@@ -12,6 +12,17 @@ Un studio de cinéma local pour macOS, construit avec Rust, Tauri et React. Les 
 
 ![Médias regroupés dans le film](docs/screenshots/library-collected.png)
 
+## Main actuelle : Generate et configuration portable
+
+**Generate** propose création et modification d’images et vidéos, image de départ, références multiples, vidéo et audio via des entrées explicitement liées au workflow. Choisissez un nœud pour chaque tâche, ajoutez-la au lot enregistré, puis vérifiez et lancez le lot dans **Jobs**. Une instance ComfyUI utilise une file ; des instances distinctes travaillent en parallèle.
+
+**Workflows → Compatibility & initialization** propose les indicateurs Unspecified, Universal, Apple Silicon, CUDA, ROCm et CPU ainsi que les sources, empreintes, licences et destinations des modèles, plugins et wheels Python. Les [commandes portables](docs/WORKFLOW_SETUP.md) expliquent Python de l’instance, dossiers réels, installation, stockage privé, redémarrage et test de session. Le [guide RunPod/Colab](deploy/runpod/README.md) explique comment obtenir l’adresse HTTPS du relais.
+
+Main utilise le schéma **v3**, avec mise à niveau explicite et sauvegarde depuis v1/v2. Les binaires publiés **v0.1.5** ne contiennent pas encore ces fonctions ni les nouveaux fichiers de l’agent. La compilation native et les tests GPU locaux autorisés ont réussi ; les [preuves de validation](docs/GENERATION_ACCEPTANCE.md) distinguent exécution réelle, tests d’interface et tests cloud encore en attente.
+
+![Espace Generate](docs/screenshots/generate.png)
+
+
 ## Utiliser un film
 
 Créez un film et choisissez son emplacement, ou ouvrez un `.mymovie` existant. Modifiez les noms du film et des épisodes, ajoutez scènes et plans, puis organisez les images clés. Vous pouvez modifier prompts, commentaires, proportions et personnages. Chaque image hérite des personnages de sa scène.

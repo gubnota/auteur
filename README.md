@@ -12,6 +12,17 @@ A local-first macOS film studio built with Rust, Tauri and React. Movies are Fin
 
 ![Materials collected inside a movie](docs/screenshots/library-collected.png)
 
+## Current main: Generate and portable workflow setup
+
+**Generate** supports image/video creation and editing, start frames, multiple references, reference video and audio through explicit workflow bindings. Choose a node for each item, add it to a saved batch, then review and run all in **Jobs**. One ComfyUI instance queues work; different instances dispatch concurrently.
+
+**Workflows → Compatibility & initialization** provides Unspecified, Universal, Apple Silicon, CUDA, ROCm and CPU flags, plus reviewed model/plugin/wheel sources, hashes, licenses and destinations. [Portable setup commands](docs/WORKFLOW_SETUP.md) explain instance Python, effective model folders, plugin installation, private storage, restart and first-session canary. [RunPod/Colab connection instructions](deploy/runpod/README.md) explain the HTTPS relay address.
+
+Current main uses schema **v3**, with explicit backed-up upgrades from v1/v2. The published **v0.1.5** binaries do not contain these new features or runner helpers. A local native build and safe local GPU tests passed; [acceptance evidence](docs/GENERATION_ACCEPTANCE.md) distinguishes live results from fixture UI checks and pending cloud tests.
+
+![Generate workspace](docs/screenshots/generate.png)
+
+
 ## Working with a movie
 
 Create a movie and choose its location, or open an existing `.mymovie` package. Rename the movie and episodes, add scenes and shots, then arrange keyframes. Edit prompts, comments, aspect ratios and participating characters. Scene characters are inherited by their frames.
