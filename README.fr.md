@@ -20,6 +20,8 @@ Un studio de cinéma local pour macOS, construit avec Rust, Tauri et React. Les 
 
 Schéma **v4** : la mise à niveau depuis v1/v2/v3 exige confirmation et sauvegarde. Les anciennes applications ne peuvent pas ouvrir le paquet mis à niveau.
 
+L’application macOS installée a exécuté Generate → Jobs → Renders avec un workflow éditeur enregistré et le nœud local : PNG de 64 × 114 au format 9:16. Le format a été conservé après réouverture du film. Voir les [résultats de validation](docs/GENERATION_ACCEPTANCE.md).
+
 ![Espace Generate](docs/screenshots/generate.png)
 
 

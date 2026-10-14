@@ -63,7 +63,7 @@
 ## Documentation and references
 - PROJECT_CONTEXT, MODULE_OWNERSHIP, API_CONTRACTS, DECISIONS, TASK_LOG: compact memory.
 - IMPLEMENTATION_PLAN.md: approved scope and pending acceptance requirements.
-- WORKFLOW_CATALOGUE_PLAN.md: proposed reusable editor workflow/target pool, schema-generated forms and agent conversion increment; approval pending.
+- WORKFLOW_CATALOGUE_PLAN.md: approved reusable editor workflow/target pool, implemented schema-generated forms and agent conversion, with acceptance limits.
 - DESIGN_HANDOFF.md / WORKFLOW_AUDIT.md / BRIDGE_CONTRACT.md: design/workflow/boundary notes.
 - drafts/: ignored Base44 references; never stage these.
 - Sibling astrofenki, homer_studio, unipuni, whatsapp-sender: read-only references.
@@ -72,9 +72,9 @@
 - .gitlab-ci.yml: checks, macOS/Linux packages, version-tag registry/Release publication.
 - .github/workflows/: native macOS/Windows/Linux matrix and published tag prereleases.
 - scripts/ci-setup.sh, check-release-version.py, gitlab-release.py: toolchains and immutable release files.
-- scripts/package-agent.py: architecture-checked Linux x86_64/ARM64 agent archives, notebooks and checksums.
+- scripts/package-agent.py: architecture-checked Linux/macOS x86_64/ARM64 agent archives, compiler helpers, notebooks and checksums.
 - scripts/notebook-bootstrap.py / generate-notebooks.py: verified artifact and GPU worker setup.
 - deploy/colab/, deploy/kaggle/: generated notebooks; scripts/tests/: bootstrap/release regression.
-- examples/workflows/: CPU, text-to-image, masked-edit API/editor fixtures; actual UI exchange pending.
+- examples/workflows/: CPU, text-to-image, masked-edit API/editor fixtures; native mask editor import/preparation/export passed.
 - playwright.config.ts / e2e/: mocked native Jobs exact-input/persistence and RunningHub mapping acceptance.
 - docs/CI_RELEASES.md: runner requirements, tag and notebook artifact usage.

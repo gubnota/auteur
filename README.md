@@ -20,6 +20,8 @@ A local-first macOS film studio built with Rust, Tauri and React. Movies are Fin
 
 Documents use schema **v4**, with backed-up upgrades from v1/v2/v3. Local frontend compilation, safe MPS FaceSwap and the weight-free canary were tested; [acceptance evidence](docs/GENERATION_ACCEPTANCE.md) separates real execution, fixture UI checks and pending cloud tests.
 
+The installed macOS app completed Generate → Jobs → Renders using a saved editor workflow and local node, producing a 64 × 114 PNG at 9:16. The saved ratio also survived reopening the movie.
+
 ![Generate workspace](docs/screenshots/generate.png)
 
 

@@ -34,6 +34,18 @@ Mask receipt evidence:
 
 ## Native and automated checks
 
+The installed 0.1.6 app also submitted a real job through Generate → Jobs
+review → Validate/start. The saved mask editor workflow and local node were
+reused without uploading the workflow again. Its frozen inputs were width 64,
+height 114 and mask value 0.5. Renders collected the resulting 64 × 114 PNG
+inside the movie and displayed the generation provenance.
+
+- Attempt: `2336b2bd-5d3d-433e-a6b3-90d5cc9cb307`.
+- ComfyUI prompt: `8cdb6e8b-9b37-4a30-ac8d-aa172c6ff1f3`.
+- Workflow version: `ef8baa085837cadefba7fbbb635d01c722bf5ecfcb57e8d67e465bbd1cc31f6a`.
+- Result: 613 bytes, SHA256 `70a20b299d4007b09c6074c6c36aea72e3977d6eaa60876cdfe5bf59eb1d6dd6`.
+- Native receipt screenshot: [native-job-0.1.6.png](screenshots/native-job-0.1.6.png).
+
 The ARM64 macOS release build opened the completed disposable mask document.
 Its Workflows screen displayed the Universal flag, completed job and custom
 compatibility picker. Screenshot: [workflow-compatibility.png](screenshots/workflow-compatibility.png).
@@ -62,7 +74,7 @@ portable activation commands, and first-session initialization. See
 
 ## Catalogue/compiler acceptance, 0.1.6
 
-- Installed native 0.1.6 imported a normal mask editor source, prepared four inputs/one output, applied 9:16 (64×114), exported the three-node API and saved it to the global catalogue. [Native screenshot](screenshots/native-workflow-0.1.6.png). Export preserves prepared workflow defaults; draft values belong to the frozen job snapshot.
+- Installed native 0.1.6 imported a normal mask editor source, prepared four inputs/one output, applied 9:16 (64×114), exported the three-node API and saved it to the global catalogue. [Native screenshot](screenshots/native-workflow-0.1.6.png). Saved 9:16 dimensions restored after quitting/reopening. The installed compiler uses a persistent app-support environment and preparation passed again after that path change. Export preserves prepared workflow defaults; draft values belong to the frozen job snapshot.
 
 - Native agent CLI compiled the unchanged 29-node FaceSwap editor graph against local ComfyUI (1,894 registered classes), without submitting during conversion.
 - Compiler frontend hash: `a98d776a71f61b5ed006b7fdc1d7339ef5a3642a41c6e4dd1ac16d12ba6c85de`; compiler version `frontend-export-v1`.
