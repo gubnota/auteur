@@ -14,6 +14,59 @@ No secrets or signed URLs belong in this metadata. Unresolved dependencies block
 managed readiness. Direct connections can check installed registry models/nodes,
 but cannot attest or install their filesystem dependencies.
 
+## Import once, prepare for a saved target
+
+In **Workflows**, import ordinary ComfyUI editor JSON or API JSON once. It is
+pinned inside this movie and added to the local catalogue. In **Generate/Jobs**,
+choose **Browse workflow catalogue**, select a saved connection, then
+**Prepare / refresh inputs**. Preparation reads the live node registry and uses
+that instance’s frontend exporter for editor graphs. It does not submit a job.
+Two image loaders produce two independent media cards; text, numbers, booleans,
+choices and supported media loaders use typed controls. Linked inputs remain
+links. Unsupported custom controls are marked for manual bindings.
+
+Use **Customize input form** for saved labels, groups, order, advanced controls
+and output selection. Ratio applies to an explicit width/height pair, including
+active dynamic branch fields. Switching a dynamic branch requires re-export and
+preparation; arbitrary plugin frontend behavior is not universally guaranteed.
+**Export editor** preserves the source; **Export API** writes the prepared target
+profile. Runtime schema changes require refreshing preparation before dispatch.
+RunningHub reuses a saved authorized hosted deployment, not arbitrary graph uploads.
+
+### Compiler prerequisites (Mac or Linux)
+
+The agent archive includes the compiler helper and pinned requirements, not
+Python or Chromium. Install once in a dedicated environment on the machine
+performing compilation. On the Mac, set **Settings → General → Compiler Python**
+to its Python path; an optional browser executable override supports an existing
+compatible Chromium installation. For an outbound worker, set these paths on its
+`serve` command (see `mymovie-agent serve --help`).
+
+```sh
+RUNNER_DIR="/path/to/extracted-agent"
+COMPILER_ENV="/path/to/mymovie-compiler-env"
+python3 -m venv "$COMPILER_ENV"
+"$COMPILER_ENV/bin/python" -m pip install -r "$RUNNER_DIR/workflow-compiler-requirements.txt"
+"$COMPILER_ENV/bin/python" -m playwright install chromium
+# Linux: install Chromium system libraries with your administrator, or use
+# python -m playwright install --with-deps chromium in a reviewed build environment.
+
+"$RUNNER_DIR/mymovie-agent" workflow-compile \
+  --comfy-url http://127.0.0.1:8188 --data /path/to/agent-data \
+  --workflow-source /path/to/workflow_editor.json \
+  --workflow-compiler "$RUNNER_DIR/mymovie_workflow_compiler.py" \
+  --python "$COMPILER_ENV/bin/python" > compilation-receipt.json
+```
+
+The receipt contains `graph` plus source/API/registry/frontend hashes. The CLI
+also offers `workflow-inspect` and `workflow-install`; check their `--help` for
+required paths. Installation registers an immutable source in agent-owned
+storage. It does not replace the active ComfyUI canvas or write a user’s workflow
+folder. Compilation loads it into an isolated temporary browser context, exports
+through ComfyUI, then closes that context. Missing plugins, models and licenses
+remain reviewed initialization requirements; filenames do not identify trusted
+weight download URLs.
+
 ## Portable paths and activation
 
 On the **machine running ComfyUI**, use that instance's Python environment and
@@ -24,14 +77,13 @@ already installed matching weights. Categories include `diffusion_models`,
 `text_encoders`, `vae`, `loras`, `checkpoints`, and plugin-specific categories.
 Unknown categories must be configured before installation. Existing conflicting
 files are never silently overwritten. Mac, Linux and Windows paths are accepted
-by the Python helper; the published outbound agent targets Linux. On macOS,
-use a locally built agent (`cargo build -p mymovie-agent`) for these CLI checks;
-the Linux binary cannot run on a Mac. For Windows, activate its instance Python
+by the Python helper; published agents target Linux x86_64/ARM64 and macOS Intel/Apple Silicon.
+Download the matching archive; a Linux binary cannot run on a Mac. For Windows, activate its instance Python
 and use `python.exe` paths with the helper; a Windows outbound agent is not shipped.
 
 Export **workflow-setup.json** from the workflow modal. It contains a list of
-workflows with API graphs, exact bindings and setup requirements. Editor exports
-are preserved separately when imported together.
+workflows with API graphs, exact bindings and setup requirements. Normal editor imports retain their original JSON; preparation creates a separate
+target-specific API profile.
 
 ```sh
 # Replace these three paths with paths on this ComfyUI machine.

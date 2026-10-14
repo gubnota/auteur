@@ -1,5 +1,23 @@
 # Task Log
 
+## 2026-10-14 — Catalogue, compiler and generated forms: 0.1.6
+
+- User approved WORKFLOW_CATALOGUE_PLAN.md with `go`; implementation on main. Import normal editor/API JSON once into immutable catalogue versions; portable v4 project pins, target profiles, layouts and saved target selection.
+- Agent CLI/relay inspect/install/compile and desktop Prepare use the selected ComfyUI frontend exporter in an isolated sidecar. API/editor exports, registry-derived controls, separate media roles, advanced fields, constrained ratios and output labels/selections implemented. RunningHub reuses explicit hosted deployment mappings.
+- Python/Playwright/Chromium are compiler prerequisites; native binaries do not embed a browser. The agent registry preserves editor sources but does not overwrite a live canvas. Existing reviewed dependency installation remains the managed-worker gate.
+- Real compiler: 29-node FaceSwap, 1,894 registry classes; safe local MPS execution completed with two traceable results. Normal core mask editor compiled too. Native app imported the editor, prepared four inputs/one output, changed ratio to 9:16 (64×114), exported a three-node API and saved catalogue entry. Screenshot: screenshots/native-workflow-0.1.6.png.
+- Verification: 38 Rust tests, 10 frontend tests, 7 mocked browser acceptance tests, 28 Python tests; typecheck, formatting, native ARM64 production build and version parity passed. Loopback fixtures require sandbox elevation. Native 0.1.6 installed in /Applications; release publication tracked in CI_RELEASES.md.
+- GitHub/GitLab now package macOS Intel/ARM agents alongside Linux x86_64/ARM64 agents and five desktop targets. Compiler helper/requirements and architecture checks included. Hosted release validation pending at this entry's creation.
+- Gaps: active cloud/relay and paid RunningHub acceptance, actual Finder drop test, comprehensive primitive/reroute/bypass/subgraph/custom-serializer fixtures, foreign desktop launch, signing/notarization. No paid cloud resources used. Private media, credentials, drafts and unrelated cpu-canary.png excluded.
+
+## 2026-10-14 — Reusable editor workflows and execution targets: planning
+
+- User requests a reusable workflow/target pool, automatically generated forms from actual node types, and agent editor-to-API conversion for local/remote ComfyUI; RunningHub remains a mapped hosted test target.
+- Inspected native importer, bindings, Generate, agent command capabilities and the live Base44 Generate/Custom Nodes/Workflow screens. Native import currently rejects editor JSON; preserved editor pairs are not automatic conversion.
+- Official frontend exporter uses custom widget serializers and virtual/subgraph handling; registry/widget-position guessing cannot establish conversion fidelity.
+- Implementation-ready proposal: docs/WORKFLOW_CATALOGUE_PLAN.md. Includes native catalogue/project pins, target fingerprints, compiler proof first, generated typed forms, preparation/session checks, repeated jobs and macOS/Linux utility artifacts.
+- This entry records the planning state; user subsequently approved it. Implementation and verification are recorded above.
+
 ## 2026-10-14 — Generate, compatibility and verified node setup
 
 - Implemented the approved Generate plan on main: standalone image/video modes, exact ordered image/video/audio slots, shared Jobs review and saved batches. Same endpoints retain FIFO; distinct endpoints retain parallel dispatch.

@@ -140,3 +140,13 @@ Context: User needs standalone image/video generation, exact multi-media workflo
 Decision: Share exact typed input resolution across Generate and Jobs; persist standalone drafts and explicit media roles in schema v3. Declare compatibility explicitly. Inventory the real ComfyUI Python environment and effective model paths; managed workers install only reviewed hash-pinned artifacts, then restart/re-inventory and run a session canary. Keep existing Mac environments read-only.
 Consequences: No guessed loader IDs, automatic compatibility conversion, plugin pip scripts or implicit weight downloads. Profile builders resolve runtime pins and reviewed wheelhouses instead of shipping a misleading universal ready profile. Live cloud acceptance requires an actual reachable session; local GPU success does not prove cloud deployment.
 Related files: docs/GENERATE_IMPLEMENTATION_PLAN.md, docs/WORKFLOW_SETUP.md, apps/desktop/src/features/Generate.tsx, apps/agent/src/provision.rs, deploy/runner/mymovie_runtime.py.
+
+# ADR-0015: Immutable catalogue and target-specific frontend compilation
+
+Date: 2026-10-14
+Status: Accepted
+
+Context: Repeated JSON upload and guessed widgets prevented reliable custom workflow jobs.
+Decision: Import once into a local immutable catalogue and portable movie pin. Preserve editor JSON and export API through the selected ComfyUI frontend in an isolated read-only browser context. Describe literal inputs from its live registry; remember targets and editable layouts. Freeze target profile/output selection and recheck registry before dispatch. Publish compiler sidecars in native Linux/macOS agent artifacts.
+Consequences: Requires Python/Playwright/Chromium and a reachable compatible runtime for preparation. Unsupported custom controls and dynamic branch switching need explicit bindings/re-export. RunningHub uses authorized hosted maps. Global catalogue changes never mutate project pins or old receipts.
+Related files: docs/WORKFLOW_CATALOGUE_PLAN.md, crates/workflow-core/src/schema.rs, crates/integration-core/src/catalogue.rs, deploy/runner/mymovie_workflow_compiler.py, apps/desktop/src/components/WorkflowTarget.tsx.

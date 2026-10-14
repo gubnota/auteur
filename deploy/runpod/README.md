@@ -11,7 +11,7 @@ Branch builds on GitHub publish `comfyui-agent-linux-x86_64`; GitLab publishes
 Use `mymovie-agent-linux-x86_64.tar.gz`, its `.json` metadata and
 `SHA256SUMS-agent.txt` from the **same build**. The archive contains the actual
 ELF x86_64 agent, this guide, the runtime helper, profile preparer and tiny test workflows.
-The new initialization bundle is in current source/CI builds; published v0.1.5
+The new initialization bundle is in current source/CI builds; published v0.1.6
 archives predate it. Use the archive and bootstrap from the same new build. It is built on Ubuntu 22.04; use a compatible
 Linux x86_64 image with glibc 2.35 or newer.
 
@@ -128,3 +128,7 @@ runner with its pinned ComfyUI commit. The notebook reports the node ID and port
 allowlist that ID at the relay and add it to Connections. Keep the notebook alive.
 Start with `mask-canary_api.json`, then the reviewed u2netp profile. Two Kaggle
 GPUs use two independent workers/ports and parallel jobs, not shared VRAM.
+
+### Editor workflow compilation
+
+The agent archive includes `mymovie_workflow_compiler.py` and `workflow-compiler-requirements.txt`. Install them in a dedicated Python environment with Playwright Chromium. Configure `serve --workflow-compiler` and `--python`; the app can then prepare ordinary editor graphs through that worker. See [compiler setup](../../docs/WORKFLOW_SETUP.md). Compilation registers a preserved source and exports through an isolated ComfyUI frontend; it does not replace the active canvas or submit a job.

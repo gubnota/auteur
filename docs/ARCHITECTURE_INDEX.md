@@ -63,6 +63,7 @@
 ## Documentation and references
 - PROJECT_CONTEXT, MODULE_OWNERSHIP, API_CONTRACTS, DECISIONS, TASK_LOG: compact memory.
 - IMPLEMENTATION_PLAN.md: approved scope and pending acceptance requirements.
+- WORKFLOW_CATALOGUE_PLAN.md: proposed reusable editor workflow/target pool, schema-generated forms and agent conversion increment; approval pending.
 - DESIGN_HANDOFF.md / WORKFLOW_AUDIT.md / BRIDGE_CONTRACT.md: design/workflow/boundary notes.
 - drafts/: ignored Base44 references; never stage these.
 - Sibling astrofenki, homer_studio, unipuni, whatsapp-sender: read-only references.

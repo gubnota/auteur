@@ -45,3 +45,10 @@
 - Native Jobs reserves/persists before dispatch; provider I/O runs outside the global project mutex.
 - Every asynchronous result is scoped to the original project/session; job-core owns durable FIFO/slots.
 - React edits saved drafts only; native preflight is authoritative before any upload.
+
+## Catalogue/compiler ownership
+- integration-core/catalogue owns local immutable workflow versions; project-core owns portable pins and v4 migration/backups.
+- workflow-core/schema normalizes live registries and validates target profiles; it cannot perform UI or provider I/O.
+- Agent and desktop service coordinate compilation; Python helper delegates serialization to selected ComfyUI frontend, without generation.
+- WorkflowCatalogue/WorkflowTarget/WorkflowInputs own saved selection and forms; no frontend JSON-to-API conversion heuristics.
+- CI packages sidecars and architecture-verified agents; tests separate mock UI evidence from live execution.

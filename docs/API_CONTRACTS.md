@@ -3,7 +3,7 @@
 ## Project persistence
 - Rust DTOs: crates/studio-contracts/src/lib.rs; camelCase serde JSON.
 - Manual TS mirror: apps/desktop/src/lib/types.ts; generated parity pending.
-- Schema v3: manifest.json + project.sqlite; SQLite authoritative.
+- Schema v4: manifest.json + project.sqlite; SQLite authoritative.
 - Tables: project(id=1, revision, json), jobs(id,json), history(revision,json), projections(id,pending), job_runs(id,json).
 - save_project(project, expectedRevision): UUID identity, revision conflict check, validated references.
 - Recoverable projections: manifest, scene keyframes/board.json, character.json, versioned workflow definition.json.
@@ -112,3 +112,13 @@
 - renewOnly lease reports refresh running/collecting/cancel_requested leases without overwriting state/progress/remoteId; terminal jobs stay terminal.
 - New CI agent archive includes runtime helper, profile builder, tiny paired workflows, model descriptor and deterministic pinned plugin archive. Published v0.1.5 lacks these new files.
 - v3 upgrades preserve pre-upgrade SQLite/manifest backups; older clients reject upgraded packages.
+
+## Workflow catalogue and preparation
+- Workflow source/version immutable; global catalogue SQLite and portable movie pins have independent ownership.
+- Native: list_workflows, catalogue_workflow(workflowId), pin_workflow(workflowId), save_workflow_layout(workflowId,layout), prepare_workflow(workflowId,connectionId), export_workflow(workflowId,path,editor:boolean,connectionId).
+- WorkflowProfile: connectionId/sourceHash/apiHash/registryHash/frontendHash/compilerVersion/graph/inputs/outputs. Stale registry fails before uploads; frozen jobs retain compiled profile and output layout.
+- Inputs describe literal nodeId/input, type/control/default/constraints/choices/media role; graph links are excluded. Layout aliases/groups/order/advanced/hidden are persisted separately.
+- ComfyUI V3 COMBO options and active dotted dynamic dimensions supported; changing a dynamic branch requires preparation. Unsupported values require explicit bindings.
+- Agent typed workflow-inspect/install/compile operations take bounded editor source, check immutable hash and write confined agent-owned source/compiled/receipt paths.
+- Compiler emits graph + registry + hashes; installation does not replace a user's active canvas. No execution during compilation; same-origin read-only browser traffic, no external requests.
+- Result output selection filters ComfyUI nodeId metadata; providers lacking node metadata retain all results.

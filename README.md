@@ -1,8 +1,8 @@
 # MyMovie Studio
 
-[Download releases](https://github.com/gubnota/auteur/releases/tag/v0.1.5) — macOS Apple Silicon/Intel, Windows x64, Linux x86_64/ARM64 and headless ComfyUI agents. Windows installers are unsigned; macOS notarization remains pending.
+[Download releases](https://github.com/gubnota/auteur/releases/tag/v0.1.6) — macOS Apple Silicon/Intel, Windows x64, Linux x86_64/ARM64 and headless ComfyUI agents. Windows installers are unsigned; macOS notarization remains pending.
 
-Version **0.1.5** adds Windows x64 and Linux ARM64 builds. The Jobs workspace provides saved batches, exact typed inputs, automatic FIFO on one ComfyUI instance and parallel dispatch to different instances. RunPod ComfyUI is the main execution target; RunningHub is for workflow tests. Opening an older document requests approval for a backed-up schema v2 upgrade; older app versions cannot open the upgraded package.
+Version **0.1.6** adds a reusable workflow catalogue, automatic editor-to-API compilation against the selected ComfyUI frontend, generated input forms, real dimension controls and macOS/Linux agent utilities. Jobs preserve exact inputs, queue on one instance and run in parallel across different instances. RunPod ComfyUI is the main execution target; RunningHub tests saved hosted deployments. Older documents upgrade to schema v4 only after an explicit backed-up migration; older apps cannot open the upgraded package.
 
 Release build: `npm run tauri:build -- --bundles app`; output: `target/release/bundle/macos/MyMovie Studio.app`. Local installation uses an ad-hoc signature; Apple notarization remains pending.
 
@@ -18,7 +18,7 @@ A local-first macOS film studio built with Rust, Tauri and React. Movies are Fin
 
 **Workflows → Compatibility & initialization** provides Unspecified, Universal, Apple Silicon, CUDA, ROCm and CPU flags, plus reviewed model/plugin/wheel sources, hashes, licenses and destinations. [Portable setup commands](docs/WORKFLOW_SETUP.md) explain instance Python, effective model folders, plugin installation, private storage, restart and first-session canary. [RunPod/Colab connection instructions](deploy/runpod/README.md) explain the HTTPS relay address.
 
-Current main uses schema **v3**, with explicit backed-up upgrades from v1/v2. The published **v0.1.5** binaries do not contain these new features or runner helpers. A local native build and safe local GPU tests passed; [acceptance evidence](docs/GENERATION_ACCEPTANCE.md) distinguishes live results from fixture UI checks and pending cloud tests.
+Documents use schema **v4**, with backed-up upgrades from v1/v2/v3. Local frontend compilation, safe MPS FaceSwap and the weight-free canary were tested; [acceptance evidence](docs/GENERATION_ACCEPTANCE.md) separates real execution, fixture UI checks and pending cloud tests.
 
 ![Generate workspace](docs/screenshots/generate.png)
 
@@ -46,7 +46,7 @@ Native picker import and linked character reference collection were verified in 
 
 ## Workflows and connections
 
-Import an API-format workflow and explicitly bind its prompt, image and other inputs. `characterReference1` through `characterReference4` can use reference images from the scene/frame cast. The app does not guess arbitrary node mappings.
+Import a normal editor or API workflow once through **Browse workflow catalogue**. Select the saved workflow and execution node in Generate/Jobs, then **Prepare / refresh inputs**. Preparation derives controls from that instance’s real registry and exports through its installed frontend. Install the compiler prerequisites once using [setup instructions](docs/WORKFLOW_SETUP.md). Media slots, text, choices and numeric constraints appear automatically; customize labels, groups, Advanced visibility and collected outputs. Reuse this form and target for later jobs. Unsupported custom serializers/types remain explicit requirements. For API-specific semantic overrides, bind its prompt, image and other inputs. `characterReference1` through `characterReference4` can use reference images from the scene/frame cast. The app does not guess arbitrary node mappings.
 
 Connections support multiple ComfyUI, RunningHub and private-relay records. Google, DeepSeek and OpenRouter prompt assistance is optional. Enter secrets through secure app controls; credentials are stored in the macOS Keychain. fal/custom generation endpoints currently have configuration UI only.
 
@@ -62,18 +62,18 @@ Items sharing a normalized ComfyUI endpoint queue in FIFO order, including dupli
 
 Pause affects waiting items; cancel also requests cancellation of active work. Reopened unsent items are paused until **Resume waiting**. Unknown submissions block their lane until reconciled; other instances continue. The Runs history and Renders provenance retain run/item IDs and exact snapshots.
 
-The schema v2 upgrade creates SQLite/manifest backups under the package’s `backups/` directory. Keep a complete copy of the original package if you need to continue using an older app.
+The schema v4 upgrade creates SQLite/manifest backups under the package’s `backups/` directory. Keep a complete copy of the original package if you need to continue using an older app.
 
 ![Jobs in the native macOS app](docs/screenshots/jobs-workspace.png)
 
 ## Private RunPod ComfyUI
 
-Use the [RunPod agent guide](deploy/runpod/README.md) to deploy the CI-built Linux x86_64/ARM64 agent beside private ComfyUI. It connects outbound to an authenticated HTTPS relay; no public ComfyUI port is required. CI packages the real ELF agent, setup guide, metadata and SHA-256 checksums. Weights and custom nodes must already be installed. Automatic LoRA/runtime S3 synchronization and a live private RunPod/GPU roundtrip remain pending.
+Use the [RunPod agent guide](deploy/runpod/README.md) to deploy the CI-built Linux x86_64/ARM64 agent beside private ComfyUI. It connects outbound to an authenticated HTTPS relay; no public ComfyUI port is required. CI packages the real ELF agent, setup guide, metadata and SHA-256 checksums. The archive includes runtime and workflow compiler helpers. Managed initialization supports reviewed hash-pinned models/plugins/wheels and private transfer manifests; live installation and the private RunPod/S3/GPU roundtrip remain pending.
 
 ## RunningHub: create a job
 
 1. Add a RunningHub account in **Connections** and save its key with the secure credential control.
-2. Import the API workflow in **Workflows**. In **RunningHub deployments**, select the account, API family (**Workflow** or **AI App**) and the hosted ID for that exact deployment. An imported JSON graph does not contain proof of a hosted deployment; do not substitute an unrelated AI App ID. An account default is optional.
+2. Import the API workflow once in **Workflows**, then reuse it from the catalogue. In **RunningHub deployments**, select the account, API family (**Workflow** or **AI App**) and the hosted ID for that exact deployment. An imported JSON graph does not contain proof of a hosted deployment; do not substitute an unrelated AI App ID. An account default is optional.
 3. Configure **Job input bindings** with node IDs, field names and value types from that deployment’s API schema. Character reference slots use the assigned scene/frame cast.
 4. Choose **Target keyframe**, click **Create generation job**, then select the account, review the values and **Review exact inputs** → **Validate & start**. Missing setup is explained in the dialog.
 
@@ -123,7 +123,7 @@ Keep the OrbStack/Docker engine running; the OrbStack window may be closed. The 
 
 ## Current limits
 
-This is a development foundation. Live RunningHub generation, weighted ComfyUI workflow exchange, private relay/S3/RunPod roundtrip, live notebook deployment, signing/notarization and complete Finder-drop acceptance remain pending. All five native desktop builds and both Linux agent builds/smoke tests passed for 0.1.5; all 19 public downloads passed checksum and format checks. Desktop runtime checks on Windows and Linux remain pending. Browser profiles, remote LoRA training and the complete FFmpeg derivative pipeline are later milestones. No paid generation or cloud rental was performed during validation.
+This is a development foundation. Live RunningHub generation, private relay/S3/RunPod roundtrip, live notebook deployment, signing/notarization and complete Finder-drop acceptance remain pending. The historical 0.1.5 release passed all five native desktop and two Linux agent builds; 0.1.6 also adds Mac agent builds. Current publication evidence is in the task log. Desktop runtime checks on Windows and Linux remain pending. Browser profiles, remote LoRA training and the complete FFmpeg derivative pipeline are later milestones. No paid generation or cloud rental was performed during validation.
 
 See [architecture](docs/ARCHITECTURE_INDEX.md), [contracts](docs/API_CONTRACTS.md) and [test evidence](docs/TASK_LOG.md). Agents should read the six compact context documents before targeted source inspection. Keep `drafts/`, secrets and personal movie packages out of Git.
 

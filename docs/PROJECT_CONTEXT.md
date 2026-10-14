@@ -10,7 +10,7 @@
 ## Current milestone
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
 - Native Generate/media setup implemented; live private cloud acceptance remains open.
-- Version 0.1.3 installed: Jobs drafts, exact inputs and automatic endpoint queues implemented and locally verified.
+- Version 0.1.6: reusable catalogue and target-specific compiler/forms implemented; publication evidence is in TASK_LOG.
 - Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.
 - Real SQLite package persistence; browser preview is memory-only.
@@ -66,13 +66,13 @@
 - Execution adapters: ComfyUI, RunningHub and private relay.
 - Google, DeepSeek and OpenRouter optional prompt assistance implemented.
 - fal/custom API generation adapters remain configuration-only.
-- Imported graphs require explicit semantic bindings; no guessed graph IDs.
+- Prepared graphs expose registry-derived literal inputs; explicit aliases/media roles remain editable. No guessed graph IDs.
 - Workflows expose keyframe job creation and per-account RunningHub deployment/family maps.
 - Provider rejections become failed; ambiguous submissions require history reconciliation.
 - Durable jobs/receipts/results; unknown submission blocks blind retry.
 - ComfyUI URL FIFO (one active); relay URL + node FIFO/capacity; RunningHub account capacity.
 - Saved independent batches, exact typed inputs and frozen run/item provenance.
-- v1/v2→v3 requires explicit backup/upgrade; SQLite and manifest backups retained.
+- v1/v2/v3→v4 requires explicit backup/upgrade; SQLite and manifest backups retained.
 - Reopening unsent work pauses it; unknown submissions keep their lane occupied.
 - Desktop polls providers; relay offers authenticated replayable SSE.
 - Desktop SSE consumption and result-handoff chains remain open.
@@ -89,7 +89,7 @@
 
 ## Private runner and storage
 - RunPod ComfyUI is the primary execution target; RunningHub is for workflow tests.
-- Authenticated node-scoped relay and outbound Linux x86_64/ARM64 agents are initial implementations.
+- Authenticated node-scoped relay and outbound Linux/macOS x86_64/ARM64 agents are initial implementations.
 - CI publishes checksummed ELF agent archive and deploy/runpod/README.md; no public pod IP needed.
 - Independent Kaggle workers isolate GPU/port/node identity; live deployment pending.
 - Agent exposes typed doctor/inventory/drain/bootstrap/provision operations.
@@ -135,3 +135,11 @@
 - Update contracts, decisions and task evidence with each tested increment.
 - Make small commits; review staging for drafts, secrets and generated output.
 - Push authorized tested work without force.
+
+## Workflow catalogue milestone
+- Approved scope: docs/WORKFLOW_CATALOGUE_PLAN.md.
+- Immutable local catalogue; each movie pins portable versions and remembers targets/layouts.
+- Original editor JSON retained; selected frontend exports API in an isolated compiler context.
+- Compiler requires Python/Playwright/Chromium; instructions: docs/WORKFLOW_SETUP.md.
+- Target profiles carry source/API/registry/frontend hashes; dispatch checks current registry.
+- Two-image FaceSwap editor conversion and local weighted pipeline verified; cloud acceptance remains open.

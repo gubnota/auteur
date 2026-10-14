@@ -1,8 +1,8 @@
 # MyMovie Studio
 
-[Télécharger les releases](https://github.com/gubnota/auteur/releases/tag/v0.1.5) — macOS Apple Silicon/Intel, Windows x64, Linux x86_64/ARM64 et agents ComfyUI. Les installateurs Windows ne sont pas signés ; la notarisation macOS reste à réaliser.
+[Télécharger les releases](https://github.com/gubnota/auteur/releases/tag/v0.1.6) — macOS Apple Silicon/Intel, Windows x64, Linux x86_64/ARM64 et agents ComfyUI. Les installateurs Windows ne sont pas signés ; la notarisation macOS reste à réaliser.
 
-La version **0.1.5** ajoute les builds Windows x64 et Linux ARM64. Jobs propose des lots enregistrés, des entrées typées exactes, une FIFO pour chaque instance ComfyUI et un envoi parallèle vers des instances distinctes. ComfyUI sur RunPod est la cible principale ; RunningHub sert aux tests de workflows. L’ouverture d’un ancien document demande une mise à niveau sauvegardée vers le schéma v2 ; les anciennes versions ne peuvent pas ouvrir ce paquet mis à niveau.
+La version **0.1.6** ajoute un catalogue commun de workflows, la préparation du JSON éditeur via le ComfyUI sélectionné, des formulaires issus des types réels et les agents macOS/Linux. Importez une fois puis réutilisez les versions et destinations dans Generate et Jobs.
 
 Compilation release : `npm run tauri:build -- --bundles app` ; résultat : `target/release/bundle/macos/MyMovie Studio.app`. L’installation locale utilise une signature ad hoc ; la notarisation Apple reste à réaliser.
 
@@ -18,7 +18,7 @@ Un studio de cinéma local pour macOS, construit avec Rust, Tauri et React. Les 
 
 **Workflows → Compatibility & initialization** propose les indicateurs Unspecified, Universal, Apple Silicon, CUDA, ROCm et CPU ainsi que les sources, empreintes, licences et destinations des modèles, plugins et wheels Python. Les [commandes portables](docs/WORKFLOW_SETUP.md) expliquent Python de l’instance, dossiers réels, installation, stockage privé, redémarrage et test de session. Le [guide RunPod/Colab](deploy/runpod/README.md) explique comment obtenir l’adresse HTTPS du relais.
 
-Main utilise le schéma **v3**, avec mise à niveau explicite et sauvegarde depuis v1/v2. Les binaires publiés **v0.1.5** ne contiennent pas encore ces fonctions ni les nouveaux fichiers de l’agent. La compilation native et les tests GPU locaux autorisés ont réussi ; les [preuves de validation](docs/GENERATION_ACCEPTANCE.md) distinguent exécution réelle, tests d’interface et tests cloud encore en attente.
+Schéma **v4** : la mise à niveau depuis v1/v2/v3 exige confirmation et sauvegarde. Les anciennes applications ne peuvent pas ouvrir le paquet mis à niveau.
 
 ![Espace Generate](docs/screenshots/generate.png)
 
@@ -45,6 +45,10 @@ Avant de transférer le film, utilisez **Collect for export**. Cette commande v�
 L’importation par dialogue natif et le regroupement d’une référence de personnage liée ont été vérifiés dans l’application macOS.
 
 ## Workflows et connexions
+
+Importez un JSON éditeur standard ou API une seule fois. Dans **Generate**, choisissez **Browse workflow catalogue**, une destination puis **Prepare / refresh inputs**. Le graphe original est conservé ; le frontend du ComfyUI sélectionné produit l’API. Images, vidéos, audio, textes, nombres et choix ont leurs propres contrôles. Deux LoadImage produisent deux références indépendantes pour FaceSwap ; les liens du graphe restent des liens.
+
+**Customize input form** enregistre les libellés, groupes, ordre et résultats sélectionnés. Le ratio modifie uniquement les dimensions width/height liées ; choisissez la paire si plusieurs existent. Changer de branche dynamique exige une nouvelle préparation. **Export API** utilise le profil préparé de la destination. Installation Python, Playwright et Chromium : [WORKFLOW_SETUP](docs/WORKFLOW_SETUP.md). RunningHub réutilise un déploiement autorisé enregistré ; les graphes arbitraires ne sont pas publiés automatiquement.
 
 Importez un workflow au format API et associez explicitement ses entrées : prompts, images et autres paramètres. Les entrées `characterReference1` à `characterReference4` peuvent utiliser les images de référence des personnages de la scène/image. L’application ne devine pas les identifiants des nœuds.
 
@@ -118,10 +122,4 @@ Le moteur OrbStack/Docker doit rester actif ; la fenêtre OrbStack peut être fe
 
 ## Limites actuelles
 
-Il s’agit d’une base de développement. Génération RunningHub réelle, échange de workflows ComfyUI avec poids, parcours complet relay/S3/RunPod privé, déploiement réel des notebooks, signature/notarisation et validation du glisser-déposer Finder restent à terminer. Les cinq builds natifs de l’application et les builds/tests des deux agents Linux ont réussi pour 0.1.5 ; les 19 téléchargements publics ont passé les vérifications de sommes de contrôle et de format. L’exécution de l’application sous Windows et Linux reste à valider. Les profils de navigateur, l’entraînement LoRA distant et le pipeline FFmpeg complet sont prévus ultérieurement. Aucun traitement payant ni location cloud n’a été effectué pendant la validation.
-
-[Architecture](docs/ARCHITECTURE_INDEX.md) · [Contrats](docs/API_CONTRACTS.md) · [Preuves de validation](docs/TASK_LOG.md). Les agents doivent lire les six documents compacts de contexte avant une inspection ciblée. Excluez de Git `drafts/`, secrets et films personnels.
-
-Licence : Apache-2.0 OR MIT ; [Apache](LICENSE-APACHE), [MIT](LICENSE-MIT).
-
-Bundled font licenses: [Manrope](docs/licenses/Manrope-OFL.txt), [IBM Plex Mono](docs/licenses/IBM-Plex-Mono-OFL.txt).
+La génération RunningHub réelle, relay/S3/RunPod distant, notebooks cloud, notarisation et gestes Finder restent à valider. L’export éditeur→API local et FaceSwap avec poids ont été vérifiés ; les résultats portent les empreintes et la provenance du job. Les plugins personnalisés exigent un frontend compatible et une vérification des dépendances. Profils de navigateur, entraînement LoRA et pipeline FFmpeg complet restent des étapes ultérieures.
