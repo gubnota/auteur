@@ -33,6 +33,31 @@ pub fn describe(
     let mut inputs = vec![];
     let mut outputs = vec![];
     let mut media_order = 0;
+    let mut active = std::collections::HashSet::new();
+    let mut pending: Vec<String> = graph
+        .as_object()
+        .unwrap()
+        .iter()
+        .filter(|(_, n)| registry[n["class_type"].as_str().unwrap()]["output_node"] == true)
+        .map(|(id, _)| id.clone())
+        .collect();
+    let known_outputs = !pending.is_empty();
+    while let Some(id) = pending.pop() {
+        if !active.insert(id.clone()) {
+            continue;
+        }
+        for v in graph[&id]["inputs"].as_object().unwrap().values() {
+            if let Some(parent) = v
+                .as_array()
+                .filter(|a| a.len() == 2 && a[1].is_u64())
+                .and_then(|a| a[0].as_str())
+            {
+                if graph.get(parent).is_some() {
+                    pending.push(parent.into());
+                }
+            }
+        }
+    }
     for (id, node) in graph.as_object().unwrap() {
         let ty = node["class_type"].as_str().unwrap();
         let definition = registry
@@ -73,7 +98,10 @@ pub fn describe(
                             | ("audio", "LoadAudio", "audio")
                     )
             });
-            let (control, value_type) = if media.is_some() {
+            let inactive = known_outputs && !active.contains(id);
+            let (control, value_type) = if media.is_some() && inactive {
+                ("unsupported", "string")
+            } else if media.is_some() {
                 ("media", "string")
             } else if choices.is_some() {
                 (
@@ -103,16 +131,16 @@ pub fn describe(
                 }
             };
             let semantic = format!("{id}.{field}");
-            let media = media.map(|kind| {
+            let media = media.filter(|_| !inactive).map(|kind| {
                 let order = media_order;
                 media_order += 1;
                 MediaBinding {
                     kind: kind.into(),
                     // Enumeration order says nothing about source/reference semantics.
-                    role: if kind == "image" {
-                        "referenceImage"
-                    } else {
-                        kind
+                    role: match kind {
+                        "image" => "referenceImage",
+                        "video" => "referenceVideo",
+                        _ => "referenceAudio",
                     }
                     .into(),
                     order,
@@ -127,16 +155,16 @@ pub fn describe(
                     media,
                 },
                 label: format!("{label} · {field}"),
-                required: definition["input"]["required"].get(field).is_some(),
+                required: !inactive && definition["input"]["required"].get(field).is_some(),
                 control: control.into(),
                 default: value.clone(),
                 choices: choices.cloned().unwrap_or_default(),
                 min: options["min"].as_f64(),
                 max: options["max"].as_f64(),
                 step: options["step"].as_f64(),
-                advanced: !matches!(control, "media" | "multiline"),
+                advanced: inactive || !matches!(control, "media" | "multiline"),
                 group: String::new(),
-                hidden: false,
+                hidden: inactive,
             });
         }
     }
@@ -179,12 +207,12 @@ pub fn fingerprint(graph: &Value, registry: &Value) -> Result<String> {
                         );
                     if inventory && spec[0].is_array() {
                         spec[0] = Value::String("RUNTIME_INVENTORY".into());
-                        if let Some(options) = spec[1].as_object_mut() {
+                        if let Some(options) = spec.get_mut(1).and_then(Value::as_object_mut) {
                             options.remove("default");
                         }
                     }
                     if inventory && spec[0] == "COMBO" {
-                        if let Some(options) = spec[1].as_object_mut() {
+                        if let Some(options) = spec.get_mut(1).and_then(Value::as_object_mut) {
                             options.remove("default");
                             options.insert(
                                 "options".into(),
@@ -221,6 +249,16 @@ pub fn fingerprint(graph: &Value, registry: &Value) -> Result<String> {
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn inventory_schema_without_options_is_valid() {
+        let graph = json!({"1":{"class_type":"VAELoader","inputs":{"vae_name":"a.safetensors"}}});
+        let mut registry =
+            json!({"VAELoader":{"input":{"required":{"vae_name":[["a.safetensors"]]}}}});
+        let initial = fingerprint(&graph, &registry).unwrap();
+        registry["VAELoader"]["input"]["required"]["vae_name"][0] = json!(["b.safetensors"]);
+        assert_eq!(initial, fingerprint(&graph, &registry).unwrap());
+        assert_eq!(describe(&graph, &registry).unwrap().0.len(), 1);
+    }
     #[test]
     fn fingerprint_ignores_only_known_inventory_and_unrelated_classes() {
         let graph =
@@ -279,10 +317,140 @@ mod tests {
             fields[0].binding.media.as_ref().unwrap().role,
             "referenceImage"
         );
-        assert_eq!(
-            fields[1].binding.media.as_ref().unwrap().role,
-            "referenceImage"
-        );
+        assert!(fields[1].binding.media.is_none());
+        assert!(!fields[1].required);
+        assert!(fields[1].hidden && fields[1].advanced);
+        assert_eq!(fields[1].default, "b.png");
         assert_eq!(outputs[0].node_id, "3");
+    }
+}
+
+/// Validate the reusable public form without altering immutable graph literals.
+pub fn validate_form(
+    graph: &Value,
+    bindings: &[Binding],
+    layout: &studio_contracts::WorkflowLayout,
+) -> Result<()> {
+    let mut names = std::collections::HashSet::new();
+    let mut fields = std::collections::HashSet::new();
+    for b in bindings {
+        let v = graph
+            .get(&b.node_id)
+            .and_then(|n| n["inputs"].get(&b.input))
+            .ok_or("Binding field missing; prepare this target first")?;
+        if b.semantic.trim().is_empty()
+            || b.semantic.len() > 200
+            || !names.insert(&b.semantic)
+            || !fields.insert((&b.node_id, &b.input))
+        {
+            return Err("Inputs need unique nonempty names and fields".into());
+        }
+        if v.as_array().is_some_and(|a| {
+            a.len() == 2
+                && a[0].is_string()
+                && a[1].is_u64()
+                && graph.get(a[0].as_str().unwrap()).is_some()
+        }) {
+            return Err("Internal graph links cannot be bound as literals".into());
+        }
+        if !["string", "number", "boolean", "json"].contains(&b.value_type.as_str())
+            || b.media.as_ref().is_some_and(|m| {
+                b.value_type != "string" || !["image", "video", "audio"].contains(&m.kind.as_str())
+            })
+        {
+            return Err("Invalid input type or media kind".into());
+        }
+    }
+    if bindings.len() > 4096
+        || layout.inputs.len() > 4096
+        || layout.outputs.len() > 1024
+        || layout.inputs.iter().any(|l| {
+            l.media_role.as_ref().is_some_and(|r| {
+                ![
+                    "sourceImage",
+                    "startFrame",
+                    "endFrame",
+                    "referenceImage",
+                    "mask",
+                    "referenceVideo",
+                    "referenceAudio",
+                    "sourceVideo",
+                    "sourceAudio",
+                    "characterReference",
+                ]
+                .contains(&r.as_str())
+            })
+        })
+        || layout
+            .outputs
+            .iter()
+            .any(|l| l.label.trim().is_empty() || l.label.len() > 200)
+        || layout
+            .inputs
+            .iter()
+            .any(|l| l.label.trim().is_empty() || l.label.len() > 200 || l.group.len() > 100)
+    {
+        return Err("Use short, nonempty input labels".into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod form_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn public_form_rejects_links_duplicate_fields_and_invalid_media_types() {
+        let graph = json!({"1":{"class_type":"LoadImage","inputs":{"image":"x.png"}},"2":{"class_type":"SaveImage","inputs":{"images":["1",0]}}});
+        let layout = studio_contracts::WorkflowLayout::default();
+        let b = Binding {
+            semantic: "source".into(),
+            node_id: "1".into(),
+            input: "image".into(),
+            value_type: "string".into(),
+            media: Some(MediaBinding {
+                kind: "image".into(),
+                role: "sourceImage".into(),
+                order: 0,
+            }),
+        };
+        assert!(validate_form(&graph, &[b.clone()], &layout).is_ok());
+        assert!(
+            validate_form(
+                &graph,
+                &[
+                    b.clone(),
+                    Binding {
+                        semantic: "other".into(),
+                        ..b.clone()
+                    }
+                ],
+                &layout
+            )
+            .is_err()
+        );
+        assert!(
+            validate_form(
+                &graph,
+                &[Binding {
+                    node_id: "2".into(),
+                    input: "images".into(),
+                    ..b.clone()
+                }],
+                &layout
+            )
+            .is_err()
+        );
+        assert!(
+            validate_form(
+                &graph,
+                &[Binding {
+                    value_type: "number".into(),
+                    ..b
+                }],
+                &layout
+            )
+            .is_err()
+        );
     }
 }

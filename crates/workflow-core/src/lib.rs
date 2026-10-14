@@ -96,6 +96,13 @@ pub fn for_target(w: &Workflow, connection: &str) -> Result<Workflow> {
         return Err("Prepare this editor workflow on the selected execution target first".into());
     }
     for input in &mut result.inputs {
+        if let Some(binding) = result
+            .bindings
+            .iter()
+            .find(|b| b.node_id == input.binding.node_id && b.input == input.binding.input)
+        {
+            input.binding = binding.clone();
+        }
         if let Some(layout) = w
             .layout
             .inputs
@@ -458,6 +465,7 @@ mod tests {
                 .read()
                 .unwrap();
         p.assets.push(studio_contracts::Asset {
+            archived_at: None,
             id: "ref".into(),
             name: "Character.png".into(),
             path: "media/originals/ref.png".into(),
@@ -613,6 +621,11 @@ pub fn resolve_item(
                 None
             }
             .ok_or_else(|| format!("Select media for {} before generation", b.semantic))?;
+            if asset.archived_at.is_some() {
+                return Err(
+                    format!("Restore {} from Library Trash before queueing", asset.name).into(),
+                );
+            }
             let kind = b.media.as_ref().map(|m| m.kind.as_str()).unwrap_or("image");
             if asset.kind != kind {
                 return Err(format!("{} requires {kind} media", b.semantic).into());

@@ -828,3 +828,85 @@ pub async fn export_workflow_setup(
     }
     project_core::atomic_json(dest, &json!([workflow])).map_err(err)
 }
+
+/// Import and assign by content ID in one document revision, never by filename.
+#[tauri::command]
+pub async fn import_job_media(
+    state: S<'_>,
+    draft_id: String,
+    item_id: String,
+    semantic: String,
+    path: String,
+    linked: Option<bool>,
+) -> Reply<ImportResult> {
+    let mut i = state.inner.lock().await;
+    let s = i.project.as_mut().ok_or("No movie open")?;
+    let mut p = s.read().map_err(err)?;
+    let item = p
+        .job_drafts
+        .iter()
+        .find(|d| d.id == draft_id)
+        .and_then(|d| d.items.iter().find(|x| x.id == item_id))
+        .ok_or("Job input no longer exists")?;
+    let w = workflow_core::for_target(
+        p.workflows
+            .iter()
+            .find(|w| w.id == item.workflow_id)
+            .ok_or("Workflow missing")?,
+        &item.connection_id,
+    )
+    .map_err(err)?;
+    let b = item
+        .bindings
+        .as_ref()
+        .unwrap_or(&w.bindings)
+        .iter()
+        .find(|b| b.semantic == semantic)
+        .ok_or("Configure this workflow input first")?;
+    let kind = b
+        .media
+        .as_ref()
+        .map(|m| m.kind.as_str())
+        .or_else(|| {
+            (b.semantic == "image"
+                || b.semantic == "mask"
+                || b.semantic.starts_with("characterReference"))
+            .then_some("image")
+        })
+        .ok_or("Select a media input")?;
+    let candidate = asset_core::import_with_mode(s.path(), Path::new(&path), true).map_err(err)?;
+    if candidate.kind != kind {
+        return Err(format!("This input requires {kind}"));
+    }
+    if b.media
+        .as_ref()
+        .is_some_and(|m| m.role == "characterReference")
+        || b.semantic.starts_with("characterReference")
+    {
+        return Err(
+            "Import references through Characters, assign the cast, then select its image".into(),
+        );
+    }
+    let id = asset_core::import_reusing(
+        s.path(),
+        &mut p.assets,
+        Path::new(&path),
+        linked.unwrap_or(false),
+    )
+    .map_err(err)?;
+    p.job_drafts
+        .iter_mut()
+        .find(|d| d.id == draft_id)
+        .unwrap()
+        .items
+        .iter_mut()
+        .find(|x| x.id == item_id)
+        .unwrap()
+        .assets
+        .insert(semantic, id.clone());
+    let revision = p.revision;
+    Ok(ImportResult {
+        project: s.save(p, revision).map_err(err)?,
+        asset_ids: vec![id],
+    })
+}

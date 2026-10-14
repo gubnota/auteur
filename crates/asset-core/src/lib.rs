@@ -29,6 +29,7 @@ pub fn import_with_mode(root: &Path, source: &Path, linked: bool) -> Result<Asse
         let source = fs::canonicalize(source)?;
         let (sha256, size) = hash_file(&source)?;
         return Ok(Asset {
+            archived_at: None,
             id: id(),
             name: source
                 .file_name()
@@ -90,6 +91,7 @@ pub fn import_with_mode(root: &Path, source: &Path, linked: bool) -> Result<Asse
         File::open(&dir)?.sync_all()?;
     }
     Ok(Asset {
+        archived_at: None,
         id: id(),
         name: source
             .file_name()
@@ -231,6 +233,30 @@ pub fn import_drop(
         },
     )
 }
+/// Resolve content identity before copying. Re-importing never implicitly collects links.
+pub fn import_reusing(
+    root: &Path,
+    assets: &mut Vec<Asset>,
+    path: &Path,
+    linked: bool,
+) -> Result<String> {
+    let candidate = import_with_mode(root, path, true)?;
+    if let Some(old) = assets.iter_mut().find(|a| {
+        a.sha256 == candidate.sha256 && a.size == candidate.size && a.kind == candidate.kind
+    }) {
+        source(root, old, true)?;
+        old.archived_at = None;
+        return Ok(old.id.clone());
+    }
+    let asset = if linked {
+        candidate
+    } else {
+        import(root, path)?
+    };
+    let id = asset.id.clone();
+    assets.push(asset);
+    Ok(id)
+}
 /// One metadata revision per batch. Failed batches never partially edit the board.
 pub fn import_target(
     root: &Path,
@@ -313,22 +339,7 @@ pub fn import_target(
     }
     let mut asset_ids = vec![];
     for path in paths {
-        let asset = import_with_mode(root, Path::new(path), t.linked)?;
-        let asset_id = if let Some(old) = p
-            .assets
-            .iter_mut()
-            .find(|a| a.path == asset.path && a.sha256 == asset.sha256)
-        {
-            // A copy import also collects an already-linked identical original.
-            if !t.linked {
-                old.source_path = None;
-            }
-            old.id.clone()
-        } else {
-            let id = asset.id.clone();
-            p.assets.push(asset);
-            id
-        };
+        let asset_id = import_reusing(root, &mut p.assets, Path::new(path), t.linked)?;
         asset_ids.push(asset_id);
     }
     if let Some(id) = t.character {
@@ -632,5 +643,78 @@ mod drop_tests {
         assert!(source(&root, &saved.assets[0], false).is_err());
         assert!(collect(&root, saved.clone()).is_err());
         assert_eq!(store.read().unwrap().revision, saved.revision);
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+    #[test]
+    fn reuse_precedes_copy_preserves_link_and_restores_without_changing_references() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("Reuse.mymovie");
+        let mut store = project_core::ProjectStore::create(&root, "Reuse", true).unwrap();
+        let first = dir.path().join("same.png");
+        let other = dir.path().join("other.png");
+        fs::write(&first, include_bytes!("../../../fixtures/cpu-canary.png")).unwrap();
+        fs::copy(&first, &other).unwrap();
+        let mut p = store.read().unwrap();
+        let id = import_reusing(&root, &mut p.assets, &first, true).unwrap();
+        p.characters.push(studio_contracts::Character {
+            id: project_core::id(),
+            name: "Actor".into(),
+            description: "".into(),
+            asset_ids: vec![id.clone()],
+            revision: 0,
+        });
+        p.assets[0].archived_at = Some("2026-10-14T12:00:00Z".into());
+        let rev = p.revision;
+        p = store.save(p, rev).unwrap();
+        assert_eq!(
+            import_reusing(&root, &mut p.assets, &other, false).unwrap(),
+            id
+        );
+        assert!(p.assets[0].source_path.is_some());
+        assert!(p.assets[0].archived_at.is_none());
+        assert_eq!(
+            fs::read_dir(root.join("media/originals"))
+                .map(|entries| entries.count())
+                .unwrap_or(0),
+            0
+        );
+        fs::write(&other, b"different content with same extension").unwrap();
+        let second = import_reusing(&root, &mut p.assets, &other, false).unwrap();
+        assert_ne!(second, id);
+        assert_eq!(p.assets.len(), 2);
+        assert_eq!(
+            fs::read_dir(root.join("media/originals")).unwrap().count(),
+            1
+        );
+        p.assets[0].archived_at = Some("2026-10-14T12:00:00Z".into());
+        let rev = p.revision;
+        store.save(p, rev).unwrap();
+        drop(store);
+        let reopened = project_core::ProjectStore::open(&root)
+            .unwrap()
+            .read()
+            .unwrap();
+        assert!(reopened.assets[0].archived_at.is_some());
+        assert_eq!(
+            reopened
+                .characters
+                .iter()
+                .find(|c| c.name == "Actor")
+                .unwrap()
+                .asset_ids,
+            vec![id]
+        );
+        let mut legacy = serde_json::to_value(&reopened.assets[0]).unwrap();
+        legacy.as_object_mut().unwrap().remove("archivedAt");
+        assert!(
+            serde_json::from_value::<Asset>(legacy)
+                .unwrap()
+                .archived_at
+                .is_none()
+        );
     }
 }

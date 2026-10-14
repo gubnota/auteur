@@ -377,6 +377,12 @@ pub fn validate(p: &Project) -> Result<()> {
     }
     for a in &p.assets {
         check(&a.id)?;
+        if a.archived_at
+            .as_ref()
+            .is_some_and(|s| chrono::DateTime::parse_from_rfc3339(s).is_err())
+        {
+            return Err("Invalid asset Trash timestamp".into());
+        }
         if a.source_path
             .as_ref()
             .is_some_and(|s| !Path::new(s).is_absolute())

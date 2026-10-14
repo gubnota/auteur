@@ -59,8 +59,62 @@ fn preflight(i: &Inner, draft: &JobDraft) -> Result<Vec<Job>> {
 fn chrono_now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
+// Refresh only new attempts. Frozen receipts and dispatch validation stay immutable.
+async fn prepare_draft(state: &Studio, draft: &JobDraft) -> Reply<()> {
+    let (epoch, targets) = {
+        let i = state.inner.lock().await;
+        let p = store(&i).map_err(err)?.read().map_err(err)?;
+        let mut targets = vec![];
+        for item in &draft.items {
+            let c = connection(&i, &item.connection_id).map_err(err)?;
+            if !["comfyui", "relay"].contains(&c.kind.as_str()) {
+                continue;
+            }
+            let w = p
+                .workflows
+                .iter()
+                .find(|w| w.id == item.workflow_id)
+                .ok_or("Workflow missing")?;
+            let profile = w.profiles.iter().find(|x| x.connection_id == c.id);
+            if !targets.iter().any(
+                |(id, target, _): &(String, Connection, Option<CompiledProfile>)| {
+                    id == &w.id && target.id == c.id
+                },
+            ) {
+                targets.push((w.id.clone(), c, profile.cloned()));
+            }
+        }
+        (i.session, targets)
+    };
+    for (w, c, profile) in targets {
+        let refresh = if c.kind == "relay" {
+            true // Runner inspects its private registry; the desktop cannot reach it directly.
+        } else if let Some(profile) = profile.filter(|p| p.registry_hash.starts_with("scope-v1:")) {
+            let registry = provider_comfyui::ComfyUi::new(&c.url)
+                .map_err(err)?
+                .get("/object_info")
+                .await
+                .map_err(err)?;
+            workflow_core::schema::fingerprint(&profile.graph, &registry).map_err(err)?
+                != profile.registry_hash
+        } else {
+            true
+        };
+        if state.inner.lock().await.session != epoch {
+            return Err("Movie changed during preparation; review again".into());
+        }
+        if refresh {
+            catalogue::prepare_target(state, w, c.id).await?;
+        }
+    }
+    if state.inner.lock().await.session != epoch {
+        return Err("Movie changed during preparation; review again".into());
+    }
+    Ok(())
+}
 #[tauri::command]
 pub async fn preview_job_draft(state: S<'_>, draft: JobDraft) -> Reply<Value> {
+    prepare_draft(state.inner(), &draft).await?;
     let i = state.inner.lock().await;
     preflight(&i, &draft)
         .map(|jobs| json!({"items": jobs.iter().map(|j| &j.snapshot).collect::<Vec<_>>() }))
@@ -117,6 +171,24 @@ async fn freeze_draft(
         .ok_or("Draft missing; wait for it to save")?;
     if draft.queued_run_id.is_some() && draft.queued_run_id != replace {
         return Err("This draft edits an existing queue. Save queue changes or keep it as a separate draft first".into());
+    }
+    let epoch = i.session;
+    drop(i);
+    prepare_draft(state.inner(), &draft).await?;
+    let i = state.inner.lock().await;
+    let current = store(&i)
+        .map_err(err)?
+        .read()
+        .map_err(err)?
+        .job_drafts
+        .into_iter()
+        .find(|d| d.id == draft.id)
+        .ok_or("Draft missing")?;
+    if i.session != epoch
+        || serde_json::to_value(&current).map_err(err)?
+            != serde_json::to_value(&draft).map_err(err)?
+    {
+        return Err("Draft changed during preparation; review again".into());
     }
     let mut attempts = preflight(&i, &draft).map_err(err)?;
     let run = JobRun {
@@ -341,13 +413,8 @@ async fn poll(
                     .unwrap_or("png");
                 let tmp = dir.path().join(format!("result.{ext}"));
                 std::fs::write(&tmp, bytes)?;
-                let a = asset_core::import(s.path(), &tmp)?;
-                let a = if let Some(old) = p.assets.iter().find(|old| old.path == a.path) {
-                    old.clone()
-                } else {
-                    p.assets.push(a.clone());
-                    a
-                };
+                let asset_id = asset_core::import_reusing(s.path(), &mut p.assets, &tmp, false)?;
+                let a = p.assets.iter().find(|a| a.id == asset_id).unwrap().clone();
                 j.results.push(a);
             }
             let rev = p.revision;

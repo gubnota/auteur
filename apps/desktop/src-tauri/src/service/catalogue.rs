@@ -149,6 +149,13 @@ pub async fn prepare_workflow(
     workflow_id: String,
     connection_id: String,
 ) -> Reply<Project> {
+    prepare_target(state.inner(), workflow_id, connection_id).await
+}
+pub(super) async fn prepare_target(
+    state: &Studio,
+    workflow_id: String,
+    connection_id: String,
+) -> Reply<Project> {
     let (w, c, epoch, python, browser) = {
         let i = state.inner.lock().await;
         let p = store(&i).map_err(err)?.read().map_err(err)?;
@@ -322,4 +329,36 @@ pub async fn export_workflow(
             .graph
     };
     project_core::atomic_json(Path::new(&path), &graph).map_err(err)
+}
+
+#[tauri::command]
+pub async fn save_workflow_form(
+    state: S<'_>,
+    workflow_id: String,
+    bindings: Vec<studio_contracts::Binding>,
+    connection_id: String,
+    layout: studio_contracts::WorkflowLayout,
+) -> Reply<Project> {
+    let mut i = state.inner.lock().await;
+    let s = i.project.as_mut().ok_or("Movie closed")?;
+    let mut p = s.read().map_err(err)?;
+    let w = p
+        .workflows
+        .iter_mut()
+        .find(|w| w.id == workflow_id)
+        .ok_or("Workflow missing")?;
+    let graph = w
+        .profiles
+        .iter()
+        .find(|x| x.connection_id == connection_id)
+        .map(|x| &x.graph)
+        .unwrap_or(&w.graph);
+    workflow_core::schema::validate_form(graph, &bindings, &layout).map_err(err)?;
+    w.bindings = bindings;
+    w.layout = layout;
+    let catalogued = w.clone();
+    let revision = p.revision;
+    let saved = s.save(p, revision).map_err(err)?;
+    i.settings.put_workflow(&catalogued).map_err(err)?;
+    Ok(saved)
 }

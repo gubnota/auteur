@@ -17,6 +17,13 @@ pub struct Project {
     #[serde(default)]
     pub job_drafts: Vec<JobDraft>,
 }
+/// Atomic import response: identities are authoritative, never basename matches.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportResult {
+    pub project: Project,
+    pub asset_ids: Vec<String>,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Episode {
@@ -74,6 +81,8 @@ pub struct Character {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Asset {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<String>,
     pub id: String,
     pub name: String,
     pub path: String,
