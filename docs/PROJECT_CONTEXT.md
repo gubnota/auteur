@@ -121,9 +121,9 @@
 - LTX prompt/image bindings and account deployment saved through native UI; live acceptance pending.
 - LTX image input requires an assigned frame image; AI App schema and RunPod choices remain open.
 - GitLab/GitHub CI configure native packages, Linux client and version-tag release artifacts.
-- Published 0.1.5: macOS ARM/Intel, Windows x64, Linux x86_64/ARM64 desktops and agents, notebooks.
-- All seven native builds passed; publication recovered after upload-directory bug; future uploader fixed.
-- All 19 public assets anonymously downloaded and checksum/format/architecture verified; evidence: TASK_LOG.
+- Published 0.1.6: macOS ARM/Intel, Windows x64, Linux x86_64/ARM64 desktops; four Mac/Linux agents and notebooks.
+- All nine native builds and automatic publication passed in hosted run 38557508498.
+- All 34 public assets anonymously downloaded and checksum/format/architecture verified; evidence: CI_RELEASES.md.
 - Tags publish complete GitHub prereleases after checks/builds; published assets are protected against rerun overwrite.
 - GitLab execution, signing/notarization and full access audit remain open.
 - Browser profiles, remote training and Homer interoperability are later work.

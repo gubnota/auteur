@@ -125,7 +125,7 @@ Keep the OrbStack/Docker engine running; the OrbStack window may be closed. The 
 
 ## Current limits
 
-This is a development foundation. Live RunningHub generation, private relay/S3/RunPod roundtrip, live notebook deployment, signing/notarization and complete Finder-drop acceptance remain pending. The historical 0.1.5 release passed all five native desktop and two Linux agent builds; 0.1.6 also adds Mac agent builds. Current publication evidence is in the task log. Desktop runtime checks on Windows and Linux remain pending. Browser profiles, remote LoRA training and the complete FFmpeg derivative pipeline are later milestones. No paid generation or cloud rental was performed during validation.
+This is a development foundation. Live RunningHub generation, private relay/S3/RunPod roundtrip, live notebook deployment, signing/notarization and complete Finder-drop acceptance remain pending. The published 0.1.6 release passed all five native desktop and four Mac/Linux agent builds; all 34 public downloads passed independent checksum, format and architecture verification. [Publication evidence](docs/CI_RELEASES.md) records the exact source and successful hosted run. Desktop runtime checks on Windows and Linux remain pending. Browser profiles, remote LoRA training and the complete FFmpeg derivative pipeline are later milestones. No paid generation or cloud rental was performed during validation.
 
 See [architecture](docs/ARCHITECTURE_INDEX.md), [contracts](docs/API_CONTRACTS.md) and [test evidence](docs/TASK_LOG.md). Agents should read the six compact context documents before targeted source inspection. Keep `drafts/`, secrets and personal movie packages out of Git.
 

@@ -21,7 +21,7 @@ The Windows job requires a prepared x64 PowerShell shell runner tagged `WINDOWS_
 
 Create/protect release tags in the GitLab project settings. Enable the Package Registry. Publication uses the built-in `CI_JOB_TOKEN`; no personal access token is stored in this repository. Tag pipelines use the same source checks as branch pipelines. Failed checks/builds prevent publication.
 
-macOS artifacts are ad-hoc signed and are not Apple-notarized. Distribution signing/notarization is a separate unfinished release step. All five desktop builds and both native Linux agent smoke tests passed on GitHub for 0.1.5. GitLab execution remains unverified; foreign desktop binaries were not launched on this Mac.
+macOS artifacts are ad-hoc signed and are not Apple-notarized. Distribution signing/notarization is a separate unfinished release step. All five desktop builds and all four native Linux/macOS agent smoke tests passed on GitHub for 0.1.6. GitLab execution remains unverified; foreign desktop binaries were not launched on this Mac.
 
 ## GitHub
 
@@ -33,7 +33,9 @@ Future release uploads select only regular files; an empty-directory regression 
 
 ## 0.1.6 verification
 
-Local source acceptance: 38 Rust tests, 10 frontend tests, seven browser tests and 28 Python tests passed. Normal editor import/preparation/API export and saved input reuse were checked in the installed macOS app. Hosted 0.1.6 checks and release publication are pending until the new commit/tag is pushed.
+Local source acceptance: 38 Rust tests, 10 frontend tests, seven mocked browser tests and 28 Python tests passed. Normal editor import/preparation/API export and saved input reuse were checked in the installed macOS app. Native Generate → Jobs → Renders produced a 64 × 114 PNG from the saved mask workflow; local MPS FaceSwap also completed.
+
+[Hosted run 38557508498](https://github.com/gubnota/auteur/actions/runs/38557508498) passed source checks, all five desktop builds, all four native agent builds/smoke tests and automatic publication. [Published v0.1.6](https://github.com/gubnota/auteur/releases/tag/v0.1.6) contains 34 assets from exact source `950c707849eb5082d6a7651ec57ab9cc3353184d`. Every public file was downloaded anonymously and verified against asset/global SHA-256. Installer formats, DEB version/architecture, Linux ELF and macOS Mach-O architectures, and agent source/compiler/runtime/bootstrap metadata passed independent verification. No publication recovery or tag replacement was needed.
 
 ## RunPod agent (primary target)
 
@@ -41,7 +43,7 @@ GitHub branch builds expose **comfyui-agent-linux-x86_64** and **comfyui-agent-l
 
 Workflow compilation additionally requires Python, the pinned `workflow-compiler-requirements.txt` dependencies and Playwright Chromium; the browser is not embedded in the archive. See [workflow setup](WORKFLOW_SETUP.md) for installation and inspect/install/compile commands. Direct local/remote compilation uses the selected ComfyUI frontend exporter without opening its interface or changing a live canvas.
 
-Hosted agent acceptance: both architectures built and passed native help/version smoke tests in [run 38512704998](https://github.com/gubnota/auteur/actions/runs/38512704998). Durable downloads: [x86_64 archive](https://github.com/gubnota/auteur/releases/download/v0.1.5/mymovie-agent-linux-x86_64.tar.gz), [ARM64 archive](https://github.com/gubnota/auteur/releases/download/v0.1.5/mymovie-agent-linux-aarch64.tar.gz). Use the corresponding release metadata/checksums to verify the archive and bootstrap. Branch artifacts expire after 14 days; version-tag releases provide durable distribution links. Cloud GPU execution is a separate acceptance step.
+Hosted agent acceptance: Linux and macOS, each on x86_64 and ARM64, built and passed native help/version smoke tests in [run 38557508498](https://github.com/gubnota/auteur/actions/runs/38557508498). Durable Linux downloads: [x86_64 archive](https://github.com/gubnota/auteur/releases/download/v0.1.6/mymovie-agent-linux-x86_64.tar.gz), [ARM64 archive](https://github.com/gubnota/auteur/releases/download/v0.1.6/mymovie-agent-linux-aarch64.tar.gz). macOS utilities are available from the same release. Use the corresponding release metadata/checksums to verify the archive and bootstrap. Branch artifacts expire after 14 days; version-tag releases provide durable distribution links. Cloud GPU execution is a separate acceptance step.
 
 ## Colab/Kaggle deployment
 
