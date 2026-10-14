@@ -592,7 +592,7 @@ export function Workflows({
     [mediaKind, setMediaKind] = useState("all");
   const w = p.workflows.find((w) => w.id === selected);
   return (
-    <>
+    <div className="col">
       <PageTitle
         eyebrow="GENERATION DEFINITIONS"
         title="Workflows"
@@ -604,25 +604,27 @@ export function Workflows({
           </button>
         }
       />
-      <Picker
-        title="Preparation target"
-        value={targetId}
-        options={settings.connections
-          .filter((c) => ["comfyui", "relay"].includes(c.kind))
-          .map((c) => ({ id: c.id, label: c.name, description: c.kind }))}
-        onChange={setTargetId}
-      />
-      <Picker
-        title="Workflow category"
-        value={mediaKind}
-        options={[
-          { id: "all", label: "All workflows" },
-          { id: "image", label: "Image workflows" },
-          { id: "video", label: "Video workflows" },
-          { id: "other", label: "Other workflows" },
-        ]}
-        onChange={setMediaKind}
-      />
+      <div className="row">
+        <Picker
+          title="Preparation target"
+          value={targetId}
+          options={settings.connections
+            .filter((c) => ["comfyui", "relay"].includes(c.kind))
+            .map((c) => ({ id: c.id, label: c.name, description: c.kind }))}
+          onChange={setTargetId}
+        />
+        <Picker
+          title="Workflow category"
+          value={mediaKind}
+          options={[
+            { id: "all", label: "All workflows" },
+            { id: "image", label: "Image workflows" },
+            { id: "video", label: "Video workflows" },
+            { id: "other", label: "Other workflows" },
+          ]}
+          onChange={setMediaKind}
+        />
+      </div>
       {p.workflows.length === 0 ? (
         <Empty
           title="Bring your workflow"
@@ -646,9 +648,21 @@ export function Workflows({
                 key={w.id}
                 onClick={() => setSelected(w.id)}
               >
-                {w.wrapper?.illustration ? <img className="workflow-card-cover" src={w.wrapper.illustration} alt=""/> : <WorkflowIcon size={28} />}
+                {w.wrapper?.illustration ? (
+                  <img
+                    className="workflow-card-cover"
+                    src={w.wrapper.illustration}
+                    alt=""
+                  />
+                ) : (
+                  <WorkflowIcon size={28} />
+                )}
                 <strong>{w.name}</strong>
-                {w.wrapper?.collection && <small>{w.wrapper.collection} · {w.wrapper.variantName}</small>}
+                {w.wrapper?.collection && (
+                  <small>
+                    {w.wrapper.collection} · {w.wrapper.variantName}
+                  </small>
+                )}
                 <small>
                   {Object.keys(w.graph).length
                     ? `${Object.keys(w.graph).length} nodes · ${w.bindings.length} bindings`
@@ -662,45 +676,61 @@ export function Workflows({
             ))}
         </div>
       )}
+
       {w && (
         <Modal title={w.name} onClose={() => setSelected("")}>
-          <WorkflowEditor key={`${w.id}:${targetId}`} workflow={w} workflows={p.workflows} connection={settings.connections.find((c) => c.id === targetId)} selectVariant={setSelected} change={(fn) => update((p) => fn(p.workflows.find((x) => x.id===w.id)!))} prepare={prepare} saveForm={(bindings,layout) => saveForm(w.id,bindings,layout,targetId)} notify={notify}/>
-          <details className="workflow-job-entry"><summary>Create a job</summary>
-          <h3>Generate a keyframe</h3>
-          <Picker
-            title="Target keyframe"
-            value={frameId}
-            options={p.episodes.flatMap((e) =>
-              e.scenes.flatMap((s) =>
-                s.shots.flatMap((sh) =>
-                  sh.frames.map((f) => ({
-                    id: f.id,
-                    label: `${e.name} / ${s.name} / ${f.name}`,
-                  })),
-                ),
-              ),
-            )}
-            onChange={setFrameId}
-            onClear={() => setFrameId("")}
+          <WorkflowEditor
+            key={`${w.id}:${targetId}`}
+            workflow={w}
+            workflows={p.workflows}
+            connection={settings.connections.find((c) => c.id === targetId)}
+            selectVariant={setSelected}
+            change={(fn) =>
+              update((p) => fn(p.workflows.find((x) => x.id === w.id)!))
+            }
+            prepare={prepare}
+            saveForm={(bindings, layout) =>
+              saveForm(w.id, bindings, layout, targetId)
+            }
+            notify={notify}
           />
-          <button
-            className="primary"
-            disabled={false}
-            onClick={() => {
-              setSelected("");
-              onGenerate(frameId, w.id);
-            }}
-          >
-            Create generation job
-          </button>
-          <p className="muted">
-            Choose a keyframe, then review the account and job inputs before
-            submission.
-          </p>
+          <details className="workflow-job-entry">
+            <summary>Create a job</summary>
+            <h3>Generate a keyframe</h3>
+            <Picker
+              title="Target keyframe"
+              value={frameId}
+              options={p.episodes.flatMap((e) =>
+                e.scenes.flatMap((s) =>
+                  s.shots.flatMap((sh) =>
+                    sh.frames.map((f) => ({
+                      id: f.id,
+                      label: `${e.name} / ${s.name} / ${f.name}`,
+                    })),
+                  ),
+                ),
+              )}
+              onChange={setFrameId}
+              onClear={() => setFrameId("")}
+            />
+            <button
+              className="primary"
+              disabled={false}
+              onClick={() => {
+                setSelected("");
+                onGenerate(frameId, w.id);
+              }}
+            >
+              Create generation job
+            </button>
+            <p className="muted">
+              Choose a keyframe, then review the account and job inputs before
+              submission.
+            </p>
           </details>
         </Modal>
       )}
-    </>
+    </div>
   );
 }
 export function Renders(props: React.ComponentProps<typeof Library>) {
