@@ -57,14 +57,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
+          release_files=()
+          while IFS= read -r -d '' release_file; do
+            release_files+=("$release_file")
+          done < <(find artifacts -maxdepth 1 -type f -print0)
+          test "${#release_files[@]}" -gt 0
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             if test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" != true; then
               echo 'Release is already published; refusing to replace versioned assets.' >&2
               exit 1
             fi
-            gh release upload "$RELEASE_TAG" artifacts/* --clobber
+            gh release upload "$RELEASE_TAG" "${release_files[@]}" --clobber
           else
-            gh release create "$RELEASE_TAG" artifacts/* --draft --verify-tag --title "$RELEASE_TAG" --notes-file release-notes.md
+            gh release create "$RELEASE_TAG" "${release_files[@]}" --draft --verify-tag --title "$RELEASE_TAG" --notes-file release-notes.md
           fi
       - name: Publish complete prerelease
         env:

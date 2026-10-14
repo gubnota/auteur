@@ -1,6 +1,9 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -27,6 +30,30 @@ class Response:
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_github_upload_excludes_empty_bundle_directories(self):
+        workflow = (ROOT / '.github/workflows/release.yml').read_text()
+        step = workflow.split('      - name: Create or update draft\n', 1)[1]
+        block = step.split('        run: |\n', 1)[1].split('      - name:', 1)[0]
+        script = '\n'.join(line[10:] for line in block.splitlines())
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); assets = root / 'artifacts'; assets.mkdir()
+            (assets / 'appimage').mkdir()
+            (assets / 'dmg').mkdir()
+            names = ['MyMovie.Studio_x64.msi', 'MyMovie.Studio_arm64.dmg', 'SHA256SUMS.txt']
+            for name in names: (assets / name).write_bytes(b'asset')
+            gh = root / 'gh'
+            gh.write_text(f'#!{sys.executable}\nimport json, pathlib, sys\n'
+                          'if sys.argv[1:3] == ["release", "view"]: sys.exit(1)\n'
+                          'pathlib.Path("upload-args.json").write_text(json.dumps(sys.argv[1:]))\n')
+            gh.chmod(0o755)
+            env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH'], RELEASE_TAG='v0.1.5')
+            subprocess.run(['bash', '-e', '-c', script], cwd=root, env=env, check=True)
+            args = json.loads((root / 'upload-args.json').read_text())
+            self.assertEqual(args[:3], ['release', 'create', 'v0.1.5'])
+            uploaded = [arg for arg in args if arg.startswith('artifacts/')]
+            self.assertEqual(set(uploaded), {f'artifacts/{name}' for name in names})
+            self.assertTrue(all((root / arg).is_file() for arg in uploaded))
+
     def test_tags_must_match_versions_and_cannot_contain_commands(self):
         current = version.check(ROOT, '')
         self.assertEqual(version.check(ROOT, f'v{current}'), current)

@@ -6,8 +6,8 @@
 - Published v0.1.3 prerelease with 12 verified assets from successful hosted run 38474310778; tag points to exact build commit ab71e49. Both macOS DMGs, Linux x86_64 DEB/AppImage, agent, notebooks, guide and checksums are public. Artifact ZIP digests and uploaded asset digests verified.
 - Future version tags now stage complete assets then publish prereleases; reruns refuse to replace published binaries.
 - Expanded GitHub/GitLab native matrix to Windows x64 MSI/NSIS and Linux ARM64 DEB/AppImage/agent. Added Windows native credential backend, ARM ELF validation/distinct agent metadata/checksums and ARM Node bootstrap. GitLab Windows requires a prepared shell runner.
-- v0.1.4 hosted run 38511851739 passed source checks and both native agent smoke tests. Windows failed because npm.ps1 dropped forwarded CLI options; invoke the Tauri Node CLI directly on Windows in GitHub/GitLab. Failed tag preserved unchanged.
-- Version 0.1.5 retries the complete release matrix with that correction; hosted publication pending. No foreign-platform desktop runtime launch or live cloud GPU acceptance claimed.
+- v0.1.4 hosted run 38511851739 passed source checks, both native agent smoke tests, both macOS builds and both Linux desktop builds. Windows failed because npm.ps1 dropped forwarded CLI options; invoke the Tauri Node CLI directly on Windows in GitHub/GitLab. Failed tag preserved unchanged.
+- Version 0.1.5 at c595573 / run 38512704998 passed all five desktop builds and both native agent smoke tests. Source acceptance: 30 Rust, 5 frontend, 4 mocked browser and 17 Python tests. Publication failed because an upload glob included empty bundle directories; select only regular files. Local regression and all 18 Python tests pass. Recovery from unchanged verified artifacts is pending; tag preserved. No foreign-platform desktop runtime launch or live cloud GPU acceptance claimed.
 
 ## 2026-10-14 — Jobs workspace and RunPod agent delivery, 0.1.3
 
