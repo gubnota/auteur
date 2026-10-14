@@ -48,7 +48,8 @@ import { fileDropPoint } from "./lib/file-drop";
 import { Board } from "./features/Board";
 import { Characters, Library, Workflows, Renders } from "./features/Library";
 import { Generate } from "./features/Generate";
-import { Jobs, newJobDraft } from "./features/Jobs";
+import { Jobs } from "./features/Jobs";
+import { newJobDraft } from "./lib/job-drafts";
 import { Connections, Preferences } from "./features/Connections";
 const routes = [
   ["Keyframes", Layers],
@@ -391,7 +392,7 @@ export default function App() {
     });
     setJobDraftId(draft.id);
     setModal(null);
-    setRoute("Jobs");
+    setRoute("Generate");
   };
   const importFile = (kind: "media" | "workflow") =>
     void run(async () => {
@@ -468,34 +469,25 @@ export default function App() {
     const operation = pending.current.then(async () => {
       if (epoch !== generation.current)
         throw new Error("Movie changed during import");
-      let project = await call<Project>("import_media_drop", args);
-      if (target.dataset.fileDrop === "generate") {
-        const before = new Set(current.current?.assets.map((a) => a.id));
-        const imported = project.assets.filter((a) => !before.has(a.id));
-        // Content-addressed duplicates also remain assignable.
-        const asset =
-          imported.find((a) => a.kind === target.dataset.mediaKind) ??
-          project.assets.find(
-            (a) =>
-              paths.some((path) => path.split("/").pop() === a.name) &&
-              a.kind === target.dataset.mediaKind,
-          );
-        const item = project.jobDrafts
-          ?.find((d) => d.id === target.dataset.draftId)
-          ?.items.find((i) => i.id === target.dataset.itemId);
-        revision.current = project.revision;
-        current.current = project;
-        setP(project);
-        if (!asset || !item || !target.dataset.semantic)
-          throw new Error(
-            "Imported into Library; select a compatible file in the media slot",
-          );
-        item.assets[target.dataset.semantic] = asset.id;
-        project = await call<Project>("save_project", {
-          project,
-          expectedRevision: project.revision,
-        });
-      }
+      if (target.dataset.fileDrop === "generate" && paths.length !== 1)
+        throw new Error("Drop one file onto each media slot");
+      const project =
+        target.dataset.fileDrop === "generate"
+          ? (
+              await call<import("./lib/types").ImportResult>(
+                "import_job_media",
+                {
+                  draftId: target.dataset.draftId,
+                  itemId: target.dataset.itemId,
+                  semantic: target.dataset.semantic,
+                  path: paths[0],
+                  linked: importMode === "link",
+                },
+              )
+            ).project
+          : await call<Project>("import_media_drop", args);
+      if (epoch !== generation.current)
+        throw new Error("Movie changed during import");
       revision.current = project.revision;
       current.current = project;
       setP(project);
@@ -533,7 +525,13 @@ export default function App() {
     const operation = pending.current.then(async () => {
       if (epoch !== generation.current)
         throw new Error("Movie changed during import");
-      const project = await call<Project>(command, args);
+      const reply = await call<Project | import("./lib/types").ImportResult>(
+        command,
+        args,
+      );
+      const project = "assetIds" in reply ? reply.project : reply;
+      if (epoch !== generation.current)
+        throw new Error("Movie changed during update");
       revision.current = project.revision;
       current.current = project;
       setP(project);
@@ -559,32 +557,55 @@ export default function App() {
     if (!path) return;
     if (epoch !== generation.current)
       throw new Error("Movie changed during import");
-    const project = await mutateMedia(
-      "import_asset",
-      { path, linked: importMode === "link" },
-      "Media imported",
+    await mutateMedia(
+      "import_job_media",
+      { path, draftId, itemId, semantic, linked: importMode === "link" },
+      "Media assigned",
     );
-    if (!project || epoch !== generation.current) return;
-    const asset = project.assets.find((a) => a.name === path.split("/").pop());
-    const draft = project.jobDrafts?.find((d) => d.id === draftId);
-    const item = draft?.items.find((i) => i.id === itemId);
-    const binding = (
-      item?.bindings ??
-      workflowForTarget(
-        project.workflows.find((w) => w.id === item?.workflowId),
-        item?.connectionId ?? "",
-      )?.bindings
-    )?.find((b) => b.semantic === semantic);
-    if (!asset || asset.kind !== (binding?.media?.kind ?? "image"))
-      throw new Error(
-        "Imported into Library. Select media matching this slot’s type.",
-      );
-    update((p) => {
-      const i = p.jobDrafts
-        ?.find((d) => d.id === draftId)
-        ?.items.find((i) => i.id === itemId);
-      if (i) i.assets[semantic] = asset.id;
+  };
+  const executeJob = async <T,>(
+    command: string,
+    args: Record<string, unknown>,
+  ): Promise<T> => {
+    if (importingRef.current)
+      throw new Error("Wait for the current operation to finish");
+    const epoch = generation.current;
+    importingRef.current = true;
+    setImporting(true);
+    setStatus("Preparing job…");
+    const operation = pending.current.then(async () => {
+      if (epoch !== generation.current)
+        throw new Error("Movie changed during preparation");
+      let reply: T;
+      let failure: unknown;
+      try {
+        reply = await call<T>(command, args);
+      } catch (e) {
+        failure = e;
+      }
+      // Preparation can persist a refreshed profile even when preflight rejects
+      // the job. Keep the document revision current in that case as well.
+      try {
+        const project = await call<Project>("get_project");
+        if (epoch !== generation.current)
+          throw new Error("Movie changed during preparation");
+        revision.current = project.revision;
+        current.current = project;
+        setP(project);
+      } catch (e) {
+        if (failure === undefined) failure = e;
+      }
+      if (failure !== undefined) throw failure;
+      return reply!;
     });
+    pending.current = operation.then(() => {}).catch(() => {});
+    try {
+      return await operation;
+    } finally {
+      importingRef.current = false;
+      setImporting(false);
+      setStatus("Saved locally");
+    }
   };
   const persistHeight = (h: number) => {
     void run(() => saveSettings({ ...settings, queueHeight: h }));
@@ -908,6 +929,8 @@ export default function App() {
                 <Library
                   project={p}
                   root={root}
+                  jobs={jobs}
+                  update={update}
                   onImport={() => importFile("media")}
                   onNavigate={navigateFrame}
                   onCollect={async () => {
@@ -937,6 +960,18 @@ export default function App() {
                   prepare={prepareWorkflow}
                   notify={notify}
                   onGenerate={chooseJob}
+                  saveForm={async (
+                    workflowId,
+                    bindings,
+                    layout,
+                    connectionId,
+                  ) => {
+                    await mutateMedia(
+                      "save_workflow_form",
+                      { workflowId, bindings, layout, connectionId },
+                      "Workflow inputs saved",
+                    );
+                  }}
                 />
               )}{" "}
               {route === "Generate" && (
@@ -947,21 +982,11 @@ export default function App() {
                   update={update}
                   selectedId={jobDraftId}
                   select={setJobDraftId}
-                  enqueue={async (id) => {
-                    await run(async () => {
-                      await pending.current;
-                      setJobs(
-                        await call<Job[]>("enqueue_job_draft", { draftId: id }),
-                      );
-                      notify(
-                        "Queued. Open Jobs and use Run all queued when ready.",
-                      );
-                    });
-                  }}
-                  review={(id) => {
-                    setJobDraftId(id);
-                    setRoute("Jobs");
-                  }}
+                  flush={() => pending.current}
+                  onJobs={setJobs}
+                  jobs={jobs}
+                  executeJob={executeJob}
+                  configure={() => setRoute("Workflows")}
                   importMedia={importGenerateMedia}
                   importWorkflow={browseWorkflows}
                   prepare={prepareWorkflow}
@@ -970,23 +995,43 @@ export default function App() {
               )}
               {route === "Jobs" && (
                 <Jobs
-                  importWorkflow={browseWorkflows}
-                  prepare={prepareWorkflow}
-                  root={root}
-                  importMedia={importGenerateMedia}
                   project={p}
                   settings={settings}
                   jobs={jobs}
                   update={update}
-                  selectedId={jobDraftId}
-                  select={setJobDraftId}
-                  flush={() => pending.current}
+                  select={(id) => {
+                    setJobDraftId(id);
+                    setRoute("Generate");
+                  }}
                   onJobs={setJobs}
                   notify={notify}
                 />
               )}
               {route === "Renders" && (
-                <Renders jobs={jobs} root={root} project={p} />
+                <Renders
+                  jobs={jobs}
+                  root={root}
+                  project={p}
+                  update={update}
+                  onNavigate={navigateFrame}
+                  onImport={() => importFile("media")}
+                  onCollect={async () => {
+                    await mutateMedia(
+                      "collect_media",
+                      {},
+                      "All media collected into movie",
+                    );
+                  }}
+                  onRelink={async (assetId) => {
+                    const path = await pickFile("media");
+                    if (path)
+                      await mutateMedia(
+                        "relink_asset",
+                        { assetId, path },
+                        "Original relinked",
+                      );
+                  }}
+                />
               )}{" "}
               {route === "Connections" && (
                 <Connections

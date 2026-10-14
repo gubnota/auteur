@@ -364,3 +364,90 @@ describe("execution profiles", () => {
     ).toThrow("Prepare");
   });
 });
+
+describe("reusable forms", () => {
+  it("overrides registry aliases by exact identity and keeps hidden values", () => {
+    const movie = structuredClone(p);
+    const w = movie.workflows[0];
+    w.profiles = [
+      {
+        connectionId: "c",
+        sourceHash: w.version,
+        apiHash: w.version,
+        registryHash: "r",
+        frontendHash: "f",
+        compilerVersion: "test",
+        graph: w.graph,
+        inputs: [
+          {
+            binding: {
+              semantic: "1.text",
+              nodeId: "1",
+              input: "text",
+              valueType: "string",
+            },
+            label: "Generated label",
+            control: "multiline",
+            required: true,
+            default: "original",
+            choices: [],
+            advanced: false,
+          },
+        ],
+        outputs: [],
+      },
+    ];
+    w.layout = {
+      inputs: [
+        {
+          nodeId: "1",
+          input: "text",
+          label: "Saved prompt",
+          group: "",
+          hidden: true,
+          advanced: true,
+        },
+      ],
+      outputs: [],
+    };
+    const effective = workflowForTarget(w, "c")!;
+    expect(effective.inputs![0].binding.semantic).toBe("positivePrompt");
+    expect(effective.inputs![0].label).toBe("Saved prompt");
+    expect(effective.inputs![0].hidden).toBe(true);
+    expect(
+      effective.bindings.filter((b) => b.nodeId === "1" && b.input === "text"),
+    ).toHaveLength(1);
+    expect(
+      resolveInputs(movie, draft, draft.items[0]).graph["1"].inputs.text,
+    ).toBe("exact");
+  });
+  it("rejects trashed media for new jobs while restoration keeps the same identity", () => {
+    const movie = structuredClone(p);
+    movie.workflows[0].bindings = [
+      {
+        semantic: "source",
+        nodeId: "1",
+        input: "text",
+        valueType: "string",
+        media: { kind: "image", role: "sourceImage", order: 0 },
+      },
+    ];
+    movie.assets = [
+      {
+        id: "asset",
+        name: "Source",
+        kind: "image",
+        path: "media/a.png",
+        sha256: "a".repeat(64),
+        size: 10,
+        archivedAt: "2026-10-14T12:00:00Z",
+      },
+    ];
+    const item = { ...draft.items[0], assets: { source: "asset" }, values: {} };
+    expect(() => resolveInputs(movie, draft, item)).toThrow(/Trash/);
+    movie.assets[0].archivedAt = undefined;
+    expect(resolveInputs(movie, draft, item).media.source).toMatchObject({
+      assetId: "asset",
+    });
+  });
+});

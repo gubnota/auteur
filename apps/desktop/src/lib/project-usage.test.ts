@@ -32,7 +32,12 @@ it("deduplicates inherited cast and direct placement, and locates other episodes
     "Character reference available",
   ]);
   expect(assetUsage(p, "ref").frames[1].episodeId).toBe("second");
-  expect(assetUsage(p, "unused")).toEqual({ frames: [], drafts: [] });
+  expect(assetUsage(p, "unused")).toEqual({
+    frames: [],
+    drafts: [],
+    characters: [],
+    jobs: [],
+  });
 });
 
 it("labels draft media separately from scene usage", () => {
@@ -53,5 +58,23 @@ it("labels draft media separately from scene usage", () => {
       ],
     },
   ];
-  expect(assetUsage(p, "ref")).toEqual({ frames: [], drafts: ["Media edit"] });
+  expect(assetUsage(p, "ref")).toEqual({
+    frames: [],
+    drafts: ["Media edit"],
+    characters: [],
+    jobs: [],
+  });
+});
+
+it("distinguishes immutable job input and result provenance from ordinary imports", () => {
+  const p = structuredClone(project);
+  const jobs = [
+    { id: "input", snapshot: { media: { ref: { id: "ref" } } }, results: [] },
+    { id: "output", snapshot: {}, results: [{ id: "ref" }] },
+    { id: "other", snapshot: null, results: [] },
+  ] as unknown as import("./types").Job[];
+  expect(assetUsage(p, "ref", jobs).jobs.map((j) => j.id)).toEqual([
+    "input",
+    "output",
+  ]);
 });

@@ -51,12 +51,13 @@ test("standalone multi-media draft persists and reviews a batch on two nodes", a
   await openFixture(page, movie, nodes);
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
   await page.getByRole("button", { name: "Generate", exact: true }).click();
-  await page.getByRole("tab", { name: "Multi-reference", exact: true }).click();
+  await page
+    .getByRole("button", { name: "New generation", exact: true })
+    .click();
   for (const kind of ["image", "video", "audio"]) {
     await page
       .getByRole("button", {
-        name: `Media source for reference${kind}`,
-        exact: true,
+        name: new RegExp(`Media source for reference${kind}`),
       })
       .click();
     await page
@@ -83,9 +84,6 @@ test("standalone multi-media draft persists and reviews a batch on two nodes", a
   await page.getByRole("button", { name: "Welcome", exact: true }).click();
   await page.getByRole("button", { name: /Open a movie/ }).click();
   await page.getByRole("button", { name: "Generate", exact: true }).click();
-  await expect(
-    page.getByRole("tab", { name: "Multi-reference", exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
   const saved = await page.evaluate(() => (window as any).fixture.saved);
   expect(saved.jobDrafts[0].context.kind).toBe("standalone");
   expect(saved.jobDrafts[0].items[0].assets).toEqual({
@@ -98,9 +96,7 @@ test("standalone multi-media draft persists and reviews a batch on two nodes", a
     path: "docs/screenshots/generate.png",
     fullPage: true,
   });
-  await page
-    .getByRole("button", { name: "Review / run in Jobs", exact: true })
-    .click();
+
   await expect(
     page.getByRole("button", { name: "Review exact inputs", exact: true }),
   ).toBeDisabled(); // Second item still needs explicit media.
@@ -112,7 +108,9 @@ test("Generate removes several selected batch items without starting jobs", asyn
   await openFixture(page, movie, nodes);
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
   await page.getByRole("button", { name: "Generate", exact: true }).click();
-  await page.getByRole("tab", { name: "Multi-reference", exact: true }).click();
+  await page
+    .getByRole("button", { name: "New generation", exact: true })
+    .click();
   const originalId = await page.evaluate(
     () => (window as any).fixture.saved.jobDrafts[0].items[0].id,
   );

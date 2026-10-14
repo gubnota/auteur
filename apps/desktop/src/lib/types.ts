@@ -40,6 +40,7 @@ export interface Character {
   revision: number;
 }
 export interface Asset {
+  archivedAt?: string;
   id: string;
   name: string;
   path: string;
@@ -276,4 +277,9 @@ export interface InstallArtifact {
   sourceRef?: string;
   revision?: string;
   stripPrefix?: string;
+}
+
+export interface ImportResult {
+  project: Project;
+  assetIds: string[];
 }

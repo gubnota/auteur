@@ -15,10 +15,12 @@ test("imported workflow exposes job creation and explains the missing deployment
   await openFixture(page);
   await expect(
     page.getByRole("button", { name: "Create generation job" }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await chooseFrame(page);
   await expect(
-    page.getByText(/Importing JSON alone does not create a hosted deployment/),
+    page
+      .getByText(/Importing JSON alone does not create a hosted deployment/)
+      .first(),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Review exact inputs" }),
@@ -36,7 +38,7 @@ test("account-specific mapping survives reopening and enables only the mapped ac
     .locator("section.panel")
     .filter({ has: page.getByRole("heading", { name: "Studio account" }) });
   await account
-    .getByLabel("Workflow / AI App ID", { exact: true })
+    .getByLabel("RunningHub page URL or Workflow / AI App ID", { exact: true })
     .fill("123456789");
   await account.getByRole("button", { name: "RunningHub API family" }).click();
   await page
@@ -58,14 +60,18 @@ test("account-specific mapping survives reopening and enables only the mapped ac
   await page.getByRole("button", { name: "Close dialog" }).click();
   await page.getByRole("button", { name: /Imported image workflow/ }).click();
   await expect(
-    page.getByLabel("Workflow / AI App ID", { exact: true }).first(),
+    page
+      .getByLabel("RunningHub page URL or Workflow / AI App ID", {
+        exact: true,
+      })
+      .first(),
   ).toHaveValue("123456789");
   await chooseFrame(page);
   const submit = page.getByRole("button", { name: "Review exact inputs" });
   await expect(submit).toBeEnabled();
-  await expect(
-    page.getByLabel("Hosted deployment ID", { exact: true }),
-  ).toHaveValue("123456789");
+  await submit.click();
+  await expect(page.locator(".jobs-preview")).toContainText("123456789");
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
   await page
     .getByRole("button", { name: "Execution node", exact: true })
     .click();

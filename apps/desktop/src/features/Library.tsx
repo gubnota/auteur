@@ -1,9 +1,13 @@
+import { Media } from "../components/Media";
+export { Media } from "../components/Media";
+import { MediaPicker } from "../components/MediaPicker";
+import { WorkflowForm } from "../components/WorkflowForm";
 import { WorkflowTarget } from "../components/WorkflowTarget";
 import { WorkflowSetup, compatibilityLabel } from "../components/WorkflowSetup";
 import { useState, useEffect } from "react";
 import { Plus, Image, Upload, X, Workflow as WorkflowIcon } from "lucide-react";
 import { Field, Modal, Picker, Empty } from "../components/Controls";
-import { call, mediaUrl, posterUrl, native } from "../lib/bridge";
+import { call } from "../lib/bridge";
 import {
   uid,
   type Project,
@@ -38,62 +42,6 @@ export function PageTitle({
       </div>
       {action}
     </div>
-  );
-}
-export function Media({ asset, root }: { asset: Asset; root: string }) {
-  const [poster, setPoster] = useState(false),
-    [previewError, setPreviewError] = useState(""),
-    [retry, setRetry] = useState(0);
-  useEffect(() => {
-    let stopped = false;
-    setPoster(false);
-    setPreviewError("");
-    if (asset.kind === "video" && native)
-      void call<boolean>("video_thumbnail", { assetId: asset.id })
-        .then((v) => {
-          if (!stopped) setPoster(v);
-        })
-        .catch((e) => {
-          if (!stopped) setPreviewError(String(e));
-        });
-    return () => {
-      stopped = true;
-    };
-  }, [root, asset.id, asset.sha256, retry]);
-  if (
-    !mediaUrl(root, asset) &&
-    ["image", "video", "audio"].includes(asset.kind)
-  ) {
-    return (
-      <div className="file-placeholder">
-        {asset.kind} · {asset.name}
-      </div>
-    );
-  }
-  return asset.kind === "video" ? (
-    <div className="video-preview">
-      <video
-        controls
-        preload="metadata"
-        poster={poster ? posterUrl(asset) : undefined}
-        src={mediaUrl(root, asset)}
-      />
-      {previewError && (
-        <button
-          className="text-button"
-          title={previewError}
-          onClick={() => setRetry((v) => v + 1)}
-        >
-          Preview unavailable · retry
-        </button>
-      )}
-    </div>
-  ) : asset.kind === "audio" ? (
-    <audio controls src={mediaUrl(root, asset)} />
-  ) : asset.kind === "image" ? (
-    <img src={mediaUrl(root, asset)} alt={asset.name} />
-  ) : (
-    <div className="file-placeholder">LoRA · {asset.name}</div>
   );
 }
 export function Characters({
@@ -288,19 +236,16 @@ export function Characters({
                   </figure>
                 ))}
             </div>
-            <Picker
+            <MediaPicker
               title="Reference images"
               multiple
+              root={root}
               value={c.assetIds}
-              options={p.assets
-                .filter((a) => a.kind === "image")
-                .map((a) => ({ id: a.id, label: a.name }))}
-              onChange={(v) =>
+              assets={p.assets.filter((a) => a.kind === "image")}
+              onChange={(ids) =>
                 update((p) => {
                   const ch = p.characters.find((x) => x.id === c.id)!;
-                  ch.assetIds = ch.assetIds.includes(v)
-                    ? ch.assetIds.filter((x) => x !== v)
-                    : [...ch.assetIds, v];
+                  ch.assetIds = ids;
                   ch.revision++;
                 })
               }
@@ -340,7 +285,13 @@ export function Library({
   onCollect,
   onRelink,
   onNavigate,
+  jobs,
+  update,
+  rendersOnly = false,
 }: {
+  jobs: Job[];
+  update: Update;
+  rendersOnly?: boolean;
   onNavigate: (f: FrameLocation) => void;
   project: Project;
   root: string;
@@ -348,9 +299,13 @@ export function Library({
   onCollect: () => Promise<void>;
   onRelink: (assetId: string) => Promise<void>;
 }) {
-  const [usageId, setUsageId] = useState("");
-  const usage = usageId ? assetUsage(p, usageId) : null;
-  const [filter, setFilter] = useState("all");
+  const [usageId, setUsageId] = useState(""),
+    [search, setSearch] = useState(""),
+    [filter, setFilter] = useState("all"),
+    [trash, setTrash] = useState(false),
+    [selected, setSelected] = useState<string[]>([]),
+    [removing, setRemoving] = useState(false),
+    [receipt, setReceipt] = useState<Job | null>(null);
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
   const [error, setError] = useState("");
   useEffect(() => {
@@ -363,7 +318,7 @@ export function Library({
     return () => {
       stopped = true;
     };
-  }, [p.revision]);
+  }, [p.assets]);
   const action = async (fn: () => Promise<void>) => {
     setError("");
     try {
@@ -372,13 +327,36 @@ export function Library({
       setError(String(e));
     }
   };
-  const linked = p.assets.filter((a) => a.sourcePath);
+  const resultIds = new Set(jobs.flatMap((j) => j.results.map((a) => a.id)));
+  const visible = p.assets.filter(
+    (a) =>
+      !!a.archivedAt === trash &&
+      (!rendersOnly || resultIds.has(a.id)) &&
+      (filter === "all" || filter === "renders"
+        ? filter !== "renders" || resultIds.has(a.id)
+        : a.kind === filter) &&
+      a.name.toLowerCase().includes(search.toLowerCase()),
+  );
+  const usage = usageId ? assetUsage(p, usageId, jobs) : null;
+  const chosen = p.assets.filter(
+    (a) => selected.includes(a.id) && !!a.archivedAt === trash,
+  );
+  const archive = (restore: boolean) => {
+    const ids = new Set(chosen.map((a) => a.id));
+    update((p) => {
+      for (const a of p.assets)
+        if (ids.has(a.id))
+          a.archivedAt = restore ? undefined : new Date().toISOString();
+    });
+    setSelected([]);
+    setRemoving(false);
+  };
   return (
     <>
       <PageTitle
-        eyebrow="MOVIE ASSETS"
-        title="Library"
-        description="Shared originals and linked materials. Collect linked files into your movie before export."
+        eyebrow={rendersOnly ? "TRACEABLE RESULTS" : "SHARED MOVIE MATERIAL"}
+        title={rendersOnly ? "Renders" : "Library"}
+        description="One shared library for imports and renders. Removing media moves it to Trash and keeps references and receipts."
         action={
           <button className="primary" onClick={onImport}>
             <Upload size={18} />
@@ -386,117 +364,140 @@ export function Library({
           </button>
         }
       />
-      <div className="panel row collection-panel">
-        <div className="spacer">
-          <strong>
-            {linked.length
-              ? `${linked.length} linked materials`
-              : "All materials are inside this movie"}
-          </strong>
-          <p className="muted">
-            Copy or keep original locations with Media imports. Collect makes
-            the saved movie portable.
-          </p>
-        </div>
+      <div className="jobs-toolbar media-toolbar">
         <button
-          disabled={!linked.length}
-          onClick={() => void action(onCollect)}
+          onClick={() => {
+            setTrash(!trash);
+            setSelected([]);
+          }}
         >
-          Collect for export
+          {trash ? "Back to media" : "Trash"}
+        </button>
+        <button
+          disabled={!chosen.length}
+          onClick={() => (trash ? archive(true) : setRemoving(true))}
+        >
+          {trash ? "Restore" : "Remove"} selected · {chosen.length}
         </button>
         <button
           onClick={() =>
-            void action(async () =>
-              setAvailability(
-                await call("asset_availability", { verify: true }),
-              ),
+            setSelected(
+              visible.every((a) => selected.includes(a.id))
+                ? []
+                : visible.map((a) => a.id),
             )
           }
         >
-          Check files
+          Select all visible
+        </button>
+        <button onClick={() => void action(onCollect)}>
+          Collect for export
         </button>
       </div>
       {error && <p role="alert">{error}</p>}
-      <button
-        className="library-drop-zone"
-        data-file-drop="library"
-        onClick={onImport}
-      >
-        <Upload size={24} />
-        <span>
-          <strong>Drop media here, or choose files</strong>
-          <small>
-            Images, video, audio and LoRAs · follows Media imports above
-          </small>
-        </span>
-      </button>
-      <div className="filters">
-        {["all", "image", "video", "audio", "lora"].map((k) => (
+      <Field label="Search library" value={search} onChange={setSearch} />
+      <div className="filter-row">
+        {["all", "image", "video", "audio", "renders"].map((k) => (
           <button
             key={k}
-            className={filter === k ? "active" : ""}
+            className={filter === k ? "selected" : ""}
             onClick={() => setFilter(k)}
           >
-            {k === "all" ? "All assets" : k}
+            {k}
           </button>
         ))}
       </div>
-      {p.assets.length === 0 ? (
-        <Empty
-          title="Build your visual library"
-          action={
-            <button onClick={onImport}>
-              <Image size={18} />
-              Import your first image or video
-            </button>
-          }
-        >
-          Images, clips and character references will be stored inside this
-          movie.
+      <div className="library-drop-zone" data-file-drop="library">
+        Drop files to import · existing media is reused
+      </div>
+      {!visible.length ? (
+        <Empty title={trash ? "Trash is empty" : "No matching media"}>
+          Import media or change the search and filters.
         </Empty>
       ) : (
         <div className="asset-grid">
-          {p.assets
-            .filter((a) => filter === "all" || a.kind === filter)
-            .map((a) => (
-              <article className="media-card panel" key={a.id}>
-                <Media asset={a} root={root} />
-                <strong className="asset-name" title={a.name}>
-                  {a.name}
-                </strong>
-                <span className="badge">
-                  {a.sourcePath ? "Linked original" : "Inside movie"}
-                </span>
-                {a.sourcePath && (
-                  <small className="source-path" title={a.sourcePath}>
-                    {a.sourcePath}
-                  </small>
-                )}
-                {availability[a.id] === false && (
-                  <p role="alert">Original missing or changed</p>
-                )}
-                {a.sourcePath && (
-                  <button onClick={() => void action(() => onRelink(a.id))}>
-                    Relink original
-                  </button>
-                )}
-                <small>
-                  {a.kind} · {(a.size / 1024 / 1024).toFixed(2)} MB
+          {visible.map((a) => (
+            <article
+              className="media-card panel"
+              key={a.id}
+              draggable={!trash}
+              onDragStart={(e) => {
+                e.dataTransfer.setData("application/x-mymovie-asset", a.id);
+                e.dataTransfer.effectAllowed = "copy";
+              }}
+            >
+              <Media asset={a} root={root} />
+              <strong className="asset-name" title={a.name}>
+                {a.name}
+              </strong>
+              <span className="badge">
+                {resultIds.has(a.id) ? "Render" : "Imported"} ·{" "}
+                {a.sourcePath ? "Linked original" : "Inside movie"}
+              </span>
+              {a.sourcePath && (
+                <small className="source-path" title={a.sourcePath}>
+                  {a.sourcePath}
                 </small>
-                <button onClick={() => setUsageId(a.id)}>
-                  Usage · {assetUsage(p, a.id).frames.length} keyframes
+              )}
+              {availability[a.id] === false && (
+                <p role="alert">Original missing or changed</p>
+              )}
+              {a.sourcePath && (
+                <button onClick={() => void action(() => onRelink(a.id))}>
+                  Relink original
                 </button>
-                <code title={a.sha256}>SHA256 {a.sha256.slice(0, 16)}…</code>
-              </article>
-            ))}
+              )}
+              <small>
+                {a.kind} · {(a.size / 1024 / 1024).toFixed(2)} MB
+              </small>
+              <button
+                aria-pressed={selected.includes(a.id)}
+                className={selected.includes(a.id) ? "selected" : ""}
+                onClick={() =>
+                  setSelected((ids) =>
+                    ids.includes(a.id)
+                      ? ids.filter((id) => id !== a.id)
+                      : [...ids, a.id],
+                  )
+                }
+              >
+                {selected.includes(a.id) ? "Selected" : "Select"}
+              </button>
+              <button onClick={() => setUsageId(a.id)}>
+                Usage · {assetUsage(p, a.id, jobs).frames.length} keyframes
+              </button>
+              <code title={a.sha256}>SHA256 {a.sha256.slice(0, 16)}…</code>
+            </article>
+          ))}
         </div>
+      )}
+      {removing && (
+        <Modal
+          title="Move selected media to Trash"
+          onClose={() => setRemoving(false)}
+        >
+          <p>
+            {chosen.length} materials will be hidden from galleries. Originals,
+            frame assignments and job receipts remain; Restore makes them
+            available again.
+          </p>
+          {chosen.map((a) => {
+            const u = assetUsage(p, a.id, jobs);
+            return (
+              <p key={a.id}>
+                {a.name} · {u.frames.length} frames · {u.characters.length}{" "}
+                characters · {u.drafts.length} drafts · {u.jobs.length} jobs
+              </p>
+            );
+          })}
+          <button className="danger" onClick={() => archive(false)}>
+            Move to Trash
+          </button>
+        </Modal>
       )}
       {usage && (
         <Modal title="Material usage" onClose={() => setUsageId("")}>
           <div className="usage-list">
-            {!usage.frames.length && (
-              <p>No keyframe placement or assigned character references.</p>
-            )}
             {usage.frames.map((f) => (
               <button
                 key={f.frameId}
@@ -509,17 +510,51 @@ export function Library({
                 <small>{f.label}</small>
               </button>
             ))}
+            <h3>Characters</h3>
+            {usage.characters.map((c) => (
+              <p key={c.id}>{c.name}</p>
+            ))}
             <h3>Draft references</h3>
-            {usage.drafts.length ? (
-              usage.drafts.map((name, i) => <p key={i}>{name}</p>)
-            ) : (
-              <p>None</p>
-            )}
+            {usage.drafts.map((name, n) => (
+              <p key={n}>{name}</p>
+            ))}
+            <h3>Job provenance</h3>
+            {usage.jobs.map((j) => (
+              <button
+                key={j.id}
+                onClick={() => {
+                  setUsageId("");
+                  setReceipt(j);
+                }}
+              >
+                {j.state} · {j.id.slice(0, 8)} ·{" "}
+                {j.results.some((a) => a.id === usageId) ? "Result" : "Input"}
+              </button>
+            ))}
+            {!usage.frames.length &&
+              !usage.characters.length &&
+              !usage.drafts.length &&
+              !usage.jobs.length && <p>No recorded usage.</p>}
             <p className="muted">
-              A character reference is available to the frame; this does not
-              prove it was used by a completed render.
+              A character reference available to a frame does not prove it was
+              used in a render.
             </p>
           </div>
+        </Modal>
+      )}
+      {receipt && (
+        <Modal title="Generation provenance" onClose={() => setReceipt(null)}>
+          <dl>
+            <dt>Attempt</dt>
+            <dd>{receipt.id}</dd>
+            <dt>Workflow version</dt>
+            <dd>{receipt.workflowVersion}</dd>
+            <dt>Node</dt>
+            <dd>{receipt.connectionId}</dd>
+            <dt>Remote task</dt>
+            <dd>{receipt.remoteId ?? "None"}</dd>
+          </dl>
+          <pre>{JSON.stringify(receipt.snapshot, null, 2)}</pre>
         </Modal>
       )}
     </>
@@ -533,7 +568,14 @@ export function Workflows({
   onGenerate,
   prepare,
   notify,
+  saveForm,
 }: {
+  saveForm: (
+    id: string,
+    bindings: Binding[],
+    layout: import("../lib/types").WorkflowLayout,
+    connectionId: string,
+  ) => Promise<void>;
   prepare: (w: string, c: string) => Promise<void>;
   notify: (s: string) => void;
   project: Project;
@@ -547,21 +589,9 @@ export function Workflows({
       settings.connections.find((c) => ["comfyui", "relay"].includes(c.kind))
         ?.id ?? "",
     ),
-    [nodeId, setNode] = useState(""),
-    [input, setInput] = useState(""),
-    [semantic, setSemantic] = useState("positivePrompt"),
-    [valueType, setType] = useState("string"),
     [frameId, setFrameId] = useState(""),
     [mediaKind, setMediaKind] = useState("all");
   const w = p.workflows.find((w) => w.id === selected);
-  const add = () => {
-    if (!w) return;
-    const b: Binding = { nodeId, input, semantic, valueType };
-    update((p) => {
-      const x = p.workflows.find((x) => x.id === w.id)!;
-      x.bindings = [...x.bindings.filter((y) => y.semantic !== semantic), b];
-    });
-  };
   return (
     <>
       <PageTitle
@@ -668,7 +698,7 @@ export function Workflows({
           />
           <button
             className="primary"
-            disabled={!frameId}
+            disabled={false}
             onClick={() => {
               setSelected("");
               onGenerate(frameId, w.id);
@@ -729,10 +759,10 @@ export function Workflows({
                     onChange={(apiFamily) => setDeployment({ apiFamily })}
                   />
                   <Field
-                    label="Workflow / AI App ID"
+                    label="RunningHub page URL or Workflow / AI App ID"
                     value={d?.deploymentId ?? c.deploymentId ?? ""}
                     onChange={(deploymentId) =>
-                      setDeployment({ deploymentId: deploymentId.trim() })
+                      setDeployment(parseDeployment(deploymentId))
                     }
                   />
                   <p className="muted">
@@ -742,97 +772,14 @@ export function Workflows({
                 </section>
               );
             })}
-          <h3>Job input bindings</h3>
-          <p className="muted">
-            Explicit semantic bindings edit a copy of this immutable graph for
-            each job. Image paths require staged references; unsupported inputs
-            block submission.
-          </p>
-          <Picker
-            title="Graph node"
-            value={nodeId}
-            options={Object.entries(w.graph).map(([id, n]) => ({
-              id,
-              label: `${id} · ${n.class_type}`,
-            }))}
-            onChange={(v) => {
-              setNode(v);
-              setInput("");
+          <WorkflowForm
+            key={`${w.id}:${targetId}`}
+            workflow={w}
+            connectionId={targetId}
+            save={async (bindings, layout) => {
+              await saveForm(w.id, bindings, layout, targetId);
             }}
           />
-          <Picker
-            title="Node input"
-            value={input}
-            options={Object.entries(w.graph[nodeId]?.inputs ?? {})
-              .filter(([, v]) => !Array.isArray(v))
-              .map(([id, v]) => ({
-                id,
-                label: id,
-                description: JSON.stringify(v).slice(0, 120),
-              }))}
-            onChange={setInput}
-          />
-          <Picker
-            title="Semantic value"
-            value={semantic}
-            options={[
-              "positivePrompt",
-              "negativePrompt",
-              "image",
-              "seed",
-              "ratio",
-              "fps",
-              "duration",
-              "width",
-              "height",
-              "characterReference1",
-              "characterReference2",
-              "characterReference3",
-              "characterReference4",
-            ].map((id) => ({ id, label: id }))}
-            onChange={setSemantic}
-          />
-          <p className="muted">
-            Character reference slots use images from the frame and scene cast.
-            Bind each slot to a verified image filename input, with string value
-            type.
-          </p>
-          <Picker
-            title="Value type"
-            value={valueType}
-            options={["string", "number", "boolean", "json"].map((id) => ({
-              id,
-              label: id,
-            }))}
-            onChange={setType}
-          />
-          <button
-            className="primary"
-            disabled={!nodeId || !input}
-            onClick={add}
-          >
-            Save binding
-          </button>
-          <hr />
-          {w.bindings.map((b) => (
-            <div className="binding-row" key={b.semantic}>
-              <span>
-                {b.semantic} → {b.nodeId}.{b.input} <small>{b.valueType}</small>
-              </span>
-              <button
-                onClick={() =>
-                  update((p) => {
-                    p.workflows.find((x) => x.id === w.id)!.bindings =
-                      p.workflows
-                        .find((x) => x.id === w.id)!
-                        .bindings.filter((x) => x.semantic !== b.semantic);
-                  })
-                }
-              >
-                Remove
-              </button>
-            </div>
-          ))}
           <details>
             <summary>Preserved graph</summary>
             <pre>{JSON.stringify(w.graph, null, 2)}</pre>
@@ -842,85 +789,20 @@ export function Workflows({
     </>
   );
 }
-export function Renders({
-  jobs,
-  root,
-  project,
-}: {
-  jobs: Job[];
-  root: string;
-  project: Project;
-}) {
-  const [selected, setSelected] = useState<Job | null>(null);
-  const rendered = jobs.filter((j) => j.results.length);
-  return (
-    <>
-      <PageTitle
-        eyebrow="TRACEABLE RESULTS"
-        title="Renders"
-        description="Every result remembers its frame, workflow version, account and exact submission."
-      />
-      {!rendered.length ? (
-        <Empty title="Your movie is taking shape">
-          Collected images and videos appear here after successful jobs.
-          Original receipts remain inside your document.
-        </Empty>
-      ) : (
-        <div className="asset-grid">
-          {rendered.flatMap((j) =>
-            j.results.map((a) => (
-              <article className="media-card panel" key={`${j.id}-${a.id}`}>
-                <Media asset={a} root={root} />
-                <strong className="asset-name" title={a.name}>
-                  {a.name}
-                </strong>
-                <span className="badge">
-                  {a.sourcePath ? "Linked original" : "Inside movie"}
-                </span>
-                {a.sourcePath && (
-                  <small className="source-path" title={a.sourcePath}>
-                    {a.sourcePath}
-                  </small>
-                )}
-                <small>
-                  {project.workflows.find((w) => w.id === j.workflowId)?.name} ·{" "}
-                  {j.state}
-                </small>
-                <button onClick={() => setSelected(j)}>View provenance</button>
-              </article>
-            )),
-          )}
-        </div>
-      )}
-      {selected && (
-        <Modal title="Generation provenance" onClose={() => setSelected(null)}>
-          <dl>
-            <dt>Attempt</dt>
-            <dd>{selected.id}</dd>
-            {selected.runId && (
-              <>
-                <dt>Batch run</dt>
-                <dd>{selected.runId}</dd>
-              </>
-            )}
-            {selected.itemId && (
-              <>
-                <dt>Batch item</dt>
-                <dd>{selected.itemId}</dd>
-              </>
-            )}
-            <dt>Remote task</dt>
-            <dd>{selected.remoteId}</dd>
-            <dt>Workflow SHA256</dt>
-            <dd>{selected.workflowVersion}</dd>
-            <dt>Account/connection</dt>
-            <dd>{selected.connectionId}</dd>
-            <dt>Created</dt>
-            <dd>{selected.createdAt}</dd>
-          </dl>
-          <pre>{JSON.stringify(selected.snapshot, null, 2)}</pre>
-        </Modal>
-      )}
-    </>
+export function Renders(props: React.ComponentProps<typeof Library>) {
+  return <Library {...props} rendersOnly />;
+}
+
+export function parseDeployment(text: string) {
+  const value = text.trim();
+  const match = value.match(
+    /^https:\/\/(?:www\.)?runninghub\.ai\/workflow\/(\d+)(?:[/?#]|$)/,
   );
+  if (match) return { deploymentId: match[1], apiFamily: "workflow" };
+  const app = value.match(
+    /^https:\/\/(?:www\.)?runninghub\.ai\/call-api\/api-detail\/(\d+)(?:[/?#]|$)/,
+  );
+  return app
+    ? { deploymentId: app[1], apiFamily: "ai-app" }
+    : { deploymentId: value };
 }

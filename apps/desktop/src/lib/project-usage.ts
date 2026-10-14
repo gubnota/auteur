@@ -1,4 +1,4 @@
-import type { Project } from "./types";
+import type { Project, Job } from "./types";
 export interface FrameLocation {
   episodeId: string;
   sceneId: string;
@@ -30,11 +30,15 @@ export function frameUsage(p: Project): FrameUsage[] {
 export function characterUsage(p: Project, id: string) {
   return frameUsage(p).filter((f) => f.characterIds.includes(id));
 }
-export function assetUsage(p: Project, id: string) {
+export function assetUsage(p: Project, id: string, jobs: Job[] = []) {
   const cast = p.characters
     .filter((c) => c.assetIds.includes(id))
     .map((c) => c.id);
   return {
+    characters: p.characters.filter((c) => c.assetIds.includes(id)),
+    jobs: jobs.filter(
+      (j) => j.results.some((a) => a.id === id) || snapshotUses(j.snapshot, id),
+    ),
     frames: frameUsage(p)
       .filter(
         (f) => f.assetId === id || f.characterIds.some((c) => cast.includes(c)),
@@ -50,4 +54,17 @@ export function assetUsage(p: Project, id: string) {
       )
       .map((d) => d.name),
   };
+}
+
+function snapshotUses(snapshot: unknown, id: string) {
+  if (!snapshot || typeof snapshot !== "object" || !("media" in snapshot))
+    return false;
+  const media = snapshot.media;
+  return (
+    !!media &&
+    typeof media === "object" &&
+    Object.values(media).some(
+      (a) => !!a && typeof a === "object" && "id" in a && a.id === id,
+    )
+  );
 }

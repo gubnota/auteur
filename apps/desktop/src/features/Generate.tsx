@@ -9,24 +9,22 @@ import {
   Trash2,
 } from "lucide-react";
 import type { Update } from "../App";
-import type { AppSettings, JobDraft, JobItem, Project } from "../lib/types";
-import { newJobDraft } from "./Jobs";
+import {
+  uid,
+  type AppSettings,
+  type Job,
+  type JobDraft,
+  type JobItem,
+  type Project,
+} from "../lib/types";
+import { newJobDraft } from "../lib/job-drafts";
+import { JobReview } from "../components/JobReview";
 import { WorkflowInputs } from "../components/WorkflowInputs";
 import { Field, Picker, Toggle } from "../components/Controls";
 import { WorkflowTarget } from "../components/WorkflowTarget";
 import { readiness, workflowForTarget } from "../lib/job-inputs";
 import { compatibilityLabel } from "../components/WorkflowSetup";
 import { Media } from "./Library";
-const modes = [
-  { id: "image-create", label: "Image create", kind: "image" },
-  { id: "image-edit", label: "Image edit", kind: "image" },
-  { id: "t2v", label: "Text to video", kind: "video" },
-  { id: "i2v", label: "Image to video", kind: "video" },
-  { id: "v2v", label: "Video to video", kind: "video" },
-  { id: "a2v", label: "Audio to video", kind: "video" },
-  { id: "multi-ref", label: "Multi-reference", kind: "other" },
-  { id: "custom", label: "Custom", kind: "other" },
-];
 export function Generate({
   project: p,
   settings,
@@ -34,21 +32,27 @@ export function Generate({
   update,
   selectedId,
   select,
-  review,
+  configure,
+  flush,
+  onJobs,
+  executeJob,
+  jobs,
   importMedia,
   importWorkflow,
   prepare,
   notify,
-  enqueue,
 }: {
-  enqueue: (id: string) => Promise<void>;
+  flush: () => Promise<void>;
+  executeJob: <T>(command: string, args: Record<string, unknown>) => Promise<T>;
+  onJobs: (jobs: Job[]) => void;
+  jobs: Job[];
   project: Project;
   settings: AppSettings;
   root: string;
   update: Update;
   selectedId: string;
   select: (id: string) => void;
-  review: (id: string) => void;
+  configure: () => void;
   importMedia: (
     draftId: string,
     itemId: string,
@@ -62,16 +66,13 @@ export function Generate({
   ) => Promise<void>;
   notify: (message: string) => void;
 }) {
-  const drafts = (p.jobDrafts ?? []).filter(
-    (d) => d.context?.kind === "standalone",
-  );
+  const drafts = p.jobDrafts ?? [];
   const draft = drafts.find((d) => d.id === selectedId) ?? drafts[0];
   const [itemId, setItemId] = useState("");
-  const [queueing, setQueueing] = useState(false);
+
   const item = draft?.items.find((i) => i.id === itemId) ?? draft?.items[0];
   const sourceWorkflow = p.workflows.find((w) => w.id === item?.workflowId);
   const workflow = workflowForTarget(sourceWorkflow, item?.connectionId ?? "");
-  const mode = modes.find((m) => m.id === draft?.context?.mode) ?? modes[0];
   const editDraft = (fn: (d: JobDraft) => void) => {
     if (draft)
       update((p) => {
@@ -86,15 +87,15 @@ export function Generate({
     });
   const add = () => {
     const d = newJobDraft(p, settings);
-    d.context!.mode = mode.id;
     update((p) => {
       (p.jobDrafts ??= []).push(d);
     });
     select(d.id);
   };
   const issues = draft ? readiness(p, settings, draft) : [];
+  const resultIds = new Set(jobs.flatMap((j) => j.results.map((a) => a.id)));
   const results = p.assets
-    .filter((a) => ["image", "video"].includes(a.kind))
+    .filter((a) => resultIds.has(a.id) && !a.archivedAt)
     .slice(-4)
     .reverse();
   return (
@@ -113,42 +114,6 @@ export function Generate({
           New generation
         </button>
       </header>
-      <div
-        className="generate-modes"
-        role="tablist"
-        aria-label="Generation mode"
-      >
-        {modes.map((m) => (
-          <button
-            role="tab"
-            aria-selected={mode.id === m.id}
-            className={mode.id === m.id ? "selected" : ""}
-            key={m.id}
-            onClick={() => {
-              if (!draft) {
-                const d = newJobDraft(p, settings);
-                d.context!.mode = m.id;
-                update((p) => {
-                  (p.jobDrafts ??= []).push(d);
-                });
-                select(d.id);
-              } else
-                editDraft((d) => {
-                  d.context!.mode = m.id;
-                });
-            }}
-          >
-            {m.kind === "video" ? (
-              <Video size={17} />
-            ) : m.kind === "image" ? (
-              <ImagePlus size={17} />
-            ) : (
-              <WandSparkles size={17} />
-            )}{" "}
-            {m.label}
-          </button>
-        ))}
-      </div>
       {!draft ? (
         <section className="panel generate-welcome">
           <WandSparkles size={40} />
@@ -181,6 +146,19 @@ export function Generate({
                 }))}
                 onChange={select}
               />
+              <button
+                className="text-button danger"
+                onClick={() => {
+                  update((p) => {
+                    p.jobDrafts = (p.jobDrafts ?? []).filter(
+                      (d) => d.id !== draft.id,
+                    );
+                  });
+                  select(drafts.find((d) => d.id !== draft.id)?.id ?? "");
+                }}
+              >
+                Remove draft
+              </button>
               <Field
                 label="Generation name"
                 value={draft.name}
@@ -190,6 +168,40 @@ export function Generate({
                   })
                 }
               />
+              <details>
+                <summary>
+                  Target context ·{" "}
+                  {draft.frameId ? "Storyboard frame" : "Custom media"}
+                </summary>
+                <Picker
+                  title="Target keyframe"
+                  value={draft.frameId}
+                  options={[
+                    { id: "", label: "Custom media · no frame" },
+                    ...p.episodes.flatMap((e) =>
+                      e.scenes.flatMap((s) =>
+                        s.shots.flatMap((sh) =>
+                          sh.frames.map((f) => ({
+                            id: f.id,
+                            label: `${e.name} / ${s.name} / ${f.name}`,
+                          })),
+                        ),
+                      ),
+                    ),
+                  ]}
+                  onChange={(frameId) =>
+                    editDraft((d) => {
+                      d.frameId = frameId;
+                      d.context = {
+                        ...d.context,
+                        kind: frameId ? "storyboard" : "standalone",
+                        mode: d.context?.mode ?? "custom",
+                        characterIds: d.context?.characterIds ?? [],
+                      };
+                    })
+                  }
+                />
+              </details>
               <div className="jobs-item-strip">
                 {draft.items.map((i, n) => (
                   <button
@@ -221,6 +233,18 @@ export function Generate({
                     Selected item {draft.items.indexOf(item) + 1} of{" "}
                     {draft.items.length}
                   </span>
+                  <button
+                    onClick={() =>
+                      editDraft((d) => {
+                        const next = structuredClone(item);
+                        next.id = uid();
+                        d.items.push(next);
+                        setItemId(next.id);
+                      })
+                    }
+                  >
+                    Duplicate item
+                  </button>
                   <button
                     onClick={() => {
                       const index = draft.items.findIndex(
@@ -255,7 +279,7 @@ export function Generate({
                     options={p.workflows.map((w) => ({
                       id: w.id,
                       label: w.name,
-                      description: `${compatibilityLabel(w)} · ${w.mediaKind ?? "other"}${w.mediaKind === mode.kind || mode.kind === "other" ? " · matches mode" : " · check compatibility"} · ${w.version.slice(0, 12)}`,
+                      description: `${compatibilityLabel(w)} · ${w.mediaKind ?? "other"} · ${w.version.slice(0, 12)}`,
                     }))}
                     onChange={(workflowId) =>
                       editItem((i) => {
@@ -306,10 +330,17 @@ export function Generate({
                         <Toggle
                           key={c.id}
                           label={c.name}
-                          checked={draft.context!.characterIds.includes(c.id)}
+                          checked={(draft.context?.characterIds ?? []).includes(
+                            c.id,
+                          )}
                           onChange={(checked) =>
                             editDraft((d) => {
-                              d.context!.characterIds = checked
+                              d.context ??= {
+                                kind: d.frameId ? "storyboard" : "standalone",
+                                mode: "custom",
+                                characterIds: [],
+                              };
+                              d.context.characterIds = checked
                                 ? [...d.context!.characterIds, c.id]
                                 : d.context!.characterIds.filter(
                                     (id) => id !== c.id,
@@ -323,17 +354,21 @@ export function Generate({
                   {workflow && (
                     <>
                       {sourceWorkflow && (
-                        <WorkflowTarget
-                          workflow={sourceWorkflow}
-                          connection={settings.connections.find(
-                            (c) => c.id === item.connectionId,
-                          )}
-                          prepare={prepare}
-                          notify={notify}
-                        />
+                        <details>
+                          <summary>Workflow preparation & exports</summary>
+                          <WorkflowTarget
+                            workflow={sourceWorkflow}
+                            connection={settings.connections.find(
+                              (c) => c.id === item.connectionId,
+                            )}
+                            prepare={prepare}
+                            notify={notify}
+                          />
+                        </details>
                       )}
                       <WorkflowInputs
                         key={`${draft.id}:${item.id}:${workflow.id}`}
+                        configure={configure}
                         p={p}
                         draft={draft}
                         item={item}
@@ -355,7 +390,7 @@ export function Generate({
               )}
             </section>
             <aside className="generate-preview panel">
-              <h2>Recent movie media</h2>
+              <h2>Recent results</h2>
               <p className="muted">
                 Select imported files in each mapped slot. New job results
                 appear here and in Renders.
@@ -401,22 +436,20 @@ export function Generate({
                 </small>
               )}
             </div>
-            <div className="jobs-toolbar">
-              <button
-                className="primary"
-                disabled={queueing || !!issues.length}
-                onClick={() => {
-                  setQueueing(true);
-                  void enqueue(draft.id).finally(() => setQueueing(false));
-                }}
-              >
-                Add to queue
-              </button>
-              <button onClick={() => review(draft.id)}>
-                <ListChecks size={18} />
-                Review / run in Jobs
-              </button>
-            </div>
+            <JobReview
+              key={draft.id}
+              draft={draft}
+              issues={issues}
+              flush={flush}
+              onJobs={onJobs}
+              executeJob={executeJob}
+              notify={notify}
+              saved={() =>
+                editDraft((d) => {
+                  d.queuedRunId = null;
+                })
+              }
+            />
           </footer>
         </>
       )}

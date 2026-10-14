@@ -1,3 +1,4 @@
+import { MediaPicker } from "../components/MediaPicker";
 import { useRef, useState, useEffect, type PointerEvent } from "react";
 import {
   Plus,
@@ -486,18 +487,14 @@ export function Board({
                     })
                   }
                 />
-                <Picker
+                <MediaPicker
                   title="Reference image"
+                  root={root}
+                  assets={p.assets.filter((a) => a.kind === "image")}
                   value={frame.assetId ?? ""}
-                  options={[
-                    { id: "", label: "No reference image" },
-                    ...p.assets
-                      .filter((a) => a.kind === "image")
-                      .map((a) => ({ id: a.id, label: a.name })),
-                  ]}
-                  onChange={(v) =>
+                  onChange={(ids) =>
                     modify(frame.id, (f) => {
-                      f.assetId = v || null;
+                      f.assetId = ids[0] ?? null;
                     })
                   }
                 />

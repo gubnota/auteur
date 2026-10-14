@@ -43,7 +43,11 @@ test("queued batches stay idle across reopening until explicitly started", async
   await page.getByRole("button", { name: "Pilot / Coast / Frame 01" }).click();
   await page.getByRole("button", { name: "Create generation job" }).click();
   await page.getByRole("button", { name: "Review exact inputs" }).click();
-  await page.getByRole("button", { name: "Add to queue", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Add to queue", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Jobs", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Run queued batch", exact: true }),
   ).toBeVisible();
@@ -80,12 +84,12 @@ test("exact empty prompt, zero, false and parsed JSON survive batch duplication"
     .getByLabel("Use composed project / scene / keyframe prompt")
     .uncheck();
   await page
-    .getByRole("textbox", { name: "positivePrompt · 1.text", exact: true })
+    .getByRole("textbox", { name: "positivePrompt", exact: true })
     .fill("");
-  await page.getByLabel("seed · 2.seed", { exact: true }).fill("0");
+  await page.getByLabel("seed", { exact: true }).fill("0");
   await page.getByLabel("enabled", { exact: true }).uncheck();
   await page
-    .getByRole("textbox", { name: "config · 2.config", exact: true })
+    .getByRole("textbox", { name: "config", exact: true })
     .fill('{"quality":"fast","steps":1}');
   await page
     .getByRole("button", { name: "Duplicate item", exact: true })
@@ -93,7 +97,7 @@ test("exact empty prompt, zero, false and parsed JSON survive batch duplication"
   await page
     .getByRole("button", { name: "Execution node", exact: true })
     .click();
-  await page.getByRole("button", { name: /ComfyUI 2 comfyui/ }).click();
+  await page.getByRole("button", { name: /ComfyUI 2 Automatic FIFO/ }).click();
   await page.getByRole("button", { name: "Review exact inputs" }).click();
   await page.getByRole("button", { name: /Run now.*2 jobs/ }).click();
   await expect
@@ -126,11 +130,9 @@ test("invalid raw inputs persist through item switching and reopening and block 
     .click();
   await page.getByRole("button", { name: "Pilot / Coast / Frame 01" }).click();
   await page.getByRole("button", { name: "Create generation job" }).click();
+  await page.getByLabel("seed", { exact: true }).fill("invalid-number");
   await page
-    .getByLabel("seed · 2.seed", { exact: true })
-    .fill("invalid-number");
-  await page
-    .getByRole("textbox", { name: "config · 2.config", exact: true })
+    .getByRole("textbox", { name: "config", exact: true })
     .fill("{bad-json");
   await expect(
     page.getByRole("button", { name: "Review exact inputs" }),
@@ -141,7 +143,7 @@ test("invalid raw inputs persist through item switching and reopening and block 
   await page
     .getByRole("button", { name: "1. Imported image workflow", exact: true })
     .click();
-  await expect(page.getByLabel("seed · 2.seed", { exact: true })).toHaveValue(
+  await expect(page.getByLabel("seed", { exact: true })).toHaveValue(
     "invalid-number",
   );
   await expect
@@ -157,9 +159,9 @@ test("invalid raw inputs persist through item switching and reopening and block 
     .toBe(2);
   await page.getByRole("button", { name: "Welcome", exact: true }).click();
   await page.getByRole("button", { name: /Open a movie/ }).click();
-  await page.getByRole("button", { name: "Jobs", exact: true }).click();
+  await page.getByRole("button", { name: "Generate", exact: true }).click();
   await expect(
-    page.getByRole("textbox", { name: "config · 2.config", exact: true }),
+    page.getByRole("textbox", { name: "config", exact: true }),
   ).toHaveValue("{bad-json");
   await expect(
     page.getByRole("button", { name: "Review exact inputs" }),
@@ -178,38 +180,43 @@ test("collapse editor, edit a queued node and save an idle replacement", async (
     .click();
   await page.getByRole("button", { name: "Pilot / Coast / Frame 01" }).click();
   await page.getByRole("button", { name: "Create generation job" }).click();
-  await page.getByLabel("seed · 2.seed", { exact: true }).fill("7");
+  await page.getByLabel("seed", { exact: true }).fill("7");
   await page.getByRole("button", { name: "Review exact inputs" }).click();
-  await page.getByRole("button", { name: "Add to queue", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Add to queue", exact: true })
+    .click();
   // Changing the saved draft must not change the inputs restored from its queue receipt.
-  await page.getByLabel("seed · 2.seed", { exact: true }).fill("99");
-  await page.getByRole("button", { name: "Collapse draft editor" }).click();
-  await expect(page.getByLabel("Job draft name")).toHaveCount(0);
+  await page.getByLabel("seed", { exact: true }).fill("99");
+  await page.getByRole("button", { name: "Jobs", exact: true }).click();
+  await expect(page.getByLabel("Generation name")).toHaveCount(0);
   await page.getByRole("button", { name: "Edit queued batch" }).click();
-  await expect(page.getByLabel("seed · 2.seed", { exact: true })).toHaveValue(
-    "7",
-  );
+  await expect(page.getByLabel("seed", { exact: true })).toHaveValue("7");
   await page
     .getByRole("button", { name: "Execution node", exact: true })
     .click();
-  await page.getByRole("button", { name: /ComfyUI 2 comfyui/ }).click();
+  await page.getByRole("button", { name: /ComfyUI 2 Automatic FIFO/ }).click();
   // Pending queue edits survive reopening as a saved draft.
   await page.getByRole("button", { name: "Welcome", exact: true }).click();
   await page.getByRole("button", { name: /Open a movie/ }).click();
   await page.getByRole("button", { name: "Jobs", exact: true }).click();
-  await page
-    .getByRole("button", { name: /Generation 1 edit.*workflow items/ })
-    .click();
+  await page.getByText(/^Saved drafts ·/).click();
+  await page.getByRole("button", { name: /Edit Generation 1 edit/ }).click();
   await page.getByRole("button", { name: "Review exact inputs" }).click();
   await expect(page.getByRole("button", { name: /Run now/ })).toBeDisabled();
-  await page.getByRole("button", { name: "Save queue changes" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Save queue changes" })
+    .click();
   const state = await page.evaluate(() => ({
     submissions: (window as any).fixture.submissions,
   }));
   expect(state.submissions).toEqual([]);
+  await page.getByRole("button", { name: "Jobs", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Run queued batch", exact: true }),
   ).toHaveCount(1);
+  await page.getByRole("button", { name: "Jobs", exact: true }).click();
   await expect(page.getByText(/ComfyUI 2: paused/)).toBeVisible();
   await page.screenshot({
     path: "docs/screenshots/jobs-queue-edit.png",
@@ -231,7 +238,10 @@ test("clear finished queue entries persists without removing history or active j
       .getByRole("button", { name: "Duplicate item", exact: true })
       .click();
   await page.getByRole("button", { name: "Review exact inputs" }).click();
-  await page.getByRole("button", { name: "Add to queue", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Add to queue", exact: true })
+    .click();
   await page.evaluate(() =>
     (window as any).fixture.setJobStates([
       "completed",
@@ -241,6 +251,7 @@ test("clear finished queue entries persists without removing history or active j
       "unknown",
     ]),
   );
+  await page.getByRole("button", { name: "Jobs", exact: true }).click();
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.locator(".queue-job")).toHaveCount(5);
   await page

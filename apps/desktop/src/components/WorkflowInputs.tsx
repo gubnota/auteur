@@ -17,7 +17,8 @@ import {
 } from "../lib/job-inputs";
 import { ratios } from "../lib/types";
 import { Field, Modal, Picker, Toggle } from "./Controls";
-import { Media } from "../features/Library";
+import { Media } from "./Media";
+import { MediaPicker } from "./MediaPicker";
 export function WorkflowInputs({
   p,
   draft,
@@ -27,7 +28,9 @@ export function WorkflowInputs({
   error,
   root = "",
   importMedia,
+  configure,
 }: {
+  configure: () => void;
   p: Project;
   draft: JobDraft;
   item: JobItem;
@@ -88,25 +91,13 @@ export function WorkflowInputs({
       }) ?? p.ratio
     );
   });
-  const [adding, setAdding] = useState(false);
-  const [field, setField] = useState("");
-  const [semantic, setSemantic] = useState("");
-  const [type, setType] = useState("string");
-  const available = literalInputs(w).filter(
-    (x) => !bindings.some((b) => b.nodeId === x.nodeId && b.input === x.input),
-  );
   const refs = castImages(p, draft.frameId, draft.context?.characterIds);
-  const [mediaKind, setMediaKind] = useState("");
-  const [role, setRole] = useState("referenceImage");
   const defaultValue = (b: Binding) => w.graph[b.nodeId]?.inputs[b.input];
   return (
     <section className="jobs-inputs">
       <div className="jobs-toolbar">
         <h2>Exact inputs</h2>
-        <button onClick={() => setAdding(true)}>
-          <Plus size={16} />
-          Bind literal input
-        </button>
+        <button onClick={configure}>Configure workflow inputs</button>
       </div>
       {images.length === 2 && (
         <button
@@ -123,8 +114,8 @@ export function WorkflowInputs({
       )}
       {!bindings.length && (
         <p className="muted">
-          This graph uses its imported defaults. Add explicit bindings to
-          configure inputs.
+          This graph uses its imported defaults. Configure reusable inputs in
+          Workflows.
         </p>
       )}
       {!!dimensions.length && (
@@ -203,7 +194,7 @@ export function WorkflowInputs({
         />
       )}
       {w.inputs
-        ?.filter((d) => d.control === "unsupported")
+        ?.filter((d) => d.control === "unsupported" && (advanced || !d.hidden))
         .map((d) => (
           <p key={d.binding.semantic} className="muted">
             {d.label}: custom type requires an explicit mapping.
@@ -242,21 +233,23 @@ export function WorkflowInputs({
                   {b.valueType}
                 </small>
               </div>
-              <button
-                aria-label={`Remove binding ${b.semantic}`}
-                onClick={() => {
-                  error(key, "");
-                  edit((i) => {
-                    i.bindings = bindings.filter((x) => x !== b);
-                    delete i.values[b.semantic];
-                    delete i.inputText?.[key];
-                    delete i.inputErrors?.[key];
-                    delete i.assets[b.semantic];
-                  });
-                }}
-              >
-                <XIcon />
-              </button>
+              {item.bindings && (
+                <button
+                  aria-label={`Remove binding ${b.semantic}`}
+                  onClick={() => {
+                    error(key, "");
+                    edit((i) => {
+                      i.bindings = bindings.filter((x) => x !== b);
+                      delete i.values[b.semantic];
+                      delete i.inputText?.[key];
+                      delete i.inputErrors?.[key];
+                      delete i.assets[b.semantic];
+                    });
+                  }}
+                >
+                  <XIcon />
+                </button>
+              )}
             </div>
             {!mediaBinding(b) && advanced && (
               <small className="muted">
@@ -270,6 +263,29 @@ export function WorkflowInputs({
             {mediaBinding(b) ? (
               <div
                 className="generate-media-slot"
+                onDragOver={(e) => {
+                  if (
+                    e.dataTransfer.types.includes("application/x-mymovie-asset")
+                  )
+                    e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  const id = e.dataTransfer.getData(
+                    "application/x-mymovie-asset",
+                  );
+                  if (!id) return;
+                  e.preventDefault();
+                  const a = p.assets.find(
+                    (a) =>
+                      a.id === id &&
+                      !a.archivedAt &&
+                      a.kind === (b.media?.kind ?? "image"),
+                  );
+                  if (a)
+                    edit((i) => {
+                      i.assets[b.semantic] = id;
+                    });
+                }}
                 data-file-drop="generate"
                 data-draft-id={draft.id}
                 data-item-id={item.id}
@@ -288,34 +304,24 @@ export function WorkflowInputs({
                   {b.media?.role ?? b.semantic} · Drop{" "}
                   {b.media?.kind ?? "image"} here
                 </small>
-                <Picker
-                  title={`Media source for ${b.semantic}`}
+                <MediaPicker
+                  title={`Media source for ${descriptor?.label ?? b.semantic}`}
+                  root={root}
+                  usedIds={Object.entries(item.assets)
+                    .filter(([key]) => key !== b.semantic)
+                    .map(([, id]) => id)}
                   value={item.assets[b.semantic] ?? ""}
-                  options={[
-                    {
-                      id: "",
-                      label:
-                        b.semantic === "image"
-                          ? "Use keyframe image"
-                          : b.semantic.startsWith("characterReference")
-                            ? "Use assigned cast reference"
-                            : "Choose image",
-                    },
-                    ...(b.semantic.startsWith("characterReference") ||
+                  assets={
+                    b.semantic.startsWith("characterReference") ||
                     b.media?.role === "characterReference"
                       ? refs
                       : p.assets.filter(
                           (a) => a.kind === (b.media?.kind ?? "image"),
                         )
-                    ).map((a) => ({
-                      id: a.id,
-                      label: a.name,
-                      description: a.sha256.slice(0, 12),
-                    })),
-                  ]}
-                  onChange={(id) =>
+                  }
+                  onChange={(ids) =>
                     edit((i) => {
-                      if (id) i.assets[b.semantic] = id;
+                      if (ids[0]) i.assets[b.semantic] = ids[0];
                       else delete i.assets[b.semantic];
                     })
                   }
@@ -485,133 +491,6 @@ export function WorkflowInputs({
           </article>
         );
       })}
-      {adding && (
-        <Modal
-          title="Bind a literal workflow input"
-          onClose={() => setAdding(false)}
-        >
-          <p>
-            Connected inputs stay linked. Bindings apply to this job item; the
-            imported graph remains unchanged.
-          </p>
-          <Picker
-            title="Node input"
-            value={field}
-            options={available.map((x) => ({
-              id: JSON.stringify([x.nodeId, x.input]),
-              label: `${x.nodeId}.${x.input}`,
-              description: `${x.classType} · ${JSON.stringify(x.value)}`,
-            }))}
-            onChange={(v) => {
-              setField(v);
-              const [n, i] = JSON.parse(v);
-              const val = w.graph[n].inputs[i];
-              setType(
-                typeof val === "number"
-                  ? "number"
-                  : typeof val === "boolean"
-                    ? "boolean"
-                    : typeof val === "string"
-                      ? "string"
-                      : "json",
-              );
-            }}
-          />
-          <Field
-            label="Semantic input name"
-            value={semantic}
-            onChange={setSemantic}
-            placeholder="seed, width, fps, image, mask, characterReference1…"
-          />
-          <Picker
-            title="Input type"
-            value={type}
-            options={["string", "number", "boolean", "json"].map((t) => ({
-              id: t,
-              label: t,
-            }))}
-            onChange={setType}
-          />
-          <Picker
-            title="Media slot"
-            value={mediaKind}
-            options={[
-              { id: "", label: "Literal value" },
-              ...["image", "video", "audio"].map((id) => ({
-                id,
-                label: `${id} file`,
-              })),
-            ]}
-            onChange={(kind) => {
-              setMediaKind(kind);
-              if (kind) setType("string");
-              setRole(
-                kind === "audio"
-                  ? "referenceAudio"
-                  : kind === "video"
-                    ? "referenceVideo"
-                    : "referenceImage",
-              );
-            }}
-          />
-          {mediaKind && (
-            <Picker
-              title="Media role"
-              value={role}
-              options={(mediaKind === "image"
-                ? [
-                    "sourceImage",
-                    "startFrame",
-                    "endFrame",
-                    "referenceImage",
-                    "mask",
-                    "characterReference",
-                  ]
-                : mediaKind === "video"
-                  ? ["referenceVideo"]
-                  : ["referenceAudio"]
-              ).map((id) => ({ id, label: id.replace(/([A-Z])/g, " $1") }))}
-              onChange={setRole}
-            />
-          )}
-          <button
-            className="primary"
-            disabled={
-              !field ||
-              !semantic.trim() ||
-              bindings.some((b) => b.semantic === semantic.trim())
-            }
-            onClick={() => {
-              const [nodeId, input] = JSON.parse(field);
-              edit((i) => {
-                i.bindings = [
-                  ...bindings,
-                  {
-                    semantic: semantic.trim(),
-                    nodeId,
-                    input,
-                    valueType: mediaKind ? "string" : type,
-                    ...(mediaKind
-                      ? {
-                          media: {
-                            kind: mediaKind as "image" | "video" | "audio",
-                            role,
-                            order: bindings.length,
-                          },
-                        }
-                      : {}),
-                  },
-                ];
-              });
-              setAdding(false);
-              setField("");
-              setSemantic("");
-            }}
-          >
-            Add binding
-          </button>
-        </Modal>
-      )}
     </section>
   );
 }

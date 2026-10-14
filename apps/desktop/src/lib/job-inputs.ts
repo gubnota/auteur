@@ -82,11 +82,40 @@ export function workflowForTarget(
 ): Workflow | undefined {
   if (!w) return;
   const profile = w.profiles?.find((p) => p.connectionId === connectionId);
-  if (!profile) return w;
+
   return {
     ...w,
-    graph: profile.graph,
-    inputs: profile.inputs.map((d) => {
+    graph: profile?.graph ?? w.graph,
+    inputs: [
+      ...(profile?.inputs ?? w.inputs ?? []),
+      ...w.bindings
+        .filter(
+          (b) =>
+            !(profile?.inputs ?? w.inputs ?? []).some(
+              (d) =>
+                d.binding.nodeId === b.nodeId && d.binding.input === b.input,
+            ),
+        )
+        .map((b) => ({
+          binding: b,
+          label: b.semantic,
+          required: true,
+          control: b.media
+            ? "media"
+            : b.valueType === "string"
+              ? "multiline"
+              : b.valueType,
+          default: (profile?.graph ?? w.graph)[b.nodeId]?.inputs[b.input],
+          choices: [],
+          advanced: false,
+          hidden: false,
+          group: "",
+        })),
+    ].map((d) => {
+      const explicit = w.bindings.find(
+        (b) => b.nodeId === d.binding.nodeId && b.input === d.binding.input,
+      );
+      d = { ...d, binding: explicit ?? d.binding };
       const layout = w.layout?.inputs.find(
         (l) => l.nodeId === d.binding.nodeId && l.input === d.binding.input,
       );
@@ -102,13 +131,13 @@ export function workflowForTarget(
         },
       };
     }),
-    outputs: profile.outputs.map((d) => ({
+    outputs: (profile?.outputs ?? w.outputs ?? []).map((d) => ({
       ...d,
       ...w.layout?.outputs.find((l) => l.nodeId === d.nodeId),
     })),
     bindings: [
       ...w.bindings,
-      ...profile.inputs
+      ...(profile?.inputs ?? [])
         .filter(
           (d) =>
             d.control !== "unsupported" &&
@@ -193,6 +222,10 @@ export function resolveInputs(p: Project, draft: JobDraft, item: JobItem) {
           ? frame?.assetId
           : refs[Number(b.semantic.replace("characterReference", "")) - 1]?.id);
       const asset = p.assets.find((a) => a.id === id);
+      if (asset?.archivedAt)
+        throw new Error(
+          `Restore ${asset.name} from Library Trash before queueing`,
+        );
       if (!asset || asset.kind !== (b.media?.kind ?? "image"))
         throw new Error(
           `Select ${b.media?.kind ?? "image"} media for ${b.semantic} before generation`,
