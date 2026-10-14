@@ -13,7 +13,6 @@ pub fn lane(c: &Connection) -> Result<String> {
     let endpoint = url.as_str().trim_end_matches('/').to_string();
     Ok(match c.kind.as_str() {
         "comfyui" => format!("comfyui:{endpoint}"),
-        "runninghub" => format!("runninghub:{}", c.id),
         "relay" => format!(
             "relay:{endpoint}:{}",
             c.deployment_id.as_deref().unwrap_or("")
@@ -198,4 +197,121 @@ pub fn eligible(attempts: &[Job], connections: &[Connection]) -> Result<Vec<Stri
         }
     }
     Ok(result)
+}
+
+/// Selectively start/remove or replace idle tasks atomically. Historical receipts remain intact.
+pub fn control_selected(
+    store: &ProjectStore,
+    ids: &[String],
+    action: &str,
+    replacement: Option<(&JobRun, &[Job])>,
+) -> Result<()> {
+    if ids.is_empty() || !["resume", "cancel"].contains(&action) {
+        return Err("Select idle jobs and a supported action".into());
+    }
+    let unique: std::collections::HashSet<_> = ids.iter().collect();
+    if unique.len() != ids.len() {
+        return Err("Duplicate job selection".into());
+    }
+    let mut all = jobs(store)?;
+    for id in ids {
+        let job = all
+            .iter()
+            .find(|j| &j.id == id)
+            .ok_or("Selected receipt missing")?;
+        if job.state != "paused" || job.remote_id.is_some() {
+            return Err("Only paused, unsubmitted tasks can be changed".into());
+        }
+        if action == "resume" {
+            let c: Connection = serde_json::from_value(job.snapshot["connection"].clone())?;
+            lane(&c)?;
+        }
+    }
+    if let Some((run, attempts)) = replacement {
+        if action != "cancel"
+            || !run.queued
+            || run.state != "paused"
+            || attempts.is_empty()
+            || attempts.iter().any(|j| {
+                j.state != "paused" || j.remote_id.is_some() || j.run_id.as_deref() != Some(&run.id)
+            })
+        {
+            return Err("Replacement must be an idle queue".into());
+        }
+    }
+    for job in &mut all {
+        if ids.contains(&job.id) {
+            transition(
+                job,
+                if action == "resume" {
+                    "waiting"
+                } else {
+                    "canceled"
+                },
+            )?;
+        }
+    }
+    let mut parents = list(store)?;
+    parents.retain(|r| {
+        all.iter()
+            .any(|j| ids.contains(&j.id) && j.run_id.as_deref() == Some(&r.id))
+    });
+    for run in &mut parents {
+        let children: Vec<_> = all
+            .iter()
+            .filter(|j| j.run_id.as_deref() == Some(&run.id))
+            .collect();
+        let idle = children.iter().any(|j| j.state == "paused");
+        let active = children
+            .iter()
+            .any(|j| !terminal(&j.state) && j.state != "paused");
+        run.queued = idle && run.queued;
+        run.state = if active {
+            "active"
+        } else if idle {
+            "paused"
+        } else {
+            "finished"
+        }
+        .into();
+    }
+    let tx = store.connection().unchecked_transaction()?;
+    for j in all.iter().filter(|j| ids.contains(&j.id)) {
+        tx.execute(
+            "UPDATE jobs SET json=?2 WHERE id=?1",
+            rusqlite::params![j.id, serde_json::to_string(j)?],
+        )?;
+    }
+    for r in &parents {
+        tx.execute(
+            "UPDATE job_runs SET json=?2 WHERE id=?1",
+            rusqlite::params![r.id, serde_json::to_string(r)?],
+        )?;
+    }
+    if let Some((run, attempts)) = replacement {
+        tx.execute(
+            "INSERT INTO job_runs(id,json) VALUES(?1,?2)",
+            rusqlite::params![run.id, serde_json::to_string(run)?],
+        )?;
+        for j in attempts {
+            tx.execute(
+                "INSERT INTO jobs(id,json) VALUES(?1,?2)",
+                rusqlite::params![j.id, serde_json::to_string(j)?],
+            )?;
+        }
+    }
+    tx.commit()?;
+    for j in all.iter().filter(|j| ids.contains(&j.id)) {
+        crate::persist(store, j)?;
+    }
+    for r in &parents {
+        persist(store, r)?;
+    }
+    if let Some((run, attempts)) = replacement {
+        persist(store, run)?;
+        for j in attempts {
+            crate::persist(store, j)?;
+        }
+    }
+    Ok(())
 }

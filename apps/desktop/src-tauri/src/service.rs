@@ -62,12 +62,6 @@ fn credential(c: &Connection) -> Result<String> {
 fn backend(c: &Connection) -> Result<Box<dyn ExecutionBackend>> {
     Ok(match c.kind.as_str() {
         "comfyui" => Box::new(provider_comfyui::ComfyUi::new(&c.url)?),
-        "runninghub" => Box::new(provider_runninghub::RunningHub::at(
-            credential(c)?,
-            c.deployment_id.as_deref().unwrap_or(""),
-            c.api_family.as_deref().unwrap_or("workflow"),
-            &c.url,
-        )?),
         "relay" => Box::new(relay(c)?),
         _ => return Err("Unknown backend".into()),
     })
@@ -125,7 +119,7 @@ pub async fn open_project(
     let manifest = project_core::confined(Path::new(&path), "manifest.json").map_err(err)?;
     let format: Value =
         serde_json::from_slice(&std::fs::read(manifest).map_err(err)?).map_err(err)?;
-    if format["schemaVersion"].as_u64().is_some_and(|v| v < 4) && !allow_upgrade.unwrap_or(false) {
+    if format["schemaVersion"].as_u64().is_some_and(|v| v < 5) && !allow_upgrade.unwrap_or(false) {
         return Err("UPGRADE_REQUIRED: Workflow catalogue needs document format 4. A consistent SQLite and manifest backup will be saved inside backups/ first. Older MyMovie Studio versions cannot open the upgraded document.".into());
     }
     let new = ProjectStore::open(path).map_err(err)?;
@@ -216,31 +210,73 @@ pub async fn import_workflow(state: S<'_>, path: String) -> Reply<Project> {
         return Err("Workflow exceeds 16 MiB limit".into());
     }
     let graph = serde_json::from_slice(&std::fs::read(file).map_err(err)?).map_err(err)?;
-    let mut w = workflow_core::import_source(
-        file.file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .as_ref(),
-        graph,
-    )
-    .map_err(err)?;
-    if let Some(existing) = i
-        .settings
-        .catalogue()
-        .map_err(err)?
-        .into_iter()
-        .find(|x| x.version == w.version && x.editor_hash == w.editor_hash)
-    {
-        w = existing;
+    let bundled = workflow_core::bundle::is_bundle(&graph);
+    let mut workflows = if bundled {
+        workflow_core::bundle::import(graph).map_err(err)?
+    } else {
+        vec![
+            workflow_core::import_source(
+                file.file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .as_ref(),
+                graph,
+            )
+            .map_err(err)?,
+        ]
+    };
+    let catalogue = i.settings.catalogue().map_err(err)?;
+    for w in &mut workflows {
+        if !bundled
+            && let Some(old) = catalogue
+                .iter()
+                .find(|old| old.version == w.version && old.editor_graph == w.editor_graph)
+        {
+            *w = old.clone();
+        }
+        if let Some(old) = catalogue.iter().find(|old| old.id == w.id) {
+            if old.version != w.version
+                || old.graph != w.graph
+                || old.editor_graph != w.editor_graph
+            {
+                return Err("Collection conflicts with an immutable saved variant".into());
+            }
+            w.profiles = old.profiles.clone();
+            w.last_target = old.last_target.clone();
+        }
     }
-    i.settings.put_workflow(&w).map_err(err)?;
     let s = i.project.as_mut().ok_or("No movie open")?;
     let mut p = s.read().map_err(err)?;
-    if !p.workflows.iter().any(|x| x.id == w.id) {
-        p.workflows.push(w);
+    for w in &mut workflows {
+        if !bundled
+            && let Some(old) = p
+                .workflows
+                .iter()
+                .find(|old| old.version == w.version && old.editor_graph == w.editor_graph)
+        {
+            *w = old.clone();
+        }
+        if let Some(old) = p.workflows.iter_mut().find(|old| old.id == w.id) {
+            if old.version != w.version
+                || old.graph != w.graph
+                || old.editor_graph != w.editor_graph
+            {
+                return Err("Collection conflicts with this movie's variant".into());
+            }
+            old.wrapper = w.wrapper.clone();
+            old.layout = w.layout.clone();
+            old.bindings = w.bindings.clone();
+            old.requirements = w.requirements.clone();
+        } else {
+            p.workflows.push(w.clone());
+        }
     }
     let r = p.revision;
-    s.save(p, r).map_err(err)
+    let saved = s.save(p, r).map_err(err)?;
+    for w in &workflows {
+        i.settings.put_workflow(w).map_err(err)?;
+    }
+    Ok(saved)
 }
 #[tauri::command]
 pub async fn get_settings(state: S<'_>) -> Reply<AppSettings> {
@@ -346,6 +382,7 @@ pub async fn submit_job(
     let draft_id = project_core::id();
     let draft = JobDraft {
         queued_run_id: None,
+        queued_job_ids: vec![],
         id: draft_id.clone(),
         name: "Generation".into(),
         frame_id,
@@ -559,7 +596,7 @@ pub async fn plan_deployment(
             .workflows
             .into_iter()
             .filter(|w| workflow_ids.contains(&w.id))
-            .map(|w| workflow_core::for_target(&w, &connection_id))
+            .map(|w| workflow_core::for_setup(&w, &connection_id))
             .collect::<Result<Vec<_>>>()
             .map_err(err)?;
         (c, workflows, i.settings.read().map_err(err)?)
@@ -804,7 +841,7 @@ pub async fn export_workflow_setup(
         .ok_or("Unknown workflow")?
         .clone();
     if let Some(target) = connection_id {
-        workflow = workflow_core::for_target(&workflow, &target).map_err(err)?;
+        workflow = workflow_core::for_setup(&workflow, &target).map_err(err)?;
     }
     for a in &requirements.artifacts {
         a.validate().map_err(err)?;
@@ -909,4 +946,41 @@ pub async fn import_job_media(
         project: s.save(p, revision).map_err(err)?,
         asset_ids: vec![id],
     })
+}
+
+#[tauri::command]
+pub fn notebook_setup_script(host: String) -> Reply<String> {
+    let source = match host.as_str() {
+        "colab" => include_str!("../../../../deploy/colab/MyMovie_ComfyUI.ipynb"),
+        "kaggle" => include_str!("../../../../deploy/kaggle/MyMovie_ComfyUI.ipynb"),
+        _ => return Err("Select Colab or Kaggle".into()),
+    };
+    let notebook: Value = serde_json::from_str(source).map_err(err)?;
+    let cells = notebook["cells"]
+        .as_array()
+        .ok_or("Invalid bundled notebook")?;
+    let mut script = String::new();
+    // Include installation and startup, never the notebook's separate Stop cell.
+    for cell in cells.iter().take(8) {
+        if cell["cell_type"] == "code" {
+            for line in cell["source"].as_array().ok_or("Invalid notebook cell")? {
+                script.push_str(line.as_str().ok_or("Invalid notebook line")?);
+            }
+            script.push_str("\n\n");
+        }
+    }
+    Ok(script)
+}
+
+#[cfg(test)]
+mod notebook_script_tests {
+    #[test]
+    fn copyable_notebook_starts_without_including_the_stop_cell() {
+        for host in ["colab", "kaggle"] {
+            let script = super::notebook_setup_script(host.into()).unwrap();
+            assert!(script.contains("runner.start("));
+            assert!(!script.contains("runner.stop()"));
+            assert!(script.contains("ARTIFACT_SHA256"));
+        }
+    }
 }

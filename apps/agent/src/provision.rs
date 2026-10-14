@@ -82,8 +82,15 @@ fn workflow_set(payload: &Value) -> Result<Vec<studio_contracts::Workflow>> {
         {
             return Err("Invalid immutable workflow identity".into());
         }
-        workflow_core::validate_graph(&w.graph)?;
-        if provision_core::digest(&w.graph)? != w.version {
+        let pending = w.editor_graph.is_some() && w.graph.as_object().is_some_and(|g| g.is_empty());
+        let content = if pending {
+            workflow_core::for_setup(w, "")?;
+            w.editor_graph.as_ref().unwrap()
+        } else {
+            workflow_core::validate_graph(&w.graph)?;
+            &w.graph
+        };
+        if provision_core::digest(content)? != w.version {
             return Err("Workflow content differs from immutable version".into());
         }
     }
@@ -266,6 +273,14 @@ pub async fn control(
             json!({"ready":false,"state":"needs-restart","note":"Dependencies installed and verified. Stop this managed notebook runner, start it again, inspect the new runtime fingerprint and review initialization. Existing queues are never interrupted automatically."}),
         );
     }
+    if workflows
+        .iter()
+        .any(|w| w.graph.as_object().is_some_and(|g| g.is_empty()))
+    {
+        return Ok(
+            json!({"ready":false,"state":"needs-preparation","note":"Reviewed dependencies installed. Prepare each original workflow on this node, then review initialization again. No generation or readiness attestation was performed."}),
+        );
+    }
     let mut inv = helper(args, json!({"artifacts":profile.artifacts})).await?;
     inv["devices"] = comfy.health().await?["stats"]["devices"].clone();
     let reg = registry(args).await?;
@@ -406,4 +421,22 @@ async fn comfy_compatibility(args: &Args, kind: &str) -> Result<()> {
     provider_comfyui::ComfyUi::new(&args.comfy_url)?
         .validate_compatibility(kind)
         .await
+}
+
+#[cfg(test)]
+mod setup_tests {
+    use super::*;
+    #[test]
+    fn dependency_setup_accepts_immutable_editor_but_not_changed_source() {
+        let w = workflow_core::import_source(
+            "editor",
+            json!({"nodes":[{"id":1,"type":"MissingPlugin"}],"links":[]}),
+        )
+        .unwrap();
+        let mut payload = json!({"workflows":[w]});
+        let workflows = workflow_set(&payload).unwrap();
+        assert!(workflow_core::for_target(&workflows[0], "local").is_err());
+        payload["workflows"][0]["editorGraph"]["nodes"][0]["type"] = json!("ChangedPlugin");
+        assert!(workflow_set(&payload).is_err());
+    }
 }

@@ -15,23 +15,10 @@ fn preflight(i: &Inner, draft: &JobDraft) -> Result<Vec<Job>> {
             .iter()
             .find(|w| w.id == item.workflow_id)
             .ok_or("Workflow missing")?;
-        let mut c = connection(i, &item.connection_id)?;
-        // Item overrides are explicit; otherwise use verified workflow/account mapping.
-        if let Some(id) = &item.deployment_id {
-            c.deployment_id = Some(id.clone());
-        }
-        if let Some(family) = &item.api_family {
-            c.api_family = Some(family.clone());
-        }
-        if item.deployment_id.is_none() && item.api_family.is_none() {
-            c = workflow_core::deployment(w, &c)?;
-        }
+        let c = connection(i, &item.connection_id)?;
         runs::lane(&c)?;
         backend(&c)?; // validates endpoint, route, credentials without network activity
         let mut snapshot = workflow_core::resolve_item(&p, draft, item)?;
-        if c.kind == "runninghub" && snapshot["bindings"].as_array().is_none_or(Vec::is_empty) {
-            return Err("Configure verified provider bindings first".into());
-        }
         for value in snapshot["media"].as_object().unwrap().values() {
             let asset: Asset = serde_json::from_value(value.clone())?;
             asset_core::source(store(i)?.path(), &asset, true)?;
@@ -172,6 +159,9 @@ async fn freeze_draft(
     if draft.queued_run_id.is_some() && draft.queued_run_id != replace {
         return Err("This draft edits an existing queue. Save queue changes or keep it as a separate draft first".into());
     }
+    if !draft.queued_job_ids.is_empty() && (!queued || replace.is_some()) {
+        return Err("Save selected queue changes before starting".into());
+    }
     let epoch = i.session;
     drop(i);
     prepare_draft(state.inner(), &draft).await?;
@@ -206,7 +196,15 @@ async fn freeze_draft(
             j.state = "paused".into();
         }
     }
-    if let Some(old) = replace {
+    if !draft.queued_job_ids.is_empty() {
+        runs::control_selected(
+            store(&i).map_err(err)?,
+            &draft.queued_job_ids,
+            "cancel",
+            Some((&run, &attempts)),
+        )
+        .map_err(err)?;
+    } else if let Some(old) = replace {
         runs::replace_queued(store(&i).map_err(err)?, &old, &run, &attempts).map_err(err)?;
     } else {
         runs::create(store(&i).map_err(err)?, &run, &attempts).map_err(err)?;
@@ -271,26 +269,35 @@ async fn dispatch(
     let mut semantic = j.snapshot["semantic"].clone();
     let result: Result<Value> = async {
         let bindings: Vec<Binding> = serde_json::from_value(j.snapshot["bindings"].clone())?;
-        b.validate_compatibility(j.snapshot["compatibility"].as_str().unwrap_or("unspecified")).await?;
+        b.validate_compatibility(
+            j.snapshot["compatibility"]
+                .as_str()
+                .unwrap_or("unspecified"),
+        )
+        .await?;
         b.validate_profile(&j.snapshot["compiledProfile"]).await?;
-        b.validate_media(&j.snapshot["originalGraph"], &bindings).await?;
-        let resolved = workflow_core::bind_exact(&j.snapshot["originalGraph"], &bindings, &semantic)?;
+        b.validate_media(&j.snapshot["originalGraph"], &bindings)
+            .await?;
+        let resolved =
+            workflow_core::bind_exact(&j.snapshot["originalGraph"], &bindings, &semantic)?;
         b.validate_before_staging(&resolved, &bindings).await?;
-        let mut staged: std::collections::HashMap<String,String> = std::collections::HashMap::new();
+        let mut staged: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
         for (key, asset, bytes) in uploads {
-            let name = if let Some(name) = staged.get(&asset.sha256) { name.clone() } else {
+            let name = if let Some(name) = staged.get(&asset.sha256) {
+                name.clone()
+            } else {
                 let name = b.stage_asset(&asset, bytes).await?;
-                staged.insert(asset.sha256.clone(), name.clone()); name
+                staged.insert(asset.sha256.clone(), name.clone());
+                name
             };
             semantic[&key] = json!(name);
         }
-        let mut graph = workflow_core::bind_exact(&j.snapshot["originalGraph"], &bindings, &semantic)?;
+        let graph = workflow_core::bind_exact(&j.snapshot["originalGraph"], &bindings, &semantic)?;
         b.validate_job(&graph).await?;
-        if j.snapshot["connection"]["kind"] == "runninghub" {
-            graph["_mymovieNodeInfo"] = json!(bindings.iter().map(|x| json!({"nodeId":x.node_id,"fieldName":x.input,"fieldValue":graph[&x.node_id]["inputs"][&x.input]})).collect::<Vec<_>>());
-        }
         Ok(graph)
-    }.await;
+    }
+    .await;
     let graph = {
         let i = studio.inner.lock().await;
         session(&i, epoch)?;
@@ -746,4 +753,24 @@ mod tests {
             "canceled"
         );
     }
+}
+
+#[tauri::command]
+pub async fn control_job_tasks(
+    app: tauri::AppHandle,
+    state: S<'_>,
+    job_ids: Vec<String>,
+    action: String,
+) -> Reply<Vec<Job>> {
+    let i = state.inner.lock().await;
+    runs::control_selected(store(&i).map_err(err)?, &job_ids, &action, None).map_err(err)?;
+    let jobs = job_core::list(store(&i).map_err(err)?).map_err(err)?;
+    drop(i);
+    if action == "resume" {
+        let studio = state.inner().clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = refresh(&studio, &app).await;
+        });
+    }
+    Ok(jobs)
 }

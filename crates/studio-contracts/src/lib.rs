@@ -138,6 +138,8 @@ pub struct Workflow {
     pub last_target: Option<String>,
     #[serde(default)]
     pub layout: WorkflowLayout,
+    #[serde(default)]
+    pub wrapper: WorkflowWrapper,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -148,6 +150,8 @@ pub struct WorkflowLayout {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InputLayout {
+    #[serde(default)]
+    pub optional: bool,
     pub node_id: String,
     pub input: String,
     pub label: String,
@@ -335,6 +339,8 @@ pub struct Job {
 pub struct JobDraft {
     #[serde(default)]
     pub queued_run_id: Option<String>,
+    #[serde(default)]
+    pub queued_job_ids: Vec<String>,
     pub id: String,
     pub name: String,
     pub frame_id: String,
@@ -415,4 +421,72 @@ pub struct AppSettings {
     pub storage: Value,
     pub notifications: Vec<Diagnostic>,
     pub logs: Vec<Diagnostic>,
+}
+
+/// Designer metadata; every variant has independent immutable graph identity.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowWrapper {
+    #[serde(default)]
+    pub family_id: String,
+    #[serde(default)]
+    pub variant_name: String,
+    #[serde(default)]
+    pub collection: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub readme: String,
+    #[serde(default)]
+    pub illustration: Option<String>,
+    #[serde(default)]
+    pub os: String,
+    #[serde(default)]
+    pub architecture: String,
+    #[serde(default)]
+    pub precision: String,
+}
+impl WorkflowWrapper {
+    pub fn validate(&self) -> Result<(), String> {
+        if !self.family_id.is_empty() && uuid::Uuid::parse_str(&self.family_id).is_err() {
+            return Err("Invalid workflow family identity".into());
+        }
+        if self.readme.len() > 128 * 1024
+            || self.description.len() > 4096
+            || [
+                &self.collection,
+                &self.variant_name,
+                &self.os,
+                &self.architecture,
+                &self.precision,
+            ]
+            .iter()
+            .any(|v| v.len() > 200)
+        {
+            return Err("Workflow guide metadata exceeds limits".into());
+        }
+        if !["", "any", "macos", "linux", "windows"].contains(&self.os.as_str())
+            || !["", "any", "arm64", "x86_64"].contains(&self.architecture.as_str())
+        {
+            return Err("Unsupported workflow platform declaration".into());
+        }
+        if let Some(image) = &self.illustration {
+            if image.len() > 4 * 1024 * 1024
+                || ![
+                    "data:image/png;base64,",
+                    "data:image/jpeg;base64,",
+                    "data:image/webp;base64,",
+                ]
+                .iter()
+                .any(|p| image.starts_with(p))
+                || !image.split_once(',').is_some_and(|(_, data)| {
+                    data.bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b"+/=".contains(&b))
+                })
+            {
+                return Err("Illustration must be a bounded embedded PNG, JPEG or WebP".into());
+            }
+        }
+        Ok(())
+    }
 }

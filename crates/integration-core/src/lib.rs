@@ -21,7 +21,16 @@ impl SettingsStore {
                 r.get::<_, String>(0)
             });
         match raw {
-            Ok(s) => Ok(serde_json::from_str(&s)?),
+            Ok(s) => {
+                let mut settings: AppSettings = serde_json::from_str(&s)?;
+                // Retain vault references and historic receipts; retired destinations cannot execute.
+                for connection in &mut settings.connections {
+                    if connection.kind == "runninghub" {
+                        connection.kind = "retired".into();
+                    }
+                }
+                Ok(settings)
+            }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(AppSettings {
                 theme: "light".into(),
                 queue_height: 180.,
@@ -40,7 +49,7 @@ impl SettingsStore {
             }
             if ![
                 "comfyui",
-                "runninghub",
+                "retired",
                 "relay",
                 "google",
                 "fal",
@@ -83,15 +92,12 @@ impl SettingsStore {
                 );
             }
             let known = match c.kind.as_str() {
-                "runninghub" => Some("www.runninghub.ai"),
                 "google" => Some("generativelanguage.googleapis.com"),
                 "deepseek" => Some("api.deepseek.com"),
                 "openrouter" => Some("openrouter.ai"),
                 _ => None,
             };
-            let runninghub_cn =
-                c.kind == "runninghub" && url.host_str() == Some("www.runninghub.cn");
-            if known.is_some_and(|h| url.host_str() != Some(h)) && !runninghub_cn {
+            if known.is_some_and(|h| url.host_str() != Some(h)) {
                 return Err("Provider endpoint does not match its official host".into());
             }
         }

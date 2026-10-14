@@ -185,6 +185,7 @@ mod tests {
         let w = Workflow {
             id: id(),
             name: "Safe".into(),
+            wrapper: Default::default(),
             version: "a".repeat(64),
             graph: json!({}),
             inputs: vec![],

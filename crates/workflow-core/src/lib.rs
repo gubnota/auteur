@@ -1,3 +1,4 @@
+pub mod bundle;
 pub mod schema;
 use project_core::{Result, id};
 use serde_json::Value;
@@ -38,6 +39,7 @@ pub fn import(name: &str, graph: Value) -> Result<Workflow> {
         profiles: vec![],
         last_target: None,
         layout: Default::default(),
+        wrapper: Default::default(),
         bindings: vec![],
         media_kind: "other".into(),
         editor_graph: None,
@@ -67,6 +69,21 @@ pub fn import_source(name: &str, source: Value) -> Result<Workflow> {
     } else {
         import(name, source)
     }
+}
+/// Dependency review accepts an unprepared editor source; execution never does.
+pub fn for_setup(w: &Workflow, connection: &str) -> Result<Workflow> {
+    if w.editor_graph.is_some()
+        && w.graph.as_object().is_some_and(|g| g.is_empty())
+        && !w.profiles.iter().any(|p| p.connection_id == connection)
+    {
+        let source = w.editor_graph.as_ref().unwrap();
+        let imported = import_source(&w.name, source.clone())?;
+        if imported.version != w.version || imported.editor_hash != w.editor_hash {
+            return Err("Editor source differs from immutable version".into());
+        }
+        return Ok(w.clone());
+    }
+    for_target(w, connection)
 }
 pub fn for_target(w: &Workflow, connection: &str) -> Result<Workflow> {
     let mut result = w.clone();
@@ -225,29 +242,6 @@ pub fn attach_editor(workflow: &mut Workflow, editor: Value) -> Result<()> {
     workflow.editor_graph = Some(editor);
     Ok(())
 }
-pub fn deployment(
-    workflow: &Workflow,
-    connection: &studio_contracts::Connection,
-) -> Result<studio_contracts::Connection> {
-    let mut c = connection.clone();
-    if c.kind == "runninghub" {
-        if let Some(d) = workflow
-            .deployments
-            .iter()
-            .find(|d| d.connection_id == c.id)
-        {
-            if d.deployment_id.is_empty()
-                || !d.deployment_id.bytes().all(|b| b.is_ascii_digit())
-                || !["workflow", "ai-app"].contains(&d.api_family.as_str())
-            {
-                return Err("Invalid workflow account mapping".into());
-            }
-            c.deployment_id = Some(d.deployment_id.clone());
-            c.api_family = Some(d.api_family.clone());
-        }
-    }
-    Ok(c)
-}
 /// Credentials come from the current vault identity; the destination comes from the receipt.
 pub fn frozen_connection(
     job: &studio_contracts::Job,
@@ -395,29 +389,6 @@ pub fn character_references<'a>(
 mod tests {
     use super::*;
     use serde_json::json;
-    #[test]
-    fn account_mapping_and_receipt_destination_survive_connection_edits() {
-        let mut w = import("fixture", json!({"1":{"class_type":"Output","inputs":{}}})).unwrap();
-        let c: studio_contracts::Connection = serde_json::from_value(json!({"id":"account","name":"RH","kind":"runninghub","url":"https://www.runninghub.ai","credentialRef":"connection:account","deploymentId":"111","apiFamily":"workflow","concurrency":1})).unwrap();
-        w.deployments.push(studio_contracts::WorkflowDeployment {
-            connection_id: "account".into(),
-            deployment_id: "222".into(),
-            api_family: "ai-app".into(),
-        });
-        let selected = deployment(&w, &c).unwrap();
-        assert_eq!(selected.deployment_id.as_deref(), Some("222"));
-        assert_eq!(c.deployment_id.as_deref(), Some("111"));
-        let j: studio_contracts::Job = serde_json::from_value(json!({"id":"job","frameId":"f","workflowId":w.id,"workflowVersion":w.version,"connectionId":"account","state":"submitted","remoteId":"remote","snapshot":{"connection":{"id":"account","kind":"runninghub","url":"https://www.runninghub.ai","deploymentId":"222","apiFamily":"ai-app"}},"results":[],"error":null,"createdAt":"now","updatedAt":"now"})).unwrap();
-        let frozen = frozen_connection(&j, &c).unwrap();
-        assert_eq!(frozen.deployment_id, selected.deployment_id);
-        assert_eq!(frozen.api_family, selected.api_family);
-        assert_eq!(frozen.credential_ref, c.credential_ref);
-        let mut wrong = c.clone();
-        wrong.id = "other-account".into();
-        assert!(frozen_connection(&j, &wrong).is_err());
-        w.deployments[0].deployment_id = "invalid".into();
-        assert!(deployment(&w, &c).is_err());
-    }
     #[test]
     fn imports_preserve_unknown_metadata_and_serialized_motion_json() {
         let raw = json!({"1":{"class_type":"Motion","inputs":{"context":"{\"tracks\":[{\"duration\":5}]}"},"_meta":{"privateExtension":"preserve"}},"2":{"class_type":"Output","inputs":{"image":["1",0]}}});
@@ -619,8 +590,22 @@ pub fn resolve_item(
                 references.get(slot - 1).copied()
             } else {
                 None
-            }
-            .ok_or_else(|| format!("Select media for {} before generation", b.semantic))?;
+            };
+            let optional = w
+                .layout
+                .inputs
+                .iter()
+                .any(|l| l.node_id == b.node_id && l.input == b.input && l.optional);
+            let asset = match asset {
+                Some(asset) => asset,
+                None if optional && !item.assets.contains_key(&b.semantic) => {
+                    semantic[&b.semantic] = default.clone();
+                    continue;
+                }
+                None => {
+                    return Err(format!("Select media for {} before generation", b.semantic).into());
+                }
+            };
             if asset.archived_at.is_some() {
                 return Err(
                     format!("Restore {} from Library Trash before queueing", asset.name).into(),
@@ -766,6 +751,7 @@ mod jobs_tests {
         let item:JobItem=serde_json::from_value(serde_json::json!({"id":project_core::id(),"workflowId":w.id,"connectionId":"local","values":{"positivePrompt":"","context":"literal string","seed":0,"enabled":false}})).unwrap();
         let mut d = JobDraft {
             queued_run_id: None,
+            queued_job_ids: vec![],
             id: project_core::id(),
             name: "Exact".into(),
             frame_id: frame,
@@ -856,6 +842,7 @@ mod profile_tests {
             hidden: true,
             advanced: false,
             media_role: None,
+            optional: false,
         });
         let prepared = for_target(&w, "mac").unwrap();
         assert_eq!(prepared.bindings.len(), 2);

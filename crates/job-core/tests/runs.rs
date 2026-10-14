@@ -99,9 +99,10 @@ fn fifo_aliases_parallel_slots_unknown_and_recovery() {
     assert!(path.join(format!("jobs/runs/{rid}.json")).is_file());
 }
 #[test]
-fn runninghub_uses_account_capacity_and_reservations_are_not_redispatched() {
-    let mut a = c("https://www.runninghub.ai");
-    a.kind = "runninghub".into();
+fn relay_uses_worker_capacity_and_reservations_are_not_redispatched() {
+    let mut a = c("https://relay.example.test");
+    a.kind = "relay".into();
+    a.deployment_id = Some("worker".into());
     a.concurrency = 2;
     let mut jobs = vec![j(&a, "run"), j(&a, "run"), j(&a, "run")];
     jobs.reverse();
@@ -235,4 +236,81 @@ fn queue_edits_are_atomic_idle_and_preserve_original_receipts() {
     // An already started batch cannot be replaced, even before its next poll.
     assert!(runs::replace_queued(&s, &replacement.id, &replacement, &[after]).is_err());
     assert_eq!(runs::list(&s).unwrap().len(), 2);
+}
+
+#[test]
+fn selected_queue_controls_are_atomic_and_preserve_started_siblings() {
+    let tmp = tempfile::tempdir().unwrap();
+    let s = ProjectStore::create(tmp.path().join("selection.mymovie"), "Selection", true).unwrap();
+    let node = c("http://localhost:8188");
+    let rid = id();
+    let mut a = j(&node, &rid);
+    a.state = "paused".into();
+    let b = Job {
+        id: id(),
+        ..a.clone()
+    };
+    let run = JobRun {
+        id: rid.clone(),
+        name: "Selection".into(),
+        draft_id: id(),
+        job_ids: vec![a.id.clone(), b.id.clone()],
+        state: "paused".into(),
+        created_at: "now".into(),
+        queued: true,
+    };
+    runs::create(&s, &run, &[a.clone(), b.clone()]).unwrap();
+    assert!(runs::control_selected(&s, &[a.id.clone(), "missing".into()], "resume", None).is_err());
+    assert!(list(&s).unwrap().iter().all(|j| j.state == "paused"));
+    runs::control_selected(&s, &[a.id.clone()], "resume", None).unwrap();
+    a.state = "submitted".into();
+    a.remote_id = Some("receipt".into());
+    persist(&s, &a).unwrap();
+    assert!(runs::control_selected(&s, &[a.id.clone(), b.id.clone()], "cancel", None).is_err());
+    assert_eq!(
+        list(&s)
+            .unwrap()
+            .iter()
+            .find(|j| j.id == b.id)
+            .unwrap()
+            .state,
+        "paused"
+    );
+    let replacement_id = id();
+    let next = Job {
+        id: id(),
+        run_id: Some(replacement_id.clone()),
+        connection_id: c("http://localhost:8189").id,
+        ..b.clone()
+    };
+    let replacement = JobRun {
+        id: replacement_id,
+        job_ids: vec![next.id.clone()],
+        ..run
+    };
+    runs::control_selected(
+        &s,
+        &[b.id.clone()],
+        "cancel",
+        Some((&replacement, &[next.clone()])),
+    )
+    .unwrap();
+    let history = list(&s).unwrap();
+    assert_eq!(
+        history
+            .iter()
+            .find(|j| j.id == a.id)
+            .unwrap()
+            .remote_id
+            .as_deref(),
+        Some("receipt")
+    );
+    assert_eq!(
+        history.iter().find(|j| j.id == b.id).unwrap().state,
+        "canceled"
+    );
+    assert_eq!(
+        history.iter().find(|j| j.id == next.id).unwrap().state,
+        "paused"
+    );
 }

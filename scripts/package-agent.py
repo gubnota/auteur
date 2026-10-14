@@ -46,6 +46,7 @@ with tarfile.open(archive, "w:gz") as tar:
     tar.add(root / "deploy/runner/mymovie_runtime.py", arcname="mymovie_runtime.py", recursive=False)
     tar.add(root / "deploy/runner/mymovie_workflow_compiler.py", arcname="mymovie_workflow_compiler.py", recursive=False)
     tar.add(root / "deploy/runner/workflow-compiler-requirements.txt", arcname="workflow-compiler-requirements.txt", recursive=False)
+    tar.add(root / "scripts/notebook-bootstrap.py", arcname="notebook-bootstrap.py", recursive=False)
     for extra in extras:
         tar.add(extra, arcname=extra.name, recursive=False)
 files = [archive, *extras]

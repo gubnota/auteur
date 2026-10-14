@@ -174,13 +174,13 @@ impl ProjectStore {
         let db = Connection::open(root.join("project.sqlite"))?;
         db.pragma_update(None, "journal_mode", "WAL")?;
         let version: i64 = db.pragma_query_value(None, "user_version", |r| r.get(0))?;
-        if version > 4 {
+        if version > 5 {
             return Err("Project requires a newer MyMovie Studio".into());
         }
         if version == 0 {
             db.execute_batch(include_str!("../migrations/0001_initial.sql"))?;
         }
-        if (1..4).contains(&version) {
+        if (1..5).contains(&version) {
             // SQLite creates a consistent backup including WAL data before migration.
             let backup = confined(
                 &root,
@@ -203,6 +203,9 @@ impl ProjectStore {
         }
         if version < 4 {
             db.execute_batch(include_str!("../migrations/0004_workflow_catalogue.sql"))?;
+        }
+        if version < 5 {
+            db.execute_batch(include_str!("../migrations/0005_workflow_wrappers.sql"))?;
         }
         Ok(Self {
             root,
@@ -286,7 +289,7 @@ impl ProjectStore {
         // Journal remains pending on failure; opening repairs from authoritative SQLite.
         atomic_json(
             &confined(&self.root, "manifest.json")?,
-            &serde_json::json!({"schemaVersion":4,"id":p.id,"name":p.name,"revision":p.revision,"application":"MyMovie Studio"}),
+            &serde_json::json!({"schemaVersion":5,"id":p.id,"name":p.name,"revision":p.revision,"application":"MyMovie Studio"}),
         )?;
         for ep in &p.episodes {
             for scene in &ep.scenes {
@@ -312,6 +315,7 @@ impl ProjectStore {
             )?;
         }
         for w in &p.workflows {
+            w.wrapper.validate()?;
             atomic_json(
                 &confined(
                     &self.root,
@@ -397,6 +401,7 @@ pub fn validate(p: &Project) -> Result<()> {
         }
     }
     for w in &p.workflows {
+        w.wrapper.validate()?;
         check(&w.id)?;
         if ![
             "unspecified",
@@ -566,7 +571,7 @@ mod jobs_migration_tests {
                 .db
                 .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
                 .unwrap(),
-            4
+            5
         );
         let backups = || {
             fs::read_dir(path.join("backups"))

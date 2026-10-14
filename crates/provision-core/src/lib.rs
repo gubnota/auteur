@@ -159,6 +159,12 @@ pub fn readiness(
     let mut unresolved = vec![];
     let mut incompatible = vec![];
     for w in workflows {
+        if w.graph.as_object().is_some_and(|g| g.is_empty()) {
+            unresolved.push(format!(
+                "{}: prepare original workflow on this node after dependency setup",
+                w.name
+            ));
+        }
         if !compatible(&w.requirements.compatibility, &inventory["devices"]) {
             incompatible.push(w.id.clone());
         }
@@ -292,6 +298,22 @@ mod tests {
             json!({"SolidMask":{"python_module":"nodes"}}),
             vec![w],
         )
+    }
+    #[test]
+    fn uncompiled_editor_never_gets_a_readiness_attestation() {
+        let (p, i, r, _) = fixture();
+        let w =
+            workflow_core::import_source("pending", json!({"nodes":[{"id":1,"type":"SolidMask"}]}))
+                .unwrap();
+        let status = readiness(&p, &i, &r, &[w], "session", None).unwrap();
+        assert_eq!(status["ready"], false);
+        assert_eq!(status["state"], "missing-dependencies");
+        assert!(
+            status["unresolved"][0]
+                .as_str()
+                .unwrap()
+                .contains("prepare original")
+        );
     }
     #[test]
     fn attestation_is_invalidated_by_session_hardware_and_requirements() {

@@ -52,7 +52,7 @@ pub async fn install_workflow(
         }
         Err("Installation timed out; check runner logs before retrying".into())
     } else {
-        Err("Select a ComfyUI or runner node; RunningHub uses a hosted workflow ID".into())
+        Err("Select a ComfyUI or runner node".into())
     }
 }
 fn hash(v: &Value) -> Result<String> {
@@ -257,7 +257,7 @@ pub(super) async fn prepare_target(
             json!({"registry":provider_comfyui::ComfyUi::new(&c.url).map_err(err)?.get("/object_info").await.map_err(err)?,"compilerVersion":"api-schema-v1","frontendHash":""})
         }
     } else {
-        return Err("Use a ComfyUI or runner target to analyse an editor workflow. RunningHub requires its saved hosted deployment and API bindings.".into());
+        return Err("Select a ComfyUI or runner target to discover editor workflow inputs.".into());
     };
     let graph = if w.editor_graph.is_some() {
         receipt["graph"].clone()
@@ -361,4 +361,44 @@ pub async fn save_workflow_form(
     let saved = s.save(p, revision).map_err(err)?;
     i.settings.put_workflow(&catalogued).map_err(err)?;
     Ok(saved)
+}
+
+#[tauri::command]
+pub async fn export_workflow_bundle(
+    state: S<'_>,
+    workflow_id: String,
+    collection: bool,
+    path: String,
+) -> Reply<()> {
+    let i = state.inner.lock().await;
+    let p = store(&i).map_err(err)?.read().map_err(err)?;
+    let selected = p
+        .workflows
+        .iter()
+        .find(|w| w.id == workflow_id)
+        .ok_or("Workflow missing")?;
+    let family = if selected.wrapper.family_id.is_empty() {
+        &selected.id
+    } else {
+        &selected.wrapper.family_id
+    };
+    let workflows: Vec<_> = p
+        .workflows
+        .iter()
+        .filter(|w| {
+            if collection && !selected.wrapper.collection.is_empty() {
+                w.wrapper.collection == selected.wrapper.collection
+            } else {
+                let other = if w.wrapper.family_id.is_empty() {
+                    &w.id
+                } else {
+                    &w.wrapper.family_id
+                };
+                other == family
+            }
+        })
+        .cloned()
+        .collect();
+    let bundle = workflow_core::bundle::export(&workflows).map_err(err)?;
+    project_core::atomic_json(Path::new(&path), &bundle).map_err(err)
 }
