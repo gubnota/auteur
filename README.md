@@ -2,7 +2,7 @@
 
 [Download releases](https://github.com/gubnota/auteur/releases) — macOS Apple Silicon/Intel, Windows x64, Linux x86_64/ARM64 and headless ComfyUI agents. Windows installers are unsigned; macOS notarization remains pending.
 
-Version **0.1.4** adds Windows x64 and Linux ARM64 builds. The Jobs workspace provides saved batches, exact typed inputs, automatic FIFO on one ComfyUI instance and parallel dispatch to different instances. RunPod ComfyUI is the main execution target; RunningHub is for workflow tests. Opening an older document requests approval for a backed-up schema v2 upgrade; older app versions cannot open the upgraded package.
+Version **0.1.5** adds Windows x64 and Linux ARM64 builds. The Jobs workspace provides saved batches, exact typed inputs, automatic FIFO on one ComfyUI instance and parallel dispatch to different instances. RunPod ComfyUI is the main execution target; RunningHub is for workflow tests. Opening an older document requests approval for a backed-up schema v2 upgrade; older app versions cannot open the upgraded package.
 
 Release build: `npm run tauri:build -- --bundles app`; output: `target/release/bundle/macos/MyMovie Studio.app`. Local installation uses an ad-hoc signature; Apple notarization remains pending.
 
@@ -57,7 +57,7 @@ The schema v2 upgrade creates SQLite/manifest backups under the package’s `bac
 
 ## Private RunPod ComfyUI
 
-Use the [RunPod agent guide](deploy/runpod/README.md) to deploy the CI-built Linux x86_64 agent beside private ComfyUI. It connects outbound to an authenticated HTTPS relay; no public ComfyUI port is required. CI packages the real ELF agent, setup guide, metadata and SHA-256 checksums. Weights and custom nodes must already be installed. Automatic LoRA/runtime S3 synchronization and a live private RunPod/GPU roundtrip remain pending.
+Use the [RunPod agent guide](deploy/runpod/README.md) to deploy the CI-built Linux x86_64/ARM64 agent beside private ComfyUI. It connects outbound to an authenticated HTTPS relay; no public ComfyUI port is required. CI packages the real ELF agent, setup guide, metadata and SHA-256 checksums. Weights and custom nodes must already be installed. Automatic LoRA/runtime S3 synchronization and a live private RunPod/GPU roundtrip remain pending.
 
 ## RunningHub: create a job
 
@@ -74,7 +74,7 @@ The UI and provider contracts were tested with fixtures; a paid RunningHub gener
 
 ## CI artifacts and notebooks
 
-[Build and release guide](docs/CI_RELEASES.md) covers `.gitlab-ci.yml`, GitHub Actions, macOS ARM/Intel DMGs, Linux desktop packages, and the Linux x86_64 ComfyUI client. Version tags must match the application version and publish checksums; Successful tags publish complete GitHub prereleases after all native builds pass. The current remote is GitHub; GitLab needs a project and eligible macOS runner.
+[Build and release guide](docs/CI_RELEASES.md) covers `.gitlab-ci.yml`, GitHub Actions, macOS ARM/Intel DMGs, Linux desktop packages, and the Linux x86_64/ARM64 ComfyUI client. Version tags must match the application version and publish checksums; Successful tags publish complete GitHub prereleases after all native builds pass. The current remote is GitHub; GitLab needs a project and eligible macOS runner.
 
 Generated [Colab](deploy/colab) and [Kaggle](deploy/kaggle) notebooks deploy the verified client artifact beside an existing ComfyUI installation. Kaggle supports two independent GPU workers with separate ports/node IDs. Live notebook deployment requires an authenticated relay and a permitted active runtime.
 

@@ -98,7 +98,8 @@ windows:
     - rustup target add x86_64-pc-windows-msvc
   script:
     - npm ci
-    - npm run tauri:build -- --target x86_64-pc-windows-msvc --config src-tauri/tauri.windows.conf.json
+    - Set-Location apps/desktop
+    - node ../../node_modules/@tauri-apps/cli/tauri.js build --target x86_64-pc-windows-msvc --config src-tauri/tauri.windows.conf.json
   artifacts:
     name: "windows-x64-$CI_COMMIT_REF_SLUG"
     expire_in: 14 days

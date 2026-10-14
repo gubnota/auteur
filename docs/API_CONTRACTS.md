@@ -75,6 +75,14 @@
 - Runtime loss -> offline node/unknown attempt, never automatic replay.
 - Verified Linux x86_64 artifact + authenticated HTTPS relay + notebook Secrets required.
 
+## Release artifact contract (v0.1.5)
+- Desktop targets: macOS aarch64/x86_64 DMG; Windows x64 MSI/NSIS EXE; Linux x86_64/aarch64 DEB/AppImage.
+- Linux agent archive/metadata names include architecture; archive executable is mymovie-agent.
+- Metadata: target/buildOS/commit, archive sha256, binarySha256, bootstrapSha256; ELF architecture must match target.
+- Global SHA256SUMS.txt covers every other release file using its exact published filename.
+- Agent checksums are SHA256SUMS-agent.txt (x86_64) and SHA256SUMS-agent-aarch64.txt (ARM64).
+- Publication requires all checks and native builds; source tag is version-matched and published binaries cannot be replaced by reruns.
+
 ## Jobs drafts and batches (v0.1.3)
 - Project.jobDrafts defaults empty: {id,name,frameId,items:[JobItem]}; items retain order.
 - JobItem: id/workflowId/connectionId, typed values, asset IDs, optional bindings and deployment/family overrides.

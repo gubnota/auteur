@@ -120,3 +120,13 @@ Context: User clarified that RunningHub tests workflows, while private RunPod Co
 Decision: Name CI artifacts for the Linux x86_64 ComfyUI agent, reject non-ELF/non-x86_64 package inputs, ship checksums and a RunPod guide. Keep outbound authenticated relay transport and independent GPU workers.
 Consequences: No exposed ComfyUI port or public pod IP is required. CI builds do not provision cloud resources. Actual RunPod/relay/S3 acceptance and automatic LoRA/runtime sync remain pending.
 Related files: .gitlab-ci.yml, .github/workflows/checks.yml, scripts/package-agent.py, deploy/runpod/README.md, docs/CI_RELEASES.md.
+
+# ADR-0013: Publish complete native platform releases
+
+Date: 2026-10-14
+Status: Accepted
+
+Context: User requires visible release downloads for macOS, Windows and Linux x86_64/ARM64, including private ComfyUI agents.
+Decision: Build desktop packages on native hosts and smoke-test each Linux agent natively. Publish a complete GitHub prerelease after all checks/builds succeed, normalize filenames before checksums and refuse reruns that replace published binaries. GitLab retains immutable package links and requires a prepared Windows runner.
+Consequences: Extends ADR-0010 beyond draft-only GitHub releases and ADR-0012 to ARM64 agents. Tags retain exact source provenance; signing/notarization and live cloud GPU validation remain separate.
+Related files: .github/workflows/checks.yml, .github/workflows/release.yml, .gitlab-ci.yml, scripts/package-agent.py, docs/CI_RELEASES.md.
