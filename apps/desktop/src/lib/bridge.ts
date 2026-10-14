@@ -28,7 +28,12 @@ export async function call<T>(
     };
     return previewProject as T;
   }
-  if (command === "list_jobs" || command === "refresh_jobs" || command === "list_job_runs") return [] as T;
+  if (
+    command === "list_jobs" ||
+    command === "refresh_jobs" ||
+    command === "list_job_runs"
+  )
+    return [] as T;
   if (command === "clear_diagnostics") {
     settings = { ...settings, [args.kind as string]: [] };
     return settings as T;
@@ -52,9 +57,22 @@ export async function pickFile(
   return typeof path === "string" ? path : null;
 }
 export async function pickReferenceImages(): Promise<string[]> {
-  if (!native) throw new Error("Open the native app to import reference images");
-  const paths = await open({ multiple: true, filters: [{ name: "Reference images", extensions: ["png", "jpg", "jpeg", "webp", "gif"] }] });
-  return Array.isArray(paths) ? paths : typeof paths === "string" ? [paths] : [];
+  if (!native)
+    throw new Error("Open the native app to import reference images");
+  const paths = await open({
+    multiple: true,
+    filters: [
+      {
+        name: "Reference images",
+        extensions: ["png", "jpg", "jpeg", "webp", "gif"],
+      },
+    ],
+  });
+  return Array.isArray(paths)
+    ? paths
+    : typeof paths === "string"
+      ? [paths]
+      : [];
 }
 export async function pickDestination(name: string): Promise<string | null> {
   if (!native) throw new Error("Open the native app to create a document");
@@ -66,3 +84,11 @@ export async function pickDestination(name: string): Promise<string | null> {
 export const mediaUrl = (_root: string, a: { id: string; path: string }) =>
   native ? `mymovie://localhost/${a.id}` : "";
 export const jobs = () => call<Job[]>("list_jobs");
+
+export async function exportDestination(name: string): Promise<string | null> {
+  if (!native) throw new Error("Open the native app to export setup files");
+  return save({
+    defaultPath: name,
+    filters: [{ name: "Workflow setup", extensions: ["json"] }],
+  });
+}

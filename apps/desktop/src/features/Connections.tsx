@@ -1,5 +1,5 @@
 import { AssistantDialog } from "./PromptAssistant";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Plus,
   Server,
@@ -20,11 +20,17 @@ import {
 import { Field, Modal, Picker, Toggle } from "../components/Controls";
 import { PageTitle } from "./Library";
 import type { Update } from "../App";
-const connectionTypes: Record<string, { label: string; url: string; pending?: boolean }> = {
+const connectionTypes: Record<
+  string,
+  { label: string; url: string; pending?: boolean }
+> = {
   comfyui: { label: "ComfyUI", url: "http://127.0.0.1:8188" },
   runninghub: { label: "RunningHub", url: "https://www.runninghub.ai" },
   relay: { label: "Private runner", url: "https://" },
-  google: { label: "Google AI Studio · Gemini", url: "https://generativelanguage.googleapis.com" },
+  google: {
+    label: "Google AI Studio · Gemini",
+    url: "https://generativelanguage.googleapis.com",
+  },
   deepseek: { label: "DeepSeek", url: "https://api.deepseek.com" },
   openrouter: { label: "OpenRouter", url: "https://openrouter.ai" },
   fal: { label: "fal.ai", url: "https://fal.run", pending: true },
@@ -49,26 +55,72 @@ export function Connections({
   const [notebookSecret, setNotebookSecret] = useState("");
   const [savingNotebook, setSavingNotebook] = useState(false);
   const addNotebook = async () => {
-    const ids = nodeIds.split(",").map(id => id.trim()).filter(Boolean);
-    if (!ids.length || ids.length > (host === "kaggle" ? 2 : 1) || new Set(ids).size !== ids.length || ids.some(id => !/^[a-zA-Z0-9_-]{1,96}$/.test(id))) {
-      notify("Paste the notebook's node IDs: one for Colab, one or two for Kaggle."); return;
+    const ids = nodeIds
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+    if (
+      !ids.length ||
+      ids.length > (host === "kaggle" ? 2 : 1) ||
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => !/^[a-zA-Z0-9_-]{1,96}$/.test(id))
+    ) {
+      notify(
+        "Paste the notebook's node IDs: one for Colab, one or two for Kaggle.",
+      );
+      return;
     }
     try {
       const url = new URL(relayUrl);
-      if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || url.hostname.endsWith("trycloudflare.com")) throw new Error("Use a stable HTTPS relay URL without credentials. Quick Tunnels do not support SSE.");
-      if (notebookSecret.length < 24) throw new Error("Enter the studio relay token (24+ characters). The agent uses a separate notebook Secret.");
+      if (
+        url.protocol !== "https:" ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash ||
+        url.hostname.endsWith("trycloudflare.com")
+      )
+        throw new Error(
+          "Use a stable HTTPS relay URL without credentials. Quick Tunnels do not support SSE.",
+        );
+      if (notebookSecret.length < 24)
+        throw new Error(
+          "Enter the studio relay token (24+ characters). The agent uses a separate notebook Secret.",
+        );
       setSavingNotebook(true);
       const connections: Connection[] = [];
       for (const [i, nodeId] of ids.entries()) {
         const id = uid();
-        const credentialRef = await call<string>("save_credential", { connectionId: id, secret: notebookSecret });
-        connections.push({ id, name: `${host === "colab" ? "Colab" : "Kaggle"} · GPU ${i}`, kind: "relay", url: relayUrl.replace(/\/$/, ""), credentialRef, deploymentId: nodeId, apiFamily: null, concurrency: 1, hosting: host });
+        const credentialRef = await call<string>("save_credential", {
+          connectionId: id,
+          secret: notebookSecret,
+        });
+        connections.push({
+          id,
+          name: `${host === "colab" ? "Colab" : "Kaggle"} · GPU ${i}`,
+          kind: "relay",
+          url: relayUrl.replace(/\/$/, ""),
+          credentialRef,
+          deploymentId: nodeId,
+          apiFamily: null,
+          concurrency: 1,
+          hosting: host,
+        });
       }
-      await save({ ...settings, connections: [...settings.connections, ...connections] });
-      setNotebookSecret(""); setNotebook(false);
-      notify(`Added ${connections.length} independent notebook GPU node${connections.length === 1 ? "" : "s"}. Check connection after starting the notebook client.`);
-    } catch (e) { notify(String(e)); }
-    finally { setSavingNotebook(false); }
+      await save({
+        ...settings,
+        connections: [...settings.connections, ...connections],
+      });
+      setNotebookSecret("");
+      setNotebook(false);
+      notify(
+        `Added ${connections.length} independent notebook GPU node${connections.length === 1 ? "" : "s"}. Check connection after starting the notebook client.`,
+      );
+    } catch (e) {
+      notify(String(e));
+    } finally {
+      setSavingNotebook(false);
+    }
   };
   const [assistant, setAssistant] = useState<Connection | null>(null);
   const [editing, setEditing] = useState<Connection | null>(null),
@@ -77,22 +129,59 @@ export function Connections({
       null,
     ),
     [selected, setSelected] = useState<string[]>([]);
+  const operation = useRef(0);
+  useEffect(
+    () => () => {
+      operation.current++;
+    },
+    [],
+  );
+  const [reviewed, setReviewed] = useState<string | null>(null);
   const action = async (
     c: Connection,
     command: string,
     args: Record<string, unknown> = {},
   ) => {
     try {
-      const data = await call(command, { connectionId: c.id, ...args });
-      setReport({
-        title:
-          command === "connection_health"
-            ? "Connection health"
-            : command === "plan_deployment"
-              ? "Workflow initialization plan"
-              : "Runner report",
-        data,
+      const generation = ++operation.current;
+      let data = await call<Record<string, unknown>>(command, {
+        connectionId: c.id,
+        ...args,
       });
+      const title =
+        command === "connection_health"
+          ? "Connection health"
+          : command === "plan_deployment"
+            ? "Workflow initialization"
+            : "Runner report";
+      setReport({ title, data });
+      if (
+        native &&
+        typeof data.id === "string" &&
+        command !== "connection_health"
+      ) {
+        const id = data.id;
+        while (
+          operation.current === generation &&
+          !["completed", "failed", "unknown", "canceled"].includes(
+            String(data.state),
+          )
+        ) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          if (operation.current !== generation) break;
+          data = await call<Record<string, unknown>>("runner_operation", {
+            connectionId: c.id,
+            operationId: id,
+          });
+          if (operation.current === generation) setReport({ title, data });
+        }
+        if (
+          command === "plan_deployment" &&
+          !args.apply &&
+          data.state === "completed"
+        )
+          setReviewed(`${c.id}:${selected.join(",")}`);
+      }
     } catch (e) {
       notify(String(e));
     }
@@ -139,22 +228,43 @@ export function Connections({
         description="Local ComfyUI, isolated RunningHub accounts and private outbound runners."
         action={
           <div className="row">
-            <button onClick={() => setNotebook(true)}><Cloud size={18} />Colab / Kaggle</button>
-            <button className="primary" onClick={add}><Plus size={18} />Add connection</button>
+            <button onClick={() => setNotebook(true)}>
+              <Cloud size={18} />
+              Colab / Kaggle
+            </button>
+            <button className="primary" onClick={add}>
+              <Plus size={18} />
+              Add connection
+            </button>
           </div>
         }
       />
       <div className="filters" aria-label="Filter connections">
-        {["all", ...Object.keys(connectionTypes)].map(type => <button key={type} className={filter === type ? "active" : ""} onClick={() => setFilter(type)}>{type === "all" ? "All connections" : connectionTypes[type].label}</button>)}
+        {["all", ...Object.keys(connectionTypes)].map((type) => (
+          <button
+            key={type}
+            className={filter === type ? "active" : ""}
+            onClick={() => setFilter(type)}
+          >
+            {type === "all" ? "All connections" : connectionTypes[type].label}
+          </button>
+        ))}
       </div>
       <div className="connection-grid">
         {settings.connections
-          .filter(c => filter === "all" || c.kind === filter)
+          .filter((c) => filter === "all" || c.kind === filter)
           .map((c) => (
             <article className="panel connection" key={c.id}>
               <header>
                 <span className="connection-icon">
-                  {["runninghub", "google", "deepseek", "openrouter", "fal", "custom-api"].includes(c.kind) ? (
+                  {[
+                    "runninghub",
+                    "google",
+                    "deepseek",
+                    "openrouter",
+                    "fal",
+                    "custom-api",
+                  ].includes(c.kind) ? (
                     <Cloud size={22} />
                   ) : (
                     <Server size={22} />
@@ -162,7 +272,11 @@ export function Connections({
                 </span>
                 <div>
                   <h2>{c.name}</h2>
-                  <span className="badge">{c.hosting ? `${c.hosting === "kaggle" ? "Kaggle" : "Colab"} · private runner` : connectionTypes[c.kind]?.label ?? c.kind}</span>
+                  <span className="badge">
+                    {c.hosting
+                      ? `${c.hosting === "kaggle" ? "Kaggle" : "Colab"} · private runner`
+                      : (connectionTypes[c.kind]?.label ?? c.kind)}
+                  </span>
                 </div>
               </header>
               <p className="mono">{c.url}</p>
@@ -172,9 +286,27 @@ export function Connections({
                   : "No credential configured"}{" "}
                 · {c.concurrency} concurrent job{c.concurrency !== 1 ? "s" : ""}
               </small>
-              {connectionTypes[c.kind]?.pending && <p className="muted">Saved configuration · execution adapter pending</p>}
+              {connectionTypes[c.kind]?.pending && (
+                <p className="muted">
+                  Saved configuration · execution adapter pending
+                </p>
+              )}
               <div className="row">
-                {["google", "deepseek", "openrouter"].includes(c.kind) ? <button disabled={!c.credentialRef} onClick={() => setAssistant(c)}>Prompt assistant</button> : <button disabled={connectionTypes[c.kind]?.pending} onClick={() => void action(c, "connection_health")}>Check connection</button>}
+                {["google", "deepseek", "openrouter"].includes(c.kind) ? (
+                  <button
+                    disabled={!c.credentialRef}
+                    onClick={() => setAssistant(c)}
+                  >
+                    Prompt assistant
+                  </button>
+                ) : (
+                  <button
+                    disabled={connectionTypes[c.kind]?.pending}
+                    onClick={() => void action(c, "connection_health")}
+                  >
+                    Check connection
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setSecret("");
@@ -233,6 +365,27 @@ export function Connections({
                   >
                     Review bulk initialization plan
                   </button>
+                  <button
+                    className="primary"
+                    disabled={
+                      reviewed !== `${c.id}:${selected.join(",")}` ||
+                      !selected.length ||
+                      !settings.storage.provisionProfile
+                    }
+                    onClick={() =>
+                      void action(c, "plan_deployment", {
+                        workflowIds: selected,
+                        apply: true,
+                      })
+                    }
+                  >
+                    Initialize reviewed workflows
+                  </button>
+                  <p className="muted">
+                    Inspect Inventory, save a pinned profile in Settings → App
+                    Runner, then review before installing missing files. A
+                    successful canary marks this session ready.
+                  </p>
                 </>
               )}
             </article>
@@ -254,6 +407,7 @@ export function Connections({
           <pre>
             mymovie-agent doctor --comfy-url http://127.0.0.1:8188{"\n"}
             mymovie-agent serve --relay https://YOUR-RELAY --node-id YOUR-NODE
+            --comfy-root /path/to/ComfyUI --python /path/to/python
             {"\n"}# Set MYMOVIE_AGENT_TOKEN in the server secret environment
           </pre>
           <p className="muted">
@@ -262,17 +416,88 @@ export function Connections({
           </p>
         </div>
       </article>
-      {notebook && <Modal title="Connect notebook GPUs" onClose={() => { if (!savingNotebook) { setNotebook(false); setNotebookSecret(""); } }}>
-        <Picker title="Notebook host" value={host} options={[{id:"colab",label:"Google Colab",description:"One GPU worker"},{id:"kaggle",label:"Kaggle",description:"One or two independent GPU workers"}]} onChange={v => setHost(v as "colab" | "kaggle")} />
-        <p>Open the bundled {host === "colab" ? "deploy/colab" : "deploy/kaggle"}/MyMovie_ComfyUI.ipynb notebook. Install the verified Linux client artifact, then copy its generated node IDs here and into the relay allowlist.</p>
-        <Field label="Authenticated HTTPS relay" value={relayUrl} onChange={setRelayUrl} />
-        <Field label={host === "kaggle" ? "Node IDs (comma separated · one per GPU)" : "Notebook node ID"} value={nodeIds} onChange={setNodeIds} />
-        <Field label="Studio relay token · stored in system vault" type="password" value={notebookSecret} onChange={setNotebookSecret} />
-        <p className="muted">The notebook reads its separate MYMOVIE_AGENT_TOKEN from Secrets. ComfyUI stays on loopback. Two Kaggle nodes have separate queues and concurrency 1; send one lightweight job to each for parallel execution. Their GPU memory is not combined.</p>
-        <p className="muted">A fresh notebook session gets new node IDs. Collect results before stopping. A stale heartbeat is shown as offline; expired running jobs require reconciliation.</p>
-        <button className="primary" disabled={!native || savingNotebook || !nodeIds.trim() || !notebookSecret} onClick={() => void addNotebook()}>{savingNotebook ? "Saving…" : "Add GPU connections"}</button>
-      </Modal>}
-      {assistant && <AssistantDialog connection={assistant} close={() => setAssistant(null)} />}
+      {notebook && (
+        <Modal
+          title="Connect notebook GPUs"
+          onClose={() => {
+            if (!savingNotebook) {
+              setNotebook(false);
+              setNotebookSecret("");
+            }
+          }}
+        >
+          <Picker
+            title="Notebook host"
+            value={host}
+            options={[
+              {
+                id: "colab",
+                label: "Google Colab",
+                description: "One GPU worker",
+              },
+              {
+                id: "kaggle",
+                label: "Kaggle",
+                description: "One or two independent GPU workers",
+              },
+            ]}
+            onChange={(v) => setHost(v as "colab" | "kaggle")}
+          />
+          <p>
+            Open the bundled{" "}
+            {host === "colab" ? "deploy/colab" : "deploy/kaggle"}
+            /MyMovie_ComfyUI.ipynb notebook. Install the verified Linux client
+            artifact, then copy its generated node IDs here and into the relay
+            allowlist.
+          </p>
+          <Field
+            label="Authenticated HTTPS relay"
+            value={relayUrl}
+            onChange={setRelayUrl}
+          />
+          <Field
+            label={
+              host === "kaggle"
+                ? "Node IDs (comma separated · one per GPU)"
+                : "Notebook node ID"
+            }
+            value={nodeIds}
+            onChange={setNodeIds}
+          />
+          <Field
+            label="Studio relay token · stored in system vault"
+            type="password"
+            value={notebookSecret}
+            onChange={setNotebookSecret}
+          />
+          <p className="muted">
+            The notebook reads its separate MYMOVIE_AGENT_TOKEN from Secrets.
+            ComfyUI stays on loopback. Two Kaggle nodes have separate queues and
+            concurrency 1; send one lightweight job to each for parallel
+            execution. Their GPU memory is not combined.
+          </p>
+          <p className="muted">
+            A fresh notebook session gets new node IDs. Collect results before
+            stopping. A stale heartbeat is shown as offline; expired running
+            jobs require reconciliation.
+          </p>
+          <button
+            className="primary"
+            disabled={
+              !native || savingNotebook || !nodeIds.trim() || !notebookSecret
+            }
+            onClick={() => void addNotebook()}
+          >
+            {savingNotebook ? "Saving…" : "Add GPU connections"}
+          </button>
+        </Modal>
+      )}
+      {assistant && (
+        <AssistantDialog
+          connection={assistant}
+          close={() => setAssistant(null)}
+        />
+      )}
       {editing && (
         <Modal
           title="Connection settings"
@@ -289,7 +514,15 @@ export function Connections({
           <Picker
             title="Connection type"
             value={editing.kind}
-            options={Object.entries(connectionTypes).map(([id, t]) => ({ id, label: t.label, description: t.pending ? "Configuration only · execution adapter pending" : ["google", "deepseek", "openrouter"].includes(id) ? "Optional text assistance" : "Supported execution adapter" }))}
+            options={Object.entries(connectionTypes).map(([id, t]) => ({
+              id,
+              label: t.label,
+              description: t.pending
+                ? "Configuration only · execution adapter pending"
+                : ["google", "deepseek", "openrouter"].includes(id)
+                  ? "Optional text assistance"
+                  : "Supported execution adapter",
+            }))}
             onChange={(v) =>
               setEditing({
                 ...editing,
@@ -308,18 +541,20 @@ export function Connections({
           />
           {(editing.kind === "runninghub" || editing.kind === "relay") && (
             <>
-              {editing.kind === "runninghub" && <Picker
-                title="RunningHub API family"
-                value={editing.apiFamily ?? "ai-app"}
-                options={[
-                  {
-                    id: "ai-app",
-                    label: "AI App · verified deployment inputs",
-                  },
-                  { id: "workflow", label: "Workflow · API-format bindings" },
-                ]}
-                onChange={(v) => setEditing({ ...editing, apiFamily: v })}
-              />}
+              {editing.kind === "runninghub" && (
+                <Picker
+                  title="RunningHub API family"
+                  value={editing.apiFamily ?? "ai-app"}
+                  options={[
+                    {
+                      id: "ai-app",
+                      label: "AI App · verified deployment inputs",
+                    },
+                    { id: "workflow", label: "Workflow · API-format bindings" },
+                  ]}
+                  onChange={(v) => setEditing({ ...editing, apiFamily: v })}
+                />
+              )}
               <Field
                 label={
                   editing.kind === "relay"
@@ -360,8 +595,8 @@ export function Connections({
             onChange={setSecret}
           />
           <p className="muted">
-            Credentials are stored in the system credential vault and never inside movie
-            documents.
+            Credentials are stored in the system credential vault and never
+            inside movie documents.
           </p>
           <div className="row">
             <button
@@ -389,7 +624,13 @@ export function Connections({
         </Modal>
       )}
       {report && (
-        <Modal title={report.title} onClose={() => setReport(null)}>
+        <Modal
+          title={report.title}
+          onClose={() => {
+            operation.current++;
+            setReport(null);
+          }}
+        >
           <pre>{JSON.stringify(report.data, null, 2)}</pre>
         </Modal>
       )}
@@ -410,7 +651,31 @@ export function Preferences({
   notify: (s: string) => void;
 }) {
   const [tab, setTab] = useState("General"),
-    [runtime, setRuntime] = useState(JSON.stringify(settings.storage.runtimeLock ?? { schemaVersion: 1, image: "", nodeTypes: [], artifacts: [] }, null, 2)),
+    [runtime, setRuntime] = useState(
+      JSON.stringify(
+        settings.storage.runtimeLock ?? {
+          schemaVersion: 1,
+          image: "",
+          nodeTypes: [],
+          artifacts: [],
+        },
+        null,
+        2,
+      ),
+    ),
+    [profile, setProfile] = useState(
+      JSON.stringify(
+        settings.storage.provisionProfile ?? {
+          schemaVersion: 1,
+          runtime: { kind: "native", fingerprint: "" },
+          nodeTypes: [],
+          artifacts: [],
+          canary: {},
+        },
+        null,
+        2,
+      ),
+    ),
     [custom, setCustom] = useState(project.ratio),
     [storage, setStorage] = useState(settings.storage),
     [secret, setSecret] = useState(""),
@@ -444,162 +709,308 @@ export function Preferences({
         title="Settings"
         description="Movie defaults, appearance and private asset storage."
       />
-      <div className="settings-tabs" role="tablist" aria-label="Studio settings">
-        {["General", "Media & FFmpeg", "S3 & LoRA", "RunPod", "App Runner", "Language"].map(name => <button role="tab" aria-selected={tab === name} className={tab === name ? "selected" : ""} key={name} onClick={() => setTab(name)}>{name}</button>)}
+      <div
+        className="settings-tabs"
+        role="tablist"
+        aria-label="Studio settings"
+      >
+        {[
+          "General",
+          "Media & FFmpeg",
+          "S3 & LoRA",
+          "RunPod",
+          "App Runner",
+          "Language",
+        ].map((name) => (
+          <button
+            role="tab"
+            aria-selected={tab === name}
+            className={tab === name ? "selected" : ""}
+            key={name}
+            onClick={() => setTab(name)}
+          >
+            {name}
+          </button>
+        ))}
       </div>
       <div className="settings-grid">
-        {tab === "General" && <article className="panel">
-          <h2>Movie defaults</h2>
-          <Field
-            label="Movie name"
-            value={project.name}
-            onChange={(v) => {
-              if (v.trim())
+        {tab === "General" && (
+          <article className="panel">
+            <h2>Movie defaults</h2>
+            <Field
+              label="Movie name"
+              value={project.name}
+              onChange={(v) => {
+                if (v.trim())
+                  update((p) => {
+                    p.name = v;
+                  });
+              }}
+            />
+            <Picker
+              title="Default aspect ratio"
+              value={project.ratio}
+              options={ratios.map((r) => ({ id: r, label: r }))}
+              onChange={(v) => {
+                setCustom(v);
                 update((p) => {
-                  p.name = v;
+                  p.ratio = v;
                 });
-            }}
-          />
-          <Picker
-            title="Default aspect ratio"
-            value={project.ratio}
-            options={ratios.map((r) => ({ id: r, label: r }))}
-            onChange={(v) => {
-              setCustom(v);
-              update((p) => {
-                p.ratio = v;
-              });
-            }}
-          />
-          <Field
-            label="Custom ratio · width:height"
-            value={custom}
-            onChange={setCustom}
-          />
-          <button
-            onClick={() => {
-              if (
-                /^\d+(\.\d+)?:\d+(\.\d+)?$/.test(custom) &&
-                custom.split(":").every((n) => Number(n) > 0)
-              )
-                update((p) => {
-                  p.ratio = custom;
-                });
-              else notify("Enter positive width:height values");
-            }}
-          >
-            Apply custom ratio
-          </button>
-          <p className="muted">
-            Frames can inherit or override this ratio. Workflows validate their
-            own pixel dimensions.
-          </p>
-        </article>}
-        {tab === "General" && <article className="panel">
-          <h2>Appearance</h2>
-          <Picker
-            title="Theme"
-            value={settings.theme || "light"}
-            options={[
-              { id: "light", label: "Fenki paper · light" },
-              { id: "dark", label: "Fenki ink · dark" },
-            ]}
-            onChange={(v) => void save({ ...settings, theme: v }).catch(e => notify(String(e)))}
-          />
-          <p>
-            Manrope and IBM Plex Mono are bundled locally. System focus, reduced
-            motion and keyboard navigation are supported.
-          </p>
-          <h3>Browser profiles · upcoming</h3>
-          <p className="muted">
-            Isolated manual logins for Flow and other image providers are
-            planned. Profile sessions will stay outside movie documents.
-          </p>
-        </article>}
-        {tab === "S3 & LoRA" && <article className="panel storage-panel">
-          <div className="row">
-            <HardDrive size={24} />
-            <h2>Private storage & LoRA sync</h2>
-          </div>
-          <p>
-            Use short-lived, object-scoped signed URLs for private uploads and
-            downloads. Verify size and SHA256 before importing results.
-          </p>
-          <Field
-            label="S3-compatible endpoint (HTTPS)"
-            value={String(storage.endpoint ?? "")}
-            onChange={(v) => setStorage({ ...storage, endpoint: v })}
-          />
-          <Field
-            label="Private bucket"
-            value={String(storage.bucket ?? "")}
-            onChange={(v) => setStorage({ ...storage, bucket: v })}
-          />
-          <Field
-            label="Manifest / signed transfer URL"
-            type="password"
-            value={secret}
-            onChange={setSecret}
-          />
-          <Picker
-            title="Selected LoRA assets"
-            multiple
-            value={assetIds}
-            options={project.assets
-              .filter((a) => a.kind === "lora")
-              .map((a) => ({
-                id: a.id,
-                label: a.name,
-                description: a.sha256.slice(0, 16),
-              }))}
-            onChange={(id) =>
-              setAssetIds((x) =>
-                x.includes(id) ? x.filter((v) => v !== id) : [...x, id],
-              )
-            }
-          />
-          <div className="row">
+              }}
+            />
+            <Field
+              label="Custom ratio · width:height"
+              value={custom}
+              onChange={setCustom}
+            />
+            <button
+              onClick={() => {
+                if (
+                  /^\d+(\.\d+)?:\d+(\.\d+)?$/.test(custom) &&
+                  custom.split(":").every((n) => Number(n) > 0)
+                )
+                  update((p) => {
+                    p.ratio = custom;
+                  });
+                else notify("Enter positive width:height values");
+              }}
+            >
+              Apply custom ratio
+            </button>
+            <p className="muted">
+              Frames can inherit or override this ratio. Workflows validate
+              their own pixel dimensions.
+            </p>
+          </article>
+        )}
+        {tab === "General" && (
+          <article className="panel">
+            <h2>Appearance</h2>
+            <Picker
+              title="Theme"
+              value={settings.theme || "light"}
+              options={[
+                { id: "light", label: "Fenki paper · light" },
+                { id: "dark", label: "Fenki ink · dark" },
+              ]}
+              onChange={(v) =>
+                void save({ ...settings, theme: v }).catch((e) =>
+                  notify(String(e)),
+                )
+              }
+            />
+            <p>
+              Manrope and IBM Plex Mono are bundled locally. System focus,
+              reduced motion and keyboard navigation are supported.
+            </p>
+            <h3>Browser profiles · upcoming</h3>
+            <p className="muted">
+              Isolated manual logins for Flow and other image providers are
+              planned. Profile sessions will stay outside movie documents.
+            </p>
+          </article>
+        )}
+        {tab === "S3 & LoRA" && (
+          <article className="panel storage-panel">
+            <div className="row">
+              <HardDrive size={24} />
+              <h2>Private storage & LoRA sync</h2>
+            </div>
+            <p>
+              Use short-lived, object-scoped signed URLs for private uploads and
+              downloads. Verify size and SHA256 before importing results.
+            </p>
+            <Field
+              label="S3-compatible endpoint (HTTPS)"
+              value={String(storage.endpoint ?? "")}
+              onChange={(v) => setStorage({ ...storage, endpoint: v })}
+            />
+            <Field
+              label="Private bucket"
+              value={String(storage.bucket ?? "")}
+              onChange={(v) => setStorage({ ...storage, bucket: v })}
+            />
+            <Field
+              label="Manifest / signed transfer URL"
+              type="password"
+              value={secret}
+              onChange={setSecret}
+            />
+            <Picker
+              title="Selected LoRA assets"
+              multiple
+              value={assetIds}
+              options={project.assets
+                .filter((a) => a.kind === "lora")
+                .map((a) => ({
+                  id: a.id,
+                  label: a.name,
+                  description: a.sha256.slice(0, 16),
+                }))}
+              onChange={(id) =>
+                setAssetIds((x) =>
+                  x.includes(id) ? x.filter((v) => v !== id) : [...x, id],
+                )
+              }
+            />
+            <div className="row">
+              <button
+                onClick={() =>
+                  void persistStorage().catch((e) => notify(String(e)))
+                }
+              >
+                Save storage settings
+              </button>
+              <button onClick={() => void sync("push")}>
+                Review & upload LoRAs
+              </button>
+              <button onClick={() => void sync("pull")}>
+                Download verified results
+              </button>
+            </div>
+            <p className="muted">
+              Manifests must declare compatible architecture, hash, size and
+              approved license/source. This screen syncs artifacts; training
+              comes in a later milestone.
+            </p>
+          </article>
+        )}
+        {tab === "Media & FFmpeg" && (
+          <article className="panel storage-panel">
+            <h2>Local media tools</h2>
+            <p>
+              Verify the local decoder before creating thumbnails and inspecting
+              video files.
+            </p>
             <button
               onClick={() =>
-                void persistStorage().catch((e) => notify(String(e)))
+                void call("media_tools")
+                  .then(setReport)
+                  .catch((e) => notify(String(e)))
               }
             >
-              Save storage settings
+              Check FFmpeg & FFprobe
             </button>
-            <button onClick={() => void sync("push")}>
-              Review & upload LoRAs
+            <p className="muted">
+              Original media is copied into the movie document, hashed and
+              preserved. Generated results use the same import path.
+            </p>
+          </article>
+        )}
+        {(tab === "RunPod" || tab === "App Runner") && (
+          <article className="panel storage-panel">
+            <h2>
+              {tab === "RunPod"
+                ? "Private RunPod execution"
+                : "Pinned runner runtime"}
+            </h2>
+            <p>
+              Use your own immutable Docker image. The runner connects outward
+              to the relay, stages approved artifacts and returns results
+              through authenticated transfers.
+            </p>
+            <h3>First-session readiness</h3>
+            <p>
+              Use Connections → Inventory to get the native runtime fingerprint.
+              Docker profiles use the actual immutable image digest. Model, LoRA
+              and plugin files need verified SHA256, size, license,
+              architecture, category and relative target; use sourceRef for
+              private S3 transfers.
+            </p>
+            <Field
+              label="Provisioning profile · JSON"
+              value={profile}
+              onChange={setProfile}
+              multiline
+            />
+            <button
+              className="primary"
+              onClick={() => {
+                try {
+                  const value = JSON.parse(profile);
+                  void call("validate_profile", { profile: value })
+                    .then(() =>
+                      save({
+                        ...settings,
+                        storage: {
+                          ...settings.storage,
+                          provisionProfile: value,
+                        },
+                      }),
+                    )
+                    .then(() =>
+                      notify("Provisioning profile verified and saved"),
+                    )
+                    .catch((e) => notify(String(e)));
+                } catch {
+                  notify("Enter valid profile JSON");
+                }
+              }}
+            >
+              Validate & save initialization profile
             </button>
-            <button onClick={() => void sync("pull")}>
-              Download verified results
+            <p className="muted">
+              Templates and exact Colab/RunPod setup: deploy/runner/README.md.
+              External Mac ComfyUI stays read-only. New notebook sessions and
+              changed files require initialization again.
+            </p>
+            <Field
+              label="Runtime lock · JSON"
+              value={runtime}
+              onChange={setRuntime}
+              multiline
+            />
+            <button
+              className="primary"
+              onClick={() => {
+                try {
+                  const lock = JSON.parse(runtime);
+                  void call("validate_runtime", { runtime: lock })
+                    .then(() =>
+                      save({
+                        ...settings,
+                        storage: { ...settings.storage, runtimeLock: lock },
+                      }),
+                    )
+                    .then(() => notify("Runtime lock verified and saved"))
+                    .catch((e) => notify(String(e)));
+                } catch {
+                  notify("Enter valid runtime JSON");
+                }
+              }}
+            >
+              Validate & save runtime lock
             </button>
-          </div>
-          <p className="muted">
-            Manifests must declare compatible architecture, hash, size and
-            approved license/source. This screen syncs artifacts; training comes
-            in a later milestone.
-          </p>
-        </article>}
-        {tab === "Media & FFmpeg" && <article className="panel storage-panel">
-          <h2>Local media tools</h2><p>Verify the local decoder before creating thumbnails and inspecting video files.</p>
-          <button onClick={() => void call("media_tools").then(setReport).catch(e => notify(String(e)))}>Check FFmpeg & FFprobe</button>
-          <p className="muted">Original media is copied into the movie document, hashed and preserved. Generated results use the same import path.</p>
-        </article>}
-        {(tab === "RunPod" || tab === "App Runner") && <article className="panel storage-panel">
-          <h2>{tab === "RunPod" ? "Private RunPod execution" : "Pinned runner runtime"}</h2>
-          <p>Use your own immutable Docker image. The runner connects outward to the relay, stages approved artifacts and returns results through authenticated transfers.</p>
-          <Field label="Runtime lock · JSON" value={runtime} onChange={setRuntime} multiline />
-          <button className="primary" onClick={() => {
-            try { const lock = JSON.parse(runtime); void call("validate_runtime", { runtime: lock }).then(() => save({ ...settings, storage: { ...settings.storage, runtimeLock: lock } })).then(() => notify("Runtime lock verified and saved")).catch(e => notify(String(e))); }
-            catch { notify("Enter valid runtime JSON"); }
-          }}>Validate & save runtime lock</button>
-          <p className="muted">Specify schemaVersion, image@sha256, nodeTypes and artifacts with source, SHA256, size, architecture, license and model-relative target. Unknown nodes or models stay blocked. Bulk initialize imported workflows from Connections.</p>
-          <pre>mymovie-agent doctor --comfy-url http://127.0.0.1:8188{String.fromCharCode(10)}mymovie-agent serve --relay https://YOUR-RELAY --node-id YOUR-NODE</pre>
-          <p>Cloud deployment requires your relay host, private storage and selected image. This app does not rent pods automatically.</p>
-        </article>}
-        {tab === "Language" && <article className="panel storage-panel">
-          <h2>Documentation languages</h2><p>English, Russian and French setup guides ship with the studio.</p>
-          <p className="muted">The current application interface is English. Complete interface translation is a later milestone.</p>
-        </article>}
+            <p className="muted">
+              Specify schemaVersion, image@sha256, nodeTypes and artifacts with
+              source, SHA256, size, architecture, license and model-relative
+              target. Unknown nodes or models stay blocked. Bulk initialize
+              imported workflows from Connections.
+            </p>
+            <pre>
+              mymovie-agent doctor --comfy-url http://127.0.0.1:8188
+              {String.fromCharCode(10)}mymovie-agent serve --relay
+              https://YOUR-RELAY --node-id YOUR-NODE --comfy-root
+              /path/to/ComfyUI --python /path/to/python
+            </pre>
+            <p>
+              Cloud deployment requires your relay host, private storage and
+              selected image. This app does not rent pods automatically.
+            </p>
+          </article>
+        )}
+        {tab === "Language" && (
+          <article className="panel storage-panel">
+            <h2>Documentation languages</h2>
+            <p>
+              English, Russian and French setup guides ship with the studio.
+            </p>
+            <p className="muted">
+              The current application interface is English. Complete interface
+              translation is a later milestone.
+            </p>
+          </article>
+        )}
       </div>
       {report && (
         <Modal title="Private storage transfer" onClose={() => setReport(null)}>

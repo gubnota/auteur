@@ -130,3 +130,13 @@ Context: User requires visible release downloads for macOS, Windows and Linux x8
 Decision: Build desktop packages on native hosts and smoke-test each Linux agent natively. Publish a complete GitHub prerelease after all checks/builds succeed, normalize filenames before checksums and refuse reruns that replace published binaries. GitLab retains immutable package links and requires a prepared Windows runner.
 Consequences: Extends ADR-0010 beyond draft-only GitHub releases and ADR-0012 to ARM64 agents. Tags retain exact source provenance; signing/notarization and live cloud GPU validation remain separate.
 Related files: .github/workflows/checks.yml, .github/workflows/release.yml, .gitlab-ci.yml, scripts/package-agent.py, docs/CI_RELEASES.md.
+
+# ADR-0014: Explicit media and attested managed runtime readiness
+
+Date: 2026-10-14
+Status: Accepted
+
+Context: User needs standalone image/video generation, exact multi-media workflow inputs, hardware flags and portable dependency initialization.
+Decision: Share exact typed input resolution across Generate and Jobs; persist standalone drafts and explicit media roles in schema v3. Declare compatibility explicitly. Inventory the real ComfyUI Python environment and effective model paths; managed workers install only reviewed hash-pinned artifacts, then restart/re-inventory and run a session canary. Keep existing Mac environments read-only.
+Consequences: No guessed loader IDs, automatic compatibility conversion, plugin pip scripts or implicit weight downloads. Profile builders resolve runtime pins and reviewed wheelhouses instead of shipping a misleading universal ready profile. Live cloud acceptance requires an actual reachable session; local GPU success does not prove cloud deployment.
+Related files: docs/GENERATE_IMPLEMENTATION_PLAN.md, docs/WORKFLOW_SETUP.md, apps/desktop/src/features/Generate.tsx, apps/agent/src/provision.rs, deploy/runner/mymovie_runtime.py.

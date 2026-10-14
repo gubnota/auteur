@@ -174,15 +174,18 @@ impl ProjectStore {
         let db = Connection::open(root.join("project.sqlite"))?;
         db.pragma_update(None, "journal_mode", "WAL")?;
         let version: i64 = db.pragma_query_value(None, "user_version", |r| r.get(0))?;
-        if version > 2 {
+        if version > 3 {
             return Err("Project requires a newer MyMovie Studio".into());
         }
         if version == 0 {
             db.execute_batch(include_str!("../migrations/0001_initial.sql"))?;
         }
-        if version == 1 {
+        if version == 1 || version == 2 {
             // SQLite creates a consistent backup including WAL data before migration.
-            let backup = confined(&root, &format!("backups/pre-jobs-v1-{}.sqlite", id()))?;
+            let backup = confined(
+                &root,
+                &format!("backups/pre-jobs-v{version}-{}.sqlite", id()),
+            )?;
             fs::create_dir_all(backup.parent().unwrap())?;
             db.execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])?;
             atomic_json(
@@ -194,6 +197,9 @@ impl ProjectStore {
         }
         if version < 2 {
             db.execute_batch(include_str!("../migrations/0002_job_runs.sql"))?;
+        }
+        if version < 3 {
+            db.execute_batch(include_str!("../migrations/0003_generate.sql"))?;
         }
         Ok(Self {
             root,
@@ -277,7 +283,7 @@ impl ProjectStore {
         // Journal remains pending on failure; opening repairs from authoritative SQLite.
         atomic_json(
             &confined(&self.root, "manifest.json")?,
-            &serde_json::json!({"schemaVersion":2,"id":p.id,"name":p.name,"revision":p.revision,"application":"MyMovie Studio"}),
+            &serde_json::json!({"schemaVersion":3,"id":p.id,"name":p.name,"revision":p.revision,"application":"MyMovie Studio"}),
         )?;
         for ep in &p.episodes {
             for scene in &ep.scenes {
@@ -357,6 +363,11 @@ pub fn validate(p: &Project) -> Result<()> {
         if draft.name.trim().is_empty() {
             return Err("Job draft name required".into());
         }
+        if !["standalone", "storyboard"].contains(&draft.context.kind.as_str())
+            || (draft.context.kind == "standalone" && !draft.frame_id.is_empty())
+        {
+            return Err("Invalid draft generation context".into());
+        }
         for item in &draft.items {
             check(&item.id)?;
         }
@@ -378,6 +389,25 @@ pub fn validate(p: &Project) -> Result<()> {
     }
     for w in &p.workflows {
         check(&w.id)?;
+        if ![
+            "unspecified",
+            "universal",
+            "apple-silicon",
+            "cuda",
+            "rocm",
+            "cpu",
+        ]
+        .contains(&w.requirements.compatibility.as_str())
+        {
+            return Err("Unknown workflow compatibility".into());
+        }
+        let mut destinations = std::collections::HashSet::new();
+        for artifact in &w.requirements.artifacts {
+            artifact.validate()?;
+            if !destinations.insert((&artifact.kind, &artifact.category, &artifact.target)) {
+                return Err("Duplicate workflow dependency destination".into());
+            }
+        }
         if w.version.len() != 64 || !w.version.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err("Invalid workflow hash".into());
         }
@@ -527,7 +557,7 @@ mod jobs_migration_tests {
                 .db
                 .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
                 .unwrap(),
-            2
+            3
         );
         let backups = || {
             fs::read_dir(path.join("backups"))

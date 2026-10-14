@@ -3,7 +3,7 @@
 ## Project persistence
 - Rust DTOs: crates/studio-contracts/src/lib.rs; camelCase serde JSON.
 - Manual TS mirror: apps/desktop/src/lib/types.ts; generated parity pending.
-- Schema v2: manifest.json + project.sqlite; SQLite authoritative.
+- Schema v3: manifest.json + project.sqlite; SQLite authoritative.
 - Tables: project(id=1, revision, json), jobs(id,json), history(revision,json), projections(id,pending), job_runs(id,json).
 - save_project(project, expectedRevision): UUID identity, revision conflict check, validated references.
 - Recoverable projections: manifest, scene keyframes/board.json, character.json, versioned workflow definition.json.
@@ -51,7 +51,7 @@
 - Desktop refresh polls every five seconds; ComfyUI transport also exposes WS support.
 - Relay /v1/events: authenticated SSE, monotonic id and Last-Event-ID replay.
 - Relay typed operations: doctor/inventory/drain/bootstrap/provision; no remote shell.
-- Runtime lock: schemaVersion/image digest/nodeTypes/artifacts metadata; plan is not attested readiness.
+- Runtime lock: schemaVersion/runtime fingerprint or image digest/nodeTypes/artifacts/canary. Managed readiness requires verified installed dependencies and a successful current-session canary.
 - Transfer manifest objects: name/sha256/size/url/architecture?/license?.
 - Signed manifest URL stored in Keychain; no secrets in .mymovie/settings JSON.
 - Settings allow typed connection records; only supported adapters execute generation.
@@ -95,6 +95,20 @@
 - Same normalized ComfyUI URL queues FIFO; distinct instances/relay node IDs dispatch concurrently.
 - Unknown attempts hold a slot until explicit reconciliation. Pause stops waiting work; cancellation also requests active provider cancellation.
 - Unsent work reopens paused; abandoned in-flight submissions become unknown, never automatically replayed.
-- open_project({path,allowUpgrade?}): v1 returns UPGRADE_REQUIRED until explicit upgrade approval.
+- open_project({path,allowUpgrade?}): v1/v2 returns UPGRADE_REQUIRED until explicit backup/upgrade approval.
 - v1 upgrade creates backups/pre-jobs-v1-<UUID>.sqlite and pre-jobs-manifest.json before transactional schema v2.
 - Old app cannot edit schema v2; restore a closed backup copy for rollback. Draft projection: jobs/drafts.json; runs: jobs/runs/<id>.json.
+
+## Generate and managed initialization (current main)
+- JobDraft.context: {kind:standalone,mode} or {kind:keyframe,frameId}; legacy drafts default to their existing frameId.
+- WorkflowBinding.media?: {kind:image|video|audio,role,order}; media sources require string bindings and exact asset-kind validation.
+- Workflow.requirements defaults {compatibility:unspecified,artifacts:[]}; accepted flags: unspecified/universal/apple-silicon/cuda/rocm/cpu.
+- Dependency artifact: kind/category/relative target/SHA256/size/architecture/license plus public HTTPS source or private sourceRef; plugins pin full revision and optional stripPrefix.
+- Export setup contains workflows, immutable graphs, bindings and requirements; no credentials/media bytes.
+- Agent inventory reports actual ComfyUI runtime fingerprint, hardware, node registry, paths and verified file states.
+- Managed provisioning installs only verified bytes into effective folder_paths; conflicting files fail, plugins/wheels require restart and re-inventory.
+- Ready attestation binds agent session/profile/workflow/bindings/runtime/dependency hashes; only mapped input changes are allowed at generation.
+- Relay stage metadata includes asset kind; wrong-kind references fail before submission.
+- renewOnly lease reports refresh running/collecting/cancel_requested leases without overwriting state/progress/remoteId; terminal jobs stay terminal.
+- New CI agent archive includes runtime helper, profile builder, tiny paired workflows, model descriptor and deterministic pinned plugin archive. Published v0.1.5 lacks these new files.
+- v3 upgrades preserve pre-upgrade SQLite/manifest backups; older clients reject upgraded packages.

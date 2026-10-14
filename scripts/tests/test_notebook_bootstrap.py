@@ -72,24 +72,30 @@ class BootstrapTests(unittest.TestCase):
         self.assertNotEqual(workers[0]["root"],workers[1]["root"])
     def test_lock_duplicate_start_and_stop_ownership(self):
         binary = self.root / "mymovie-agent"; binary.touch()
+        (self.root / "mymovie_runtime.py").touch()
+        repo = self.root / "ComfyUI"; repo.mkdir(exist_ok=True); (repo / "folder_paths.py").touch()
         runner = b.NotebookRunner(binary,"https://example.com",self.root,count=1)
         other = b.NotebookRunner(binary,"https://example.com",self.root,count=1)
         fake = types.SimpleNamespace(pid=100, poll=lambda: None, wait=lambda timeout: None)
         with patch.object(b,"gpu_indices",return_value=[0]), patch.object(b,"comfy_info",return_value={"stats":{"devices":[{"type":"cuda","name":"cuda:0 T4"}]},"nodeCount":3}), patch.object(b.subprocess,"Popen",return_value=fake), patch.object(b.os,"killpg") as kill:
-            runner.start("x"*32,attach=True)
-            with self.assertRaisesRegex(b.SetupError,"already started"): runner.start("x"*32,attach=True)
-            with self.assertRaisesRegex(b.SetupError,"Another runner"): other.start("x"*32,attach=True)
+            runner.start("x"*32,attach=True,comfy_root=repo)
+            with self.assertRaisesRegex(b.SetupError,"already started"): runner.start("x"*32,attach=True,comfy_root=repo)
+            with self.assertRaisesRegex(b.SetupError,"Another runner"): other.start("x"*32,attach=True,comfy_root=repo)
             runner.stop(); kill.assert_called_once_with(100,b.signal.SIGTERM)
         self.assertEqual(runner.status()["state"],"stopped")
     def test_two_gpu_request_cannot_silently_fall_back_to_one(self):
         binary = self.root / "mymovie-agent"; binary.touch()
+        (self.root / "mymovie_runtime.py").touch()
+        repo = self.root / "ComfyUI"; repo.mkdir(exist_ok=True); (repo / "folder_paths.py").touch()
         runner = b.NotebookRunner(binary,"https://example.com",self.root,count=2)
         with patch.object(b,"gpu_indices",return_value=[0]):
-            with self.assertRaisesRegex(b.SetupError,"fewer than two"): runner.start("x"*32)
+            with self.assertRaisesRegex(b.SetupError,"fewer than two"): runner.start("x"*32,comfy_root=repo)
         self.assertIsNone(runner.lock)
     def test_managed_two_gpu_launches_isolated_servers_and_agents(self):
         binary = self.root / "mymovie-agent"; binary.touch()
-        repo = self.root / "ComfyUI"; repo.mkdir(); (repo / "main.py").touch()
+        (self.root / "mymovie_runtime.py").touch()
+        repo = self.root / "ComfyUI"; repo.mkdir(exist_ok=True); (repo / "folder_paths.py").touch()
+        repo = self.root / "ComfyUI"; repo.mkdir(exist_ok=True); (repo / "main.py").touch()
         revision = "a" * 40
         runner = b.NotebookRunner(binary,"https://example.com",self.root / "session",count=2,prefix="test",first_port=8190)
         fake = types.SimpleNamespace(pid=100, poll=lambda: None, wait=lambda timeout: None)

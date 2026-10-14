@@ -1,7 +1,9 @@
+mod provision;
 use clap::Parser;
 use job_core::ExecutionBackend;
 use project_core::{Result, atomic_json};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 #[derive(Parser)]
 #[command(version)]
@@ -18,6 +20,26 @@ struct Args {
     data: PathBuf,
     #[arg(long)]
     runtime_lock: Option<PathBuf>,
+    #[arg(long)]
+    comfy_root: Option<PathBuf>,
+    #[arg(long, default_value = "python3")]
+    python: String,
+    #[arg(long)]
+    runtime_helper: Option<PathBuf>,
+    #[arg(long)]
+    managed_runtime: bool,
+    #[arg(long)]
+    model_paths: Option<PathBuf>,
+    #[arg(long)]
+    cache: Option<PathBuf>,
+    #[arg(long)]
+    profile: Option<PathBuf>,
+    #[arg(long)]
+    workflows: Option<PathBuf>,
+    #[arg(long)]
+    apply: bool,
+    #[arg(skip)]
+    session_id: String,
 }
 async fn post(c: &reqwest::Client, url: &str, token: &str, v: Value) -> Result<Value> {
     Ok(c.post(url)
@@ -29,53 +51,40 @@ async fn post(c: &reqwest::Client, url: &str, token: &str, v: Value) -> Result<V
         .json()
         .await?)
 }
+struct LeaseRenewal(tokio::task::JoinHandle<()>);
+impl Drop for LeaseRenewal {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+fn renew_lease(
+    client: reqwest::Client,
+    url: String,
+    token: String,
+    receipt: Value,
+) -> LeaseRenewal {
+    LeaseRenewal(tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+        loop {
+            interval.tick().await;
+            let mut renewal = receipt.clone();
+            renewal["renewOnly"] = json!(true);
+            let _ = post(&client, &url, &token, renewal).await;
+        }
+    }))
+}
 async fn execute(
     args: &Args,
     comfy: &provider_comfyui::ComfyUi,
     kind: &str,
     payload: &Value,
 ) -> Result<Value> {
-    let health = comfy.health().await?;
-    match kind {
-        "doctor" | "bootstrap" => Ok(
-            json!({"comfy":health,"ready":true,"note":"Bootstrap verifies the installed private runtime; it never runs arbitrary shell"}),
-        ),
-        "inventory" => Ok(health),
-        "provision" => {
-            let registry: Value = reqwest::get(format!("{}/object_info", args.comfy_url))
-                .await?
-                .error_for_status()?
-                .json()
-                .await?;
-            let workflows: Vec<studio_contracts::Workflow> =
-                serde_json::from_value(payload["workflows"].clone())?;
-            let runtime = payload
-                .get("runtimeLock")
-                .filter(|v| !v.is_null())
-                .map(|v| serde_json::from_value::<provision_core::RuntimeLock>(v.clone()))
-                .transpose()?;
-            let plan = provision_core::plan(&workflows, &registry, runtime.as_ref());
-            // Approved sources are downloaded only through a separately verified transfer manifest.
-            if let Some(lock) = runtime {
-                lock.validate()?;
-                atomic_json(&args.data.join("runtime.lock.json"), &lock)?;
-            }
-            for w in &workflows {
-                atomic_json(
-                    &args
-                        .data
-                        .join(format!("workflows/{}/{}.json", w.id, w.version)),
-                    w,
-                )?;
-            }
-            Ok(plan)
-        }
-        _ => Err("Unsupported control action".into()),
-    }
+    provision::control(args, comfy, kind, payload).await
 }
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    let mut args = Args::parse();
+    args.session_id = project_core::id();
     std::fs::create_dir_all(&args.data)?;
     let comfy = provider_comfyui::ComfyUi::new(&args.comfy_url)?;
     if args.command != "serve" {
@@ -84,6 +93,14 @@ async fn main() -> Result<()> {
         } else {
             json!({"workflows":[]})
         };
+        let mut payload = payload;
+        if let Some(path) = &args.profile {
+            payload["profile"] = serde_json::from_slice(&std::fs::read(path)?)?;
+        }
+        if let Some(path) = &args.workflows {
+            payload["workflows"] = serde_json::from_slice(&std::fs::read(path)?)?;
+        }
+        payload["apply"] = json!(args.apply);
         println!(
             "{}",
             serde_json::to_string_pretty(&execute(&args, &comfy, &args.command, &payload).await?)?
@@ -131,6 +148,12 @@ async fn main() -> Result<()> {
         let mut receipt =
             json!({"nodeId":args.node_id,"leaseToken":job["leaseToken"],"state":"running"});
         let receipt_path = args.data.join(format!("receipts/{id}.json"));
+        let _lease = renew_lease(
+            client.clone(),
+            report_url.clone(),
+            token.clone(),
+            receipt.clone(),
+        );
         if job["kind"] == "drain" {
             receipt["state"] = json!("completed");
             receipt["report"] = json!({"drained":true});
@@ -152,7 +175,9 @@ async fn main() -> Result<()> {
                 }
                 Err(_) => {
                     receipt["state"] = json!("failed");
-                    receipt["error"] = json!("Runner validation failed; inspect local logs");
+                    receipt["error"] = json!(
+                        "Runner validation failed; review runtime paths, dependency pins and connection status"
+                    );
                 }
             }
             atomic_json(&receipt_path, &receipt)?;
@@ -167,30 +192,40 @@ async fn main() -> Result<()> {
             continue;
         }
         let mut graph = job["payload"].clone();
-        // Image assets use relay-private identifiers. Materialize them into ComfyUI before validation.
-        if let Some(nodes) = graph.as_object_mut() {
-            for n in nodes.values_mut() {
-                if let Some(inputs) = n["inputs"].as_object_mut() {
-                    if let Some(image) = inputs.get_mut("image") {
-                        if let Some(asset_id) = image.as_str().filter(|s| s.len() == 36) {
-                            let bytes = client
-                                .get(format!("{relay}/v1/assets/{asset_id}"))
-                                .bearer_auth(&token)
-                                .send()
-                                .await?
-                                .error_for_status()?
-                                .bytes()
-                                .await?;
-                            *image =
-                                json!(comfy.stage_asset("reference.png", bytes.to_vec()).await?);
-                        }
+        let prepared:Result<()> = async {
+            let initialized=provision::generation_ready(&args,&graph).await?;
+            comfy.validate_media(&graph,&initialized.bindings).await?;
+            let mut staged:std::collections::HashMap<String,(String,String)>=std::collections::HashMap::new();
+            for (node_id,node) in graph.as_object_mut().ok_or("Invalid graph")? {
+                for (input,value) in node["inputs"].as_object_mut().ok_or("Invalid inputs")? {
+                    let Some(asset_id)=value.as_str().and_then(|s|s.strip_prefix("relay-asset:")).map(str::to_owned) else {continue};
+                    if asset_id.len()!=36 || !asset_id.bytes().all(|b|b.is_ascii_hexdigit() || b==b'-') {return Err("Invalid relay asset identity".into());}
+                    let binding=initialized.bindings.iter().find(|b|b.node_id==*node_id && b.input==*input).ok_or("Media marker is not a reviewed input")?;
+                    let kind=binding.media.as_ref().map(|m|m.kind.as_str()).unwrap_or("image");
+                    if let Some((name,staged_kind))=staged.get(&asset_id) {
+                        if staged_kind!=kind {return Err("One media asset cannot satisfy different loader types".into());}
+                        *value=json!(name);continue;
                     }
+                    let mut response=client.get(format!("{relay}/v1/assets/{asset_id}")).bearer_auth(&token).send().await?.error_for_status()?;
+                    let header=|key|response.headers().get(key).and_then(|v|v.to_str().ok()).unwrap_or("").to_owned();
+                    let mut asset:studio_contracts::Asset=serde_json::from_value(json!({"id":asset_id,"name":header("x-asset-name"),"kind":header("x-asset-kind"),"sha256":header("x-asset-sha256"),"size":0,"path":""}))?;
+                    if asset.kind!=kind {return Err("Media type differs from the reviewed loader binding".into());}
+                    const MAX_MEDIA:usize=1024*1024*1024;
+                    if response.content_length().is_some_and(|n|n>MAX_MEDIA as u64) {return Err("Relay media exceeds 1 GiB".into());}
+                    let mut bytes=vec![];
+                    while let Some(chunk)=response.chunk().await? {if bytes.len().saturating_add(chunk.len())>MAX_MEDIA {return Err("Relay media exceeds 1 GiB".into());}bytes.extend_from_slice(&chunk);}
+                    asset.size=bytes.len() as u64;
+                    if format!("{:x}",Sha256::digest(&bytes))!=asset.sha256 {return Err("Relay media integrity mismatch".into());}
+                    let name=comfy.stage_asset(&asset,bytes).await?;staged.insert(asset_id,(name.clone(),kind.to_owned()));*value=json!(name);
                 }
             }
-        }
-        if comfy.validate_job(&graph).await.is_err() {
+            comfy.validate_job(&graph).await?;
+            Ok(())
+        }.await;
+        if let Err(e) = prepared {
             receipt["state"] = json!("failed");
-            receipt["error"] = json!("Installed node/model registry rejected workflow");
+            receipt["error"] = json!(e.to_string());
+            atomic_json(&receipt_path, &receipt)?;
             post(&client, &report_url, &token, receipt).await?;
             continue;
         }
@@ -232,6 +267,19 @@ async fn main() -> Result<()> {
                             let response = client
                                 .post(format!("{relay}/v1/assets"))
                                 .bearer_auth(&token)
+                                .header(
+                                    "x-asset-kind",
+                                    if name.ends_with(".mp4") || name.ends_with(".webm") {
+                                        "video"
+                                    } else if name.ends_with(".wav")
+                                        || name.ends_with(".mp3")
+                                        || name.ends_with(".flac")
+                                    {
+                                        "audio"
+                                    } else {
+                                        "image"
+                                    },
+                                )
                                 .header("x-asset-name", name)
                                 .body(bytes)
                                 .send()

@@ -22,11 +22,23 @@ pub struct RemoteStatus {
 pub trait ExecutionBackend: Send + Sync {
     async fn health(&self) -> Result<Value>;
     async fn validate_job(&self, graph: &Value) -> Result<()>;
+    async fn validate_media(&self, _graph: &Value, _bindings: &[Binding]) -> Result<()> {
+        Ok(())
+    }
+    async fn validate_compatibility(&self, compatibility: &str) -> Result<()> {
+        if matches!(compatibility, "universal" | "unspecified") {
+            return Ok(());
+        }
+        Err(
+            "This provider does not report hardware compatibility; choose a verified ComfyUI node"
+                .into(),
+        )
+    }
     async fn submit(&self, attempt: &str, graph: &Value) -> Result<String>;
     async fn status(&self, remote: &str) -> Result<RemoteStatus>;
     async fn cancel(&self, remote: &str) -> Result<()>;
     async fn collect(&self, output: &Value) -> Result<(String, Vec<u8>)>;
-    async fn stage_asset(&self, name: &str, bytes: Vec<u8>) -> Result<String>;
+    async fn stage_asset(&self, asset: &studio_contracts::Asset, bytes: Vec<u8>) -> Result<String>;
 }
 pub fn list(store: &ProjectStore) -> Result<Vec<Job>> {
     let mut stmt = store
@@ -174,6 +186,10 @@ mod tests {
             editor_graph: None,
             editor_hash: None,
             deployments: vec![],
+            requirements: studio_contracts::WorkflowRequirements {
+                compatibility: "unspecified".into(),
+                artifacts: vec![],
+            },
         };
         let graph = json!({"frozen":"graph"});
         let j = prepare(&s, frame, &w, &c, graph.clone(), json!({"seed":17})).unwrap();
@@ -189,4 +205,56 @@ mod tests {
         transition(&mut recovered, "completed").unwrap();
         assert!(transition(&mut recovered, "ready").is_err());
     }
+}
+
+/// Immutable provider filenames retain only a supported extension, avoiding path injection.
+pub fn staging_name(asset: &Asset) -> Result<String> {
+    if asset.sha256.len() != 64 || !asset.sha256.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return Err("Invalid media hash".into());
+    }
+    let ext = std::path::Path::new(&asset.name)
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let allowed: &[&str] = match asset.kind.as_str() {
+        "image" => &["png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff"],
+        "video" => &["mp4", "mov", "webm", "mkv", "avi"],
+        "audio" => &["wav", "mp3", "flac", "ogg", "m4a", "aac"],
+        _ => return Err("Unsupported media kind".into()),
+    };
+    if !allowed.contains(&ext.as_str()) {
+        return Err("Unsupported media extension; convert the source to a supported format".into());
+    }
+    Ok(format!("mymovie-{}.{}", asset.sha256, ext))
+}
+
+/// Device labels are declarations from ComfyUI, not assumptions from a hosting name.
+pub fn compatible(compatibility: &str, devices: &Value) -> bool {
+    if matches!(compatibility, "universal" | "unspecified") {
+        return true;
+    }
+    devices.as_array().is_some_and(|rows| {
+        rows.iter().any(|d| match compatibility {
+            "apple-silicon" => d["type"] == "mps",
+            "cuda" => {
+                d["type"] == "cuda"
+                    && !d["name"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains("hip")
+            }
+            "rocm" => {
+                d["type"] == "hip"
+                    || d["name"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains("hip")
+            }
+            "cpu" => d["type"] == "cpu",
+            _ => false,
+        })
+    })
 }

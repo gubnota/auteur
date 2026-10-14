@@ -832,7 +832,7 @@ function RatioEditor({
     /^\d+(\.\d+)?:\d+(\.\d+)?$/.test(text) &&
     text.split(":").every((n) => Number(n) > 0);
   return (
-    <div>
+    <div className="ratio-editor">
       <Field
         label="Custom aspect ratio (width:height)"
         value={text}

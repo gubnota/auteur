@@ -3,6 +3,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listen } from "@tauri-apps/api/event";
 import {
   Film,
+  WandSparkles,
   Cloud,
   Layers,
   Users,
@@ -42,6 +43,7 @@ import { AppSymbol } from "./components/AppSymbol";
 import { fileDropPoint } from "./lib/file-drop";
 import { Board } from "./features/Board";
 import { Characters, Library, Workflows, Renders } from "./features/Library";
+import { Generate } from "./features/Generate";
 import { Jobs, newJobDraft } from "./features/Jobs";
 import { Connections, Preferences } from "./features/Connections";
 const routes = [
@@ -49,6 +51,7 @@ const routes = [
   ["Characters", Users],
   ["Library", Image],
   ["Workflows", WorkflowIcon],
+  ["Generate", WandSparkles],
   ["Jobs", ListChecks],
   ["Renders", Clapperboard],
   ["Connections", Server],
@@ -155,7 +158,7 @@ export default function App() {
       const upgrade = await new Promise<boolean>((resolve) =>
         setModal(
           <Modal
-            title="Upgrade this movie for Jobs"
+            title="Upgrade this movie for Generate"
             onClose={() => {
               setModal(null);
               resolve(false);
@@ -405,7 +408,34 @@ export default function App() {
     const operation = pending.current.then(async () => {
       if (epoch !== generation.current)
         throw new Error("Movie changed during import");
-      const project = await call<Project>("import_media_drop", args);
+      let project = await call<Project>("import_media_drop", args);
+      if (target.dataset.fileDrop === "generate") {
+        const before = new Set(current.current?.assets.map((a) => a.id));
+        const imported = project.assets.filter((a) => !before.has(a.id));
+        // Content-addressed duplicates also remain assignable.
+        const asset =
+          imported.find((a) => a.kind === target.dataset.mediaKind) ??
+          project.assets.find(
+            (a) =>
+              paths.some((path) => path.split("/").pop() === a.name) &&
+              a.kind === target.dataset.mediaKind,
+          );
+        const item = project.jobDrafts
+          ?.find((d) => d.id === target.dataset.draftId)
+          ?.items.find((i) => i.id === target.dataset.itemId);
+        revision.current = project.revision;
+        current.current = project;
+        setP(project);
+        if (!asset || !item || !target.dataset.semantic)
+          throw new Error(
+            "Imported into Library; select a compatible file in the media slot",
+          );
+        item.assets[target.dataset.semantic] = asset.id;
+        project = await call<Project>("save_project", {
+          project,
+          expectedRevision: project.revision,
+        });
+      }
       revision.current = project.revision;
       current.current = project;
       setP(project);
@@ -448,15 +478,50 @@ export default function App() {
       current.current = project;
       setP(project);
       notify(message);
+      return project;
     });
-    pending.current = operation.catch(() => {});
+    pending.current = operation.then(() => {}).catch(() => {});
     try {
-      await operation;
+      return await operation;
     } finally {
       importingRef.current = false;
       setImporting(false);
       setStatus("Saved locally");
     }
+  };
+  const importGenerateMedia = async (
+    draftId: string,
+    itemId: string,
+    semantic: string,
+  ) => {
+    const epoch = generation.current;
+    const path = await pickFile("media");
+    if (!path) return;
+    if (epoch !== generation.current)
+      throw new Error("Movie changed during import");
+    const project = await mutateMedia(
+      "import_asset",
+      { path, linked: importMode === "link" },
+      "Media imported",
+    );
+    if (!project || epoch !== generation.current) return;
+    const asset = project.assets.find((a) => a.name === path.split("/").pop());
+    const draft = project.jobDrafts?.find((d) => d.id === draftId);
+    const item = draft?.items.find((i) => i.id === itemId);
+    const binding = (
+      item?.bindings ??
+      project.workflows.find((w) => w.id === item?.workflowId)?.bindings
+    )?.find((b) => b.semantic === semantic);
+    if (!asset || asset.kind !== (binding?.media?.kind ?? "image"))
+      throw new Error(
+        "Imported into Library. Select media matching this slot’s type.",
+      );
+    update((p) => {
+      const i = p.jobDrafts
+        ?.find((d) => d.id === draftId)
+        ?.items.find((i) => i.id === itemId);
+      if (i) i.assets[semantic] = asset.id;
+    });
   };
   const persistHeight = (h: number) => {
     void run(() => saveSettings({ ...settings, queueHeight: h }));
@@ -725,13 +790,13 @@ export default function App() {
                   project={p}
                   root={root}
                   onImport={() => importFile("media")}
-                  onCollect={() =>
-                    mutateMedia(
+                  onCollect={async () => {
+                    await mutateMedia(
                       "collect_media",
                       {},
                       "All media collected into movie",
-                    )
-                  }
+                    );
+                  }}
                   onRelink={async (assetId) => {
                     const path = await pickFile("media");
                     if (path)
@@ -752,8 +817,27 @@ export default function App() {
                   onGenerate={chooseJob}
                 />
               )}{" "}
+              {route === "Generate" && (
+                <Generate
+                  project={p}
+                  settings={settings}
+                  root={root}
+                  update={update}
+                  selectedId={jobDraftId}
+                  select={setJobDraftId}
+                  review={(id) => {
+                    setJobDraftId(id);
+                    setRoute("Jobs");
+                  }}
+                  importMedia={importGenerateMedia}
+                  importWorkflow={() => importFile("workflow")}
+                  notify={notify}
+                />
+              )}
               {route === "Jobs" && (
                 <Jobs
+                  root={root}
+                  importMedia={importGenerateMedia}
                   project={p}
                   settings={settings}
                   jobs={jobs}
@@ -901,22 +985,25 @@ export default function App() {
                 <div className="queue-body">
                   {jobs.length === 0 ? (
                     <p className="muted">
-                      Your next render starts from a keyframe. Choose a workflow
-                      and a connected server.
+                      Choose a workflow in Generate or select a keyframe to
+                      start a render.
                     </p>
                   ) : (
                     jobs.map((j) => (
                       <article className="queue-job" key={j.id}>
                         <div>
                           <strong>
-                            {p.episodes
-                              .flatMap((e) =>
-                                e.scenes.flatMap((s) =>
-                                  s.shots.flatMap((sh) => sh.frames),
-                                ),
-                              )
-                              .find((f) => f.id === j.frameId)?.name ??
-                              "Archived frame"}
+                            {!j.frameId
+                              ? (p.workflows.find((w) => w.id === j.workflowId)
+                                  ?.name ?? "Standalone generation")
+                              : (p.episodes
+                                  .flatMap((e) =>
+                                    e.scenes.flatMap((s) =>
+                                      s.shots.flatMap((sh) => sh.frames),
+                                    ),
+                                  )
+                                  .find((f) => f.id === j.frameId)?.name ??
+                                "Archived frame")}
                           </strong>
                           <small>{j.remoteId ?? j.id}</small>
                         </div>

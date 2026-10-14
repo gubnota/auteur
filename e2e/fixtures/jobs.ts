@@ -124,6 +124,7 @@ export async function openFixture(
     export async function pickFile() { return '/tmp/ui-fixture.mymovie'; }
     export async function pickDestination() { throw new Error('Not used'); }
     export async function pickReferenceImages() { throw new Error('Not used'); }
+    export async function exportDestination() { return null; }
     export const mediaUrl = () => '';
   `,
     }),

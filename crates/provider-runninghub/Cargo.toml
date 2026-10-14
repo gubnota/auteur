@@ -4,6 +4,7 @@ version.workspace=true
 edition.workspace=true
 license.workspace=true
 [dependencies]
+studio-contracts.workspace=true
 project-core.workspace=true
 job-core.workspace=true
 workflow-core.workspace=true

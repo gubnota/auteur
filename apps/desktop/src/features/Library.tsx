@@ -1,3 +1,4 @@
+import { WorkflowSetup, compatibilityLabel } from "../components/WorkflowSetup";
 import { useState, useEffect } from "react";
 import { Plus, Image, Upload, X, Workflow as WorkflowIcon } from "lucide-react";
 import { Field, Modal, Picker, Empty } from "../components/Controls";
@@ -34,6 +35,9 @@ export function PageTitle({
   );
 }
 export function Media({ asset, root }: { asset: Asset; root: string }) {
+  if (!mediaUrl(root, asset) && ["image", "video", "audio"].includes(asset.kind)) {
+    return <div className="file-placeholder">{asset.kind} · {asset.name}</div>;
+  }
   return asset.kind === "video" ? (
     <video controls preload="metadata" src={mediaUrl(root, asset)} />
   ) : asset.kind === "audio" ? (
@@ -488,6 +492,9 @@ export function Workflows({
                   {Object.keys(w.graph).length} nodes · {w.bindings.length}{" "}
                   bindings
                 </small>
+                <span className="compatibility-badge">
+                  {compatibilityLabel(w)}
+                </span>
                 <code>{w.version.slice(0, 16)}</code>
               </button>
             ))}
@@ -495,6 +502,15 @@ export function Workflows({
       )}
       {w && (
         <Modal title={w.name} onClose={() => setSelected("")}>
+          <WorkflowSetup
+            workflow={w}
+            change={(requirements) =>
+              update((p) => {
+                p.workflows.find((x) => x.id === w.id)!.requirements =
+                  requirements;
+              })
+            }
+          />
           <h3>Generate a keyframe</h3>
           <Picker
             title="Target keyframe"

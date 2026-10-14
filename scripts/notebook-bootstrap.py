@@ -47,7 +47,7 @@ def secret(host: str, label: str) -> str:
     return value
 
 
-def private_url(raw: str, *, loopback=False, allow_query=False) -> str:
+def private_url(raw: str, *, loopback=False, allow_query=False, allow_quick_tunnel=False) -> str:
     try:
         u = urllib.parse.urlsplit(raw)
         local = u.hostname in ("127.0.0.1", "localhost", "::1")
@@ -55,7 +55,7 @@ def private_url(raw: str, *, loopback=False, allow_query=False) -> str:
             raise ValueError()
         if u.scheme != "https" and not (loopback and local and u.scheme == "http"):
             raise ValueError()
-        if u.hostname.endswith("trycloudflare.com"):
+        if (u.hostname == "trycloudflare.com" or u.hostname.endswith(".trycloudflare.com")) and not allow_quick_tunnel:
             raise SetupError("Quick Tunnels do not support relay SSE. Use a stable authenticated HTTPS relay.")
         return raw.rstrip("/")
     except SetupError:
@@ -114,7 +114,7 @@ def install_artifact(source: str, digest: str, destination: Path, download_token
                 members = tar.getmembers()
                 if len(members) > 16:
                     raise SetupError("Unexpected artifact contents.")
-                binaries = []
+                binaries = []; auxiliary = {}
                 for member in members:
                     path = Path(member.name)
                     if path.is_absolute() or ".." in path.parts or member.issym() or member.islnk() or not (member.isfile() or member.isdir()):
@@ -123,6 +123,9 @@ def install_artifact(source: str, digest: str, destination: Path, download_token
                         raise SetupError("Artifact member exceeds the size limit.")
                     if member.name == "mymovie-agent" and member.isfile():
                         binaries.append(member)
+                    elif member.isfile() and (member.name in {"mymovie_runtime.py", "prepare-workflow-profile.py", "mask-canary.template.json", "rembg-u2netp.model.json", "mymovie-rembg.plugin.json", "mask-canary_api.json", "mask-canary_editor.json", "rembg-u2netp_api.json", "rembg-u2netp_editor.json"} or re.fullmatch(r"mymovie-rembg-[a-f0-9]{40,64}\.tar\.gz", member.name)):
+                        if member.name in auxiliary: raise SetupError("Duplicate runtime helper.")
+                        auxiliary[member.name] = tar.extractfile(member).read(MAX_BINARY+1)
                 if len(binaries) != 1:
                     raise SetupError("Artifact must contain exactly one mymovie-agent binary.")
                 data = tar.extractfile(binaries[0]).read(MAX_BINARY + 1)
@@ -140,6 +143,11 @@ def install_artifact(source: str, digest: str, destination: Path, download_token
         staged.write_bytes(data)
         staged.chmod(0o700)
         os.replace(staged, final)
+        for name, contents in auxiliary.items():
+            path = final_dir / name
+            if path.is_symlink(): raise SetupError("Symlink runtime helper destination.")
+            staged = Path(temporary.name) / name
+            staged.write_bytes(contents); staged.chmod(0o600); os.replace(staged,path)
         return final
     finally:
         temporary.cleanup()
@@ -178,9 +186,9 @@ def plans(count: int, prefix: str, root: Path, first_port=8188) -> list[dict]:
 
 
 class NotebookRunner:
-    def __init__(self, binary: Path, relay: str, root: Path, count=1, prefix=None, first_port=8188):
+    def __init__(self, binary: Path, relay: str, root: Path, count=1, prefix=None, first_port=8188, allow_quick_tunnel=False):
         self.binary = Path(binary).resolve()
-        self.relay = private_url(relay, loopback=True)
+        self.relay = private_url(relay, loopback=True, allow_quick_tunnel=allow_quick_tunnel)
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         # A fresh session gets a fresh node ID. Keep this object for stop/start with its receipts.
@@ -216,6 +224,10 @@ class NotebookRunner:
         try:
             if not self.binary.is_file():
                 raise SetupError("Install the verified Linux client artifact first.")
+            helper = self.binary.parent / "mymovie_runtime.py"
+            if not helper.is_file(): raise SetupError("This feature requires the new agent archive containing mymovie_runtime.py; rebuild with CI.")
+            repo = Path(comfy_root or "").resolve()
+            if not (repo / "folder_paths.py").is_file(): raise SetupError("Choose the actual ComfyUI root, including for Attach.")
             devices = gpu_indices()
             if len(devices) < len(self.workers):
                 raise SetupError("Two GPUs were requested, but fewer than two are available. Select one GPU or change the runtime.")
@@ -249,7 +261,7 @@ class NotebookRunner:
                     if model_paths:
                         args.extend(["--extra-model-paths-config", str(Path(model_paths).resolve())])
                     # Only agent processes inherit the relay Secret.
-                    env = {k: v for k, v in os.environ.items() if k != "MYMOVIE_AGENT_TOKEN"}
+                    env = {k: v for k, v in os.environ.items() if k not in ("MYMOVIE_AGENT_TOKEN","MYMOVIE_TRANSFER_MANIFEST")}
                     self._spawn(args, env, cwd=repo)
             deadline = time.monotonic() + timeout
             for w in self.workers:
@@ -273,7 +285,10 @@ class NotebookRunner:
             for w in self.workers:
                 data = w["root"] / "agent"; data.mkdir(parents=True, exist_ok=True)
                 env = dict(os.environ); env["MYMOVIE_AGENT_TOKEN"] = token
-                self._spawn([str(self.binary), "serve", "--comfy-url", f'http://127.0.0.1:{w["port"]}', "--relay", self.relay, "--node-id", w["nodeId"], "--data", str(data)], env)
+                agent_args = [str(self.binary), "serve", "--comfy-url", f'http://127.0.0.1:{w["port"]}', "--relay", self.relay, "--node-id", w["nodeId"], "--data", str(data), "--comfy-root", str(repo), "--python", sys.executable, "--runtime-helper", str(helper), "--cache", str(self.root / "dependency-cache")]
+                if not attach: agent_args.append("--managed-runtime")
+                if model_paths: agent_args.extend(["--model-paths",str(Path(model_paths).resolve())])
+                self._spawn(agent_args, env)
             self.started = time.monotonic()
             (self.root / "session.json").write_text(json.dumps({**self.configuration(), "comfyRevision": revision}, indent=2))
         except Exception as e:

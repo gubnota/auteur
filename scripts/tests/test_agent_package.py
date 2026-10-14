@@ -26,7 +26,10 @@ class AgentPackageTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             archive = dest / "mymovie-agent-linux-x86_64.tar.gz"
             with tarfile.open(archive) as tar:
-                self.assertEqual(tar.getnames(), ["mymovie-agent", "README-RunPod.md"])
+                self.assertEqual(tar.getnames()[:3], ["mymovie-agent", "README-RunPod.md", "mymovie_runtime.py"])
+                self.assertIn("mask-canary_api.json", tar.getnames())
+                self.assertIn("mymovie-rembg.plugin.json", tar.getnames())
+                self.assertLessEqual(len(tar.getnames()), 16)
                 self.assertEqual(tar.extractfile("mymovie-agent").read(), binary.read_bytes())
                 self.assertTrue(tar.getmember("mymovie-agent").mode & 0o111)
             metadata = json.loads((dest / "mymovie-agent-linux-x86_64.json").read_text())

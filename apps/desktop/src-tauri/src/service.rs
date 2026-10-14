@@ -121,8 +121,8 @@ pub async fn open_project(
     let manifest = project_core::confined(Path::new(&path), "manifest.json").map_err(err)?;
     let format: Value =
         serde_json::from_slice(&std::fs::read(manifest).map_err(err)?).map_err(err)?;
-    if format["schemaVersion"] == 1 && !allow_upgrade.unwrap_or(false) {
-        return Err("UPGRADE_REQUIRED: Jobs needs document format 2. A consistent SQLite and manifest backup will be saved inside backups/ first. MyMovie Studio 0.1.2 cannot open the upgraded document.".into());
+    if format["schemaVersion"].as_u64().is_some_and(|v| v < 3) && !allow_upgrade.unwrap_or(false) {
+        return Err("UPGRADE_REQUIRED: Generate needs document format 3. A consistent SQLite and manifest backup will be saved inside backups/ first. Older MyMovie Studio versions cannot open the upgraded document.".into());
     }
     let new = ProjectStore::open(path).map_err(err)?;
     select(&app, &mut i, new).map_err(err)
@@ -320,6 +320,7 @@ pub async fn submit_job(
         id: draft_id.clone(),
         name: "Generation".into(),
         frame_id,
+        context: Default::default(),
         items: vec![JobItem {
             id: project_core::id(),
             workflow_id,
@@ -519,16 +520,47 @@ pub async fn plan_deployment(
     state: S<'_>,
     connection_id: String,
     workflow_ids: Vec<String>,
+    apply: Option<bool>,
 ) -> Reply<Value> {
-    let i = state.inner.lock().await;
-    let c = connection(&i, &connection_id).map_err(err)?;
-    let p = store(&i).and_then(ProjectStore::read).map_err(err)?;
-    let workflows: Vec<_> = p
-        .workflows
-        .into_iter()
-        .filter(|w| workflow_ids.contains(&w.id))
-        .collect();
-    relay(&c).map_err(err)?.command("provision",json!({"workflows":workflows,"runtimeLock":i.settings.read().map_err(err)?.storage["runtimeLock"]})).await.map_err(err)
+    let (c, workflows, settings) = {
+        let i = state.inner.lock().await;
+        let c = connection(&i, &connection_id).map_err(err)?;
+        let p = store(&i).and_then(ProjectStore::read).map_err(err)?;
+        let workflows: Vec<_> = p
+            .workflows
+            .into_iter()
+            .filter(|w| workflow_ids.contains(&w.id))
+            .collect();
+        (c, workflows, i.settings.read().map_err(err)?)
+    };
+    relay(&c).map_err(err)?.command("provision",json!({"workflows":workflows,"runtimeLock":settings.storage["runtimeLock"],"profile":settings.storage["provisionProfile"],"apply":apply.unwrap_or(false)})).await.map_err(err)
+}
+#[tauri::command]
+pub async fn runner_operation(
+    state: S<'_>,
+    connection_id: String,
+    operation_id: String,
+) -> Reply<Value> {
+    if operation_id.len() != 36
+        || !operation_id
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() || b == b'-')
+    {
+        return Err("Invalid operation identity".into());
+    }
+    let c = connection(&*state.inner.lock().await, &connection_id).map_err(err)?;
+    relay(&c)
+        .map_err(err)?
+        .get(&format!("/v1/jobs/{operation_id}"))
+        .await
+        .map_err(err)
+}
+#[tauri::command]
+pub fn validate_profile(profile: Value) -> Reply<()> {
+    serde_json::from_value::<provision_core::ProvisionProfile>(profile)
+        .map_err(err)?
+        .validate()
+        .map_err(err)
 }
 #[tauri::command]
 pub async fn sync_storage(state: S<'_>, direction: String, asset_ids: Vec<String>) -> Reply<Value> {
@@ -707,4 +739,47 @@ pub async fn relink_asset(state: S<'_>, asset_id: String, path: String) -> Reply
     asset_core::source(s.path(), a, true).map_err(err)?;
     let revision = p.revision;
     s.save(p, revision).map_err(err)
+}
+
+#[tauri::command]
+pub async fn export_workflow_setup(
+    state: State<'_, Studio>,
+    path: String,
+    workflow_id: String,
+    requirements: studio_contracts::WorkflowRequirements,
+) -> Reply<()> {
+    let inner = state.inner.lock().await;
+    let project = inner
+        .project
+        .as_ref()
+        .ok_or("Open a project first")?
+        .read()
+        .map_err(err)?;
+    let mut workflow = project
+        .workflows
+        .iter()
+        .find(|w| w.id == workflow_id)
+        .ok_or("Unknown workflow")?
+        .clone();
+    for a in &requirements.artifacts {
+        a.validate().map_err(err)?;
+    }
+    if ![
+        "unspecified",
+        "universal",
+        "apple-silicon",
+        "cuda",
+        "rocm",
+        "cpu",
+    ]
+    .contains(&requirements.compatibility.as_str())
+    {
+        return Err("Unknown compatibility flag".into());
+    }
+    workflow.requirements = requirements;
+    let dest = Path::new(&path);
+    if dest.is_symlink() || dest.extension().is_none_or(|e| e != "json") {
+        return Err("Choose a regular JSON destination".into());
+    }
+    project_core::atomic_json(dest, &json!([workflow])).map_err(err)
 }

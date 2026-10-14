@@ -1,5 +1,27 @@
 # Task Log
 
+## 2026-10-14 — Generate, compatibility and verified node setup
+
+- Implemented the approved Generate plan on main: standalone image/video modes, exact ordered image/video/audio slots, shared Jobs review and saved batches. Same endpoints retain FIFO; distinct endpoints retain parallel dispatch.
+- Added explicit workflow flags: Unspecified, Universal, Apple Silicon, CUDA, ROCm and CPU. Custom modal persists hardware/dependency metadata; live hardware checks happen before media upload.
+- Added reviewed model/LoRA/plugin/wheel sources, SHA256, sizes, licenses, architecture and effective ComfyUI destinations. Actual inventory, managed atomic installation, restart/reinventory and current-session canary gate readiness; direct Mac connections stay read-only.
+- Added runtime helper/profile builder, deterministic plugin archive, weight-free mask and tiny u2netp fixtures, updated agent packaging and Colab/Kaggle startup. Published 0.1.5 lacks these new files; use current CI artifacts pending a separate release.
+- Format v3 preserves explicit standalone/media context, requires backup/upgrade acknowledgement and rejects older readers. Media mismatch leaves imported material available in Library. Standalone render labels now use workflow names.
+- Real local native Rust pipeline completed the approved safe Flux2 FaceSwap (two results) and core mask (one result), collecting hashes/receipts in ignored disposable documents. Original editor graph and existing Mac weights/plugins unchanged. Evidence: docs/GENERATION_ACCEPTANCE.md.
+- Native ARM64 release build opened the completed mask project and displayed its Universal flag/custom picker; screenshots: docs/screenshots/workflow-compatibility.png and generate.png. No /Applications replacement or new release tag in this scope.
+- Validation: `cargo test --workspace --locked --offline` (34 Rust tests), `npm test` (9 unit tests), `npm run test:e2e` (6 mocked browser tests) and Python unittest discovery (25 tests) passed. Typecheck, ARM64 native production build, cargo formatting, deterministic notebook regeneration, release-version parity (0.1.5) and diff checks passed. Loopback fixtures required sandbox elevation; no live external provider test was substituted for them.
+- Updated English/Russian/French README, compact memory and portable setup/connection instructions. Private media/settings/workflows, ignored drafts, build output and unrelated cpu-canary.png excluded from staging.
+- Live managed cloud installation, learned removal, local/cloud parallel run, two-GPU Kaggle and paid RunningHub acceptance remain pending an active authenticated session. No paid resources used.
+
+## 2026-10-14 — Generate and node initialization planning
+
+- Read compact context and planning skill; inspected existing Jobs, media bindings, providers, provisioning, notebooks and Base44 Generate UI.
+- Proposed docs/GENERATE_IMPLEMENTATION_PLAN.md: standalone typed media inputs, shared Jobs UI/queues, format v3 backup migration, actual model/plugin readiness and verified initialization.
+- User chose Colab first. Plan includes authenticated relay URL instructions and explicit polling for temporary Cloudflare tunnels (no SSE support).
+- Local ComfyUI MPS registry advertises all FaceSwap workflow nodes and referenced models; no model hashes or live execution verified. Actual API export still required.
+- User supplied a suitable replacement portrait and face reference; personal media remain outside Git and acceptance fixtures.
+- At planning time only documentation changed. Scope was subsequently approved by user `go`; implementation and acceptance are recorded above.
+
 ## 2026-10-14 — Published releases and expanded native platforms
 
 - User requested visible release downloads, then Windows and Linux x86_64/ARM64 binaries.

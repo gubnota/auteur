@@ -6,5 +6,24 @@ const draft:JobDraft={id:'d',name:'Batch',frameId:'f',items:[{id:'i',workflowId:
 describe('exact job inputs',()=>{
  it('rejects empty, nonfinite and invalid JSON inputs',()=>{for(const s of ['', 'NaN','Infinity','1e999']) expect(()=>parseInput('number',s)).toThrow();expect(()=>parseInput('json','{')).toThrow();expect(parseInput('number','0')).toBe(0);expect(parseInput('json','{"a":2}')).toEqual({a:2});});
  it('preserves exact prompts and boolean false without changing imported graph',()=>{const original=JSON.stringify(p);const result=resolveInputs(p,draft,draft.items[0]);expect(result.values.positivePrompt).toBe('exact');expect(result.values.enabled).toBe(false);expect(result.graph['1'].inputs.context).toBe('{"motion":[1,2]}');expect(JSON.stringify(p)).toBe(original);const item={...draft.items[0],values:{}};expect(resolveInputs(p,draft,item).values.positivePrompt).toBe('Common\nframe');});
- it('excludes links and requires media before review',()=>{expect(literalInputs(p.workflows[0]).some(i=>i.input==='linked')).toBe(false);const copy=structuredClone(p);copy.workflows[0].bindings.push({semantic:'image',nodeId:'1',input:'text',valueType:'string'});copy.workflows[0].bindings.shift();expect(readiness(copy,{connections:[{id:'c',kind:'comfyui',name:'CPU',url:'http://localhost:8188',credentialRef:null,deploymentId:null,apiFamily:null,concurrency:1}],theme:'light',storage:{},queueHeight:180,notifications:[],logs:[]},draft)).toContain('Item 1: Select an image for image before generation');});
+ it('excludes links and requires media before review',()=>{expect(literalInputs(p.workflows[0]).some(i=>i.input==='linked')).toBe(false);const copy=structuredClone(p);copy.workflows[0].bindings.push({semantic:'image',nodeId:'1',input:'text',valueType:'string'});copy.workflows[0].bindings.shift();expect(readiness(copy,{connections:[{id:'c',kind:'comfyui',name:'CPU',url:'http://localhost:8188',credentialRef:null,deploymentId:null,apiFamily:null,concurrency:1}],theme:'light',storage:{},queueHeight:180,notifications:[],logs:[]},draft)).toContain('Item 1: Select image media for image before generation');});
+});
+
+describe('standalone generation',()=>{
+ it('uses project prompts with no scene or frame and preserves exact overrides',()=>{
+  const d:JobDraft={...draft,frameId:'',context:{kind:'standalone',mode:'t2v',characterIds:[]}};
+  expect(resolveInputs(p,d,{...d.items[0],values:{}}).values.positivePrompt).toBe('Common');
+  expect(()=>resolveInputs(p,{...d,context:undefined},d.items[0])).toThrow('target keyframe');
+  expect(()=>resolveInputs(p,{...d,frameId:'f'},d.items[0])).toThrow('no target keyframe');
+ });
+ it('maps arbitrary video/audio slots without changing graph links',()=>{
+  const project=structuredClone(p); const w=project.workflows[0];
+  project.assets=[{id:'v',name:'clip.webm',path:'media/v.webm',sha256:'a'.repeat(64),size:10,kind:'video'},{id:'a',name:'voice.wav',path:'media/a.wav',sha256:'b'.repeat(64),size:10,kind:'audio'}];
+  w.graph['3']={class_type:'LoadAudio',inputs:{audio:'voice.wav'}};
+  w.bindings=[{semantic:'motion',nodeId:'1',input:'text',valueType:'string',media:{kind:'video',role:'referenceVideo',order:0}},{semantic:'voice',nodeId:'3',input:'audio',valueType:'string',media:{kind:'audio',role:'referenceAudio',order:1}}];
+  const d:JobDraft={...draft,frameId:'',context:{kind:'standalone',mode:'custom',characterIds:[]}};
+  const item={...d.items[0],assets:{motion:'v',voice:'a'}};
+  const result=resolveInputs(project,d,item);expect(Object.keys(result.media)).toEqual(['motion','voice']); expect(result.graph['1'].inputs.linked).toEqual(['2',0]);
+  expect(()=>resolveInputs(project,d,{...item,assets:{motion:'a',voice:'a'}})).toThrow('video media');
+ });
 });

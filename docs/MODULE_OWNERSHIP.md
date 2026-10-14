@@ -9,12 +9,12 @@
 | job-core | ExecutionBackend interface, durable attempt/run state, lane eligibility and recovery |
 | provider-* | Provider-specific health, stage, submit, status, cancel, collect |
 | integration-core | Global settings, connections, recent documents, bounded diagnostics |
-| provision-core | Pinned runtime validation and readiness plans; installation pending |
+| provision-core | Pure pinned runtime/dependency validation and readiness plans |
 | storage-s3 | Manifest-based transfers, size/hash verification, resumable download |
 | desktop native | Command orchestration, Keychain, document lifecycle, native progress |
 | desktop React | UI state, serialized saves, modal/drop interaction; no direct filesystem/network |
 | relay | Authenticated node-scoped jobs, leases, event replay, private asset endpoints |
-| agent | Outbound claims/reports, typed operations, ComfyUI execution and local receipts |
+| agent | Outbound claims/reports, lease renewal, inventory, managed provision, session canary and receipts |
 | deploy/scripts | Local acceptance, verified notebook artifacts, isolated GPU workers |
 | CI/release scripts | Platform builds, version checks, immutable packages and release links |
 

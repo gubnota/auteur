@@ -1432,3 +1432,33 @@ dd {
   background: var(--pale);
   border-color: var(--ink);
 }
+
+/* Generation workspace: all spacing scales with desktop text settings. */
+.generate-page { display: grid; gap: 1.25rem; }
+.generate-modes { display: flex; flex-wrap: wrap; gap: .5rem; }
+.generate-modes button { min-height: 2.75rem; padding: .65rem 1rem; display: inline-flex; gap: .5rem; align-items: center; }
+.generate-modes .selected { background: var(--moss); color: var(--ink); border-color: var(--moss); }
+.generate-layout { display: grid; grid-template-columns: minmax(22rem, 1.1fr) minmax(18rem, 1fr); gap: 1.25rem; align-items: start; }
+.generate-composer, .generate-preview { padding: 1.5rem; display: grid; gap: 1rem; min-width: 0; }
+.generate-media-slot { border: .0625rem dashed var(--line); border-radius: .75rem; padding: 1rem; display: grid; gap: .75rem; }
+.generate-media-slot > img, .generate-media-slot > video { width: 100%; max-height: 16rem; object-fit: contain; border-radius: .5rem; }
+.generate-media-slot > audio { width: 100%; }
+.generate-media-slot.file-drop-hover { outline: .1875rem solid var(--moss); outline-offset: .125rem; }
+.generate-result-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1rem; }
+.generate-result-grid figure { margin: 0; min-width: 0; }
+.generate-result-grid img, .generate-result-grid video { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: .75rem; background: var(--paper); }
+.generate-result-grid figcaption { font-size: .75rem; overflow-wrap: anywhere; margin-top: .5rem; }
+.generate-empty, .generate-welcome { padding: 3rem 2rem; display: grid; justify-items: center; gap: 1rem; text-align: center; }
+.generate-ratio-summary { margin-top: 1.25rem; padding-top: 1rem; border-top: .0625rem solid var(--line); display: grid; gap: .5rem; }
+.generate-batch { padding: 1.25rem 1.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.ratio-editor { display: grid; gap: .75rem; margin-bottom: 1rem; }
+.ratio-editor + * { margin-top: .75rem; }
+@media (max-width: 65rem) { .generate-layout { grid-template-columns: 1fr; } .generate-batch { flex-wrap: wrap; } }
+
+.workflow-setup { padding: 1rem 0; border-bottom: .0625rem solid var(--line); margin-bottom: 1.5rem; }
+.compatibility-badge { font-size: .75rem; color: var(--moss); border: .0625rem solid var(--line); border-radius: 1rem; padding: .3rem .65rem; width: fit-content; }
+.setup-dependency { display: flex; align-items: center; gap: .75rem; padding: 1rem; border: .0625rem solid var(--line); border-radius: .75rem; margin: .75rem 0; }
+.setup-dependency > div { flex: 1; min-width: 0; }
+.setup-dependency small { display: block; overflow-wrap: anywhere; margin-top: .4rem; }
+.setup-code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .8125rem; padding: 1rem; background: var(--paper); border-radius: .75rem; }
+.setup-warning { font-size: .875rem; overflow-wrap: anywhere; margin: 1rem 0; }

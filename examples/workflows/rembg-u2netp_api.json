@@ -1,0 +1,47 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "SELECT_APPROVED_IMAGE.png"
+    }
+  },
+  "2": {
+    "class_type": "MyMovieU2netp",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "model_name": "u2netp.onnx"
+    }
+  },
+  "3": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "2",
+        0
+      ],
+      "filename_prefix": "MyMovie/background-removal"
+    }
+  },
+  "4": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "2",
+        1
+      ]
+    }
+  },
+  "5": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "4",
+        0
+      ],
+      "filename_prefix": "MyMovie/foreground-mask"
+    }
+  }
+}

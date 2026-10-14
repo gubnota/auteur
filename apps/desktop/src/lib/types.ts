@@ -53,6 +53,11 @@ export interface Binding {
   nodeId: string;
   input: string;
   valueType: string;
+  media?: {
+    kind: "image" | "video" | "audio";
+    role: string;
+    order: number;
+  } | null;
 }
 export interface Workflow {
   id: string;
@@ -67,6 +72,7 @@ export interface Workflow {
     }
   >;
   bindings: Binding[];
+  requirements?: { compatibility: string; artifacts: InstallArtifact[] };
   mediaKind?: "image" | "video" | "other";
   editorGraph?: Record<string, unknown>;
   editorHash?: string;
@@ -197,6 +203,11 @@ export interface JobDraft {
   id: string;
   name: string;
   frameId: string;
+  context?: {
+    kind: "storyboard" | "standalone";
+    mode: string;
+    characterIds: string[];
+  };
   items: JobItem[];
 }
 export interface JobRun {
@@ -206,4 +217,18 @@ export interface JobRun {
   jobIds: string[];
   state: string;
   createdAt: string;
+}
+
+export interface InstallArtifact {
+  kind: "model" | "plugin" | "wheel";
+  category: string;
+  target: string;
+  sha256: string;
+  size: number;
+  license: string;
+  architecture: string;
+  source?: string;
+  sourceRef?: string;
+  revision?: string;
+  stripPrefix?: string;
 }

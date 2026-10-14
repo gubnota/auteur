@@ -90,6 +90,16 @@ pub struct Binding {
     pub node_id: String,
     pub input: String,
     pub value_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media: Option<MediaBinding>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaBinding {
+    pub kind: String,
+    pub role: String,
+    #[serde(default)]
+    pub order: usize,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -107,6 +117,90 @@ pub struct Workflow {
     pub editor_hash: Option<String>,
     #[serde(default)]
     pub deployments: Vec<WorkflowDeployment>,
+    #[serde(default)]
+    pub requirements: WorkflowRequirements,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowRequirements {
+    #[serde(default = "unspecified")]
+    pub compatibility: String,
+    #[serde(default)]
+    pub artifacts: Vec<InstallArtifact>,
+}
+impl Default for WorkflowRequirements {
+    fn default() -> Self {
+        Self {
+            compatibility: unspecified(),
+            artifacts: vec![],
+        }
+    }
+}
+fn unspecified() -> String {
+    "unspecified".into()
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallArtifact {
+    pub kind: String,
+    pub category: String,
+    pub target: String,
+    pub sha256: String,
+    pub size: u64,
+    pub license: String,
+    pub architecture: String,
+    #[serde(default)]
+    pub source: String,
+    #[serde(default)]
+    pub source_ref: String,
+    #[serde(default)]
+    pub revision: String,
+    #[serde(default)]
+    pub strip_prefix: String,
+}
+impl InstallArtifact {
+    pub fn validate(&self) -> Result<(), &'static str> {
+        let relative = |s: &str| {
+            !s.is_empty()
+                && !s.starts_with('/')
+                && !s.contains(['\\', ':'])
+                && s.split('/').all(|p| !p.is_empty() && p != "." && p != "..")
+        };
+        let hash = |s: &str| s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit());
+        if !hash(&self.sha256)
+            || self.size == 0
+            || self.size > 32 * 1024 * 1024 * 1024
+            || self.license.trim().is_empty()
+            || !["any", "x86_64", "aarch64", "arm64"].contains(&self.architecture.as_str())
+            || !["model", "plugin", "wheel"].contains(&self.kind.as_str())
+            || !relative(&self.target)
+            || !relative(&self.category)
+            || self.category.contains('/')
+            || (!self.strip_prefix.is_empty() && !relative(&self.strip_prefix))
+            || (self.kind == "wheel" && !self.target.ends_with(".whl"))
+            || (self.kind == "plugin"
+                && !([40, 64].contains(&self.revision.len())
+                    && self.revision.bytes().all(|b| b.is_ascii_hexdigit())))
+        {
+            return Err(
+                "Pin dependency hash, byte size, license, architecture, safe destination and plugin commit",
+            );
+        }
+        if self.source_ref.is_empty() {
+            if !self.source.starts_with("https://")
+                || self.source[8..].is_empty()
+                || self.source.contains(['@', '?', '#'])
+                || self.source.chars().any(char::is_whitespace)
+            {
+                return Err(
+                    "Use public HTTPS without credentials/query strings, or a secret source reference",
+                );
+            }
+        } else if !self.source.is_empty() || self.source_ref.chars().any(char::is_whitespace) {
+            return Err("Choose one public source or a secret transfer reference");
+        }
+        Ok(())
+    }
 }
 fn other_media() -> String {
     "other".into()
@@ -158,7 +252,27 @@ pub struct JobDraft {
     pub id: String,
     pub name: String,
     pub frame_id: String,
+    #[serde(default)]
+    pub context: DraftContext,
     pub items: Vec<JobItem>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftContext {
+    pub kind: String,
+    #[serde(default)]
+    pub mode: String,
+    #[serde(default)]
+    pub character_ids: Vec<String>,
+}
+impl Default for DraftContext {
+    fn default() -> Self {
+        Self {
+            kind: "storyboard".into(),
+            mode: "custom".into(),
+            character_ids: vec![],
+        }
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

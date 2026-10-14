@@ -1,0 +1,10 @@
+{
+  "kind": "model",
+  "category": "background_removal",
+  "target": "u2netp.onnx",
+  "source": "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx",
+  "sha256": "309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8",
+  "size": 4574861,
+  "license": "Apache-2.0 (U-2-Net upstream; review model terms)",
+  "architecture": "any"
+}

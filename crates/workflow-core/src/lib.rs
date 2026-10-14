@@ -37,6 +37,10 @@ pub fn import(name: &str, graph: Value) -> Result<Workflow> {
         editor_graph: None,
         editor_hash: None,
         deployments: vec![],
+        requirements: studio_contracts::WorkflowRequirements {
+            compatibility: "unspecified".into(),
+            artifacts: vec![],
+        },
     })
 }
 pub fn preset(kind: &str) -> Result<Workflow> {
@@ -85,6 +89,7 @@ pub fn preset(kind: &str) -> Result<Workflow> {
             node_id: n.into(),
             input: i.into(),
             value_type: t.into(),
+            media: None,
         })
         .collect();
     Ok(w)
@@ -245,7 +250,7 @@ pub fn character_reference_inputs<'a>(
                 .semantic
                 .strip_prefix("characterReference")
                 .and_then(|s| s.parse::<usize>().ok())
-                .filter(|n| (1..=4).contains(n))
+                .filter(|n| *n > 0)
                 .ok_or("Unknown character reference slot")?;
             if b.value_type != "string" {
                 return Err("Character reference slots must bind string image filenames".into());
@@ -323,6 +328,7 @@ mod tests {
             node_id: "1".into(),
             input: "context".into(),
             value_type: "json".into(),
+            media: None,
         }];
         let result = bind(&w.graph, &bindings, &json!({"motion":"{\"tracks\":[]}"})).unwrap();
         assert_eq!(result["1"]["inputs"]["context"], "{\"tracks\":[]}");
@@ -333,6 +339,7 @@ mod tests {
             node_id: "2".into(),
             input: "image".into(),
             value_type: "string".into(),
+            media: None,
         }];
         assert!(bind(&raw, &link, &json!({"image":"x"})).is_err());
         assert!(
@@ -376,6 +383,7 @@ mod tests {
             node_id: "1".into(),
             input: "image".into(),
             value_type: "string".into(),
+            media: None,
         }];
         assert_eq!(
             character_reference_inputs(&p, scene, frame, &bindings, &json!({})).unwrap()[0]
@@ -419,7 +427,7 @@ pub fn resolve_item(
         )
         .into());
     }
-    let (scene, frame) = p
+    let target = p
         .episodes
         .iter()
         .flat_map(|e| &e.scenes)
@@ -428,8 +436,31 @@ pub fn resolve_item(
                 .iter()
                 .flat_map(move |sh| sh.frames.iter().map(move |f| (s, f)))
         })
-        .find(|(_, f)| f.id == draft.frame_id)
-        .ok_or("Target keyframe missing")?;
+        .find(|(_, f)| f.id == draft.frame_id);
+    let standalone = draft.context.kind == "standalone";
+    if standalone && !draft.frame_id.is_empty() {
+        return Err("Standalone drafts must have no target keyframe".into());
+    }
+    if !standalone && target.is_none() {
+        return Err("Target keyframe missing".into());
+    }
+    let cast: Vec<String> = if standalone {
+        draft.context.character_ids.clone()
+    } else {
+        let (scene, frame) = target.unwrap();
+        scene
+            .character_ids
+            .iter()
+            .chain(&frame.character_ids)
+            .cloned()
+            .collect()
+    };
+    if cast
+        .iter()
+        .any(|id| !p.characters.iter().any(|c| &c.id == id))
+    {
+        return Err("Assigned character missing".into());
+    }
     let w = p
         .workflows
         .iter()
@@ -441,7 +472,16 @@ pub fn resolve_item(
     let mut fields = std::collections::HashSet::new();
     let mut semantic = json!({});
     let mut media = serde_json::Map::new();
-    let references = character_references(p, scene, frame);
+    let references: Vec<_> = p
+        .assets
+        .iter()
+        .filter(|a| {
+            a.kind == "image"
+                && p.characters
+                    .iter()
+                    .any(|c| cast.contains(&c.id) && c.asset_ids.contains(&a.id))
+        })
+        .collect();
     for b in bindings {
         if b.semantic.trim().is_empty()
             || !seen.insert(&b.semantic)
@@ -454,7 +494,8 @@ pub fn resolve_item(
             .get(&b.node_id)
             .and_then(|n| n["inputs"].get(&b.input))
             .ok_or("Binding input missing")?;
-        let is_media = matches!(b.semantic.as_str(), "image" | "mask")
+        let is_media = b.media.is_some()
+            || matches!(b.semantic.as_str(), "image" | "mask")
             || b.semantic.starts_with("characterReference");
         if is_media {
             if b.value_type != "string" {
@@ -465,23 +506,33 @@ pub fn resolve_item(
             } else if b.semantic == "image" {
                 p.assets
                     .iter()
-                    .find(|a| frame.asset_id.as_ref() == Some(&a.id))
+                    .find(|a| target.and_then(|(_, f)| f.asset_id.as_ref()) == Some(&a.id))
             } else if b.semantic.starts_with("characterReference") {
                 let slot = b
                     .semantic
                     .strip_prefix("characterReference")
                     .and_then(|s| s.parse::<usize>().ok())
-                    .filter(|n| (1..=4).contains(n))
+                    .filter(|n| *n > 0)
                     .ok_or("Unknown character reference slot")?;
                 references.get(slot - 1).copied()
             } else {
                 None
             }
-            .ok_or_else(|| format!("Select an image for {} before generation", b.semantic))?;
-            if asset.kind != "image" {
-                return Err("Image slots require image assets".into());
+            .ok_or_else(|| format!("Select media for {} before generation", b.semantic))?;
+            let kind = b.media.as_ref().map(|m| m.kind.as_str()).unwrap_or("image");
+            if asset.kind != kind {
+                return Err(format!("{} requires {kind} media", b.semantic).into());
             }
-            if b.semantic.starts_with("characterReference")
+            if b.media.as_ref().is_some_and(|m| {
+                !["image", "video", "audio"].contains(&m.kind.as_str())
+                    || (m.role == "mask" && m.kind != "image")
+            }) {
+                return Err("Unsupported media binding kind/role".into());
+            }
+            if (b.semantic.starts_with("characterReference")
+                || b.media
+                    .as_ref()
+                    .is_some_and(|m| m.role == "characterReference"))
                 && !references.iter().any(|a| a.id == asset.id)
             {
                 return Err(
@@ -494,20 +545,31 @@ pub fn resolve_item(
         } else {
             semantic[&b.semantic] = if let Some(value) = item.values.get(&b.semantic) {
                 value.clone()
-            } else if b.semantic == "positivePrompt" {
-                json!(composed(
-                    &p.positive_prompt,
-                    scene.positive_prompt.as_deref(),
-                    &frame.positive_prompt,
-                    frame.include_common
-                ))
-            } else if b.semantic == "negativePrompt" {
-                json!(composed(
-                    &p.negative_prompt,
-                    scene.negative_prompt.as_deref(),
-                    &frame.negative_prompt,
-                    frame.include_common
-                ))
+            } else if b.semantic == "positivePrompt" || b.semantic == "negativePrompt" {
+                let positive = b.semantic == "positivePrompt";
+                let common = if positive {
+                    &p.positive_prompt
+                } else {
+                    &p.negative_prompt
+                };
+                json!(if let Some((scene, frame)) = target {
+                    composed(
+                        common,
+                        if positive {
+                            scene.positive_prompt.as_deref()
+                        } else {
+                            scene.negative_prompt.as_deref()
+                        },
+                        if positive {
+                            &frame.positive_prompt
+                        } else {
+                            &frame.negative_prompt
+                        },
+                        frame.include_common,
+                    )
+                } else {
+                    common.clone()
+                })
             } else if b.value_type == "json" && default.is_string() {
                 serde_json::from_str(default.as_str().unwrap())?
             } else {
@@ -518,8 +580,9 @@ pub fn resolve_item(
     let graph = bind_exact(&w.graph, bindings, &semantic)?;
     Ok(
         json!({"graph":graph,"originalGraph":w.graph,"semantic":semantic,"media":media,
-        "frame":frame,"sceneId":scene.id,"bindings":bindings,
-        "characters":p.characters.iter().filter(|c| frame.character_ids.contains(&c.id) || scene.character_ids.contains(&c.id)).collect::<Vec<_>>() }),
+        "compatibility":w.requirements.compatibility,"requirements":w.requirements,
+        "frame":target.map(|(_,f)|f),"sceneId":target.map(|(s,_)|&s.id),"context":draft.context,"bindings":bindings,
+        "characters":p.characters.iter().filter(|c| cast.contains(&c.id)).collect::<Vec<_>>() }),
     )
 }
 
@@ -542,24 +605,28 @@ mod jobs_tests {
                 node_id: "1".into(),
                 input: "text".into(),
                 value_type: "string".into(),
+                media: None,
             },
             Binding {
                 semantic: "context".into(),
                 node_id: "1".into(),
                 input: "context".into(),
                 value_type: "json".into(),
+                media: None,
             },
             Binding {
                 semantic: "seed".into(),
                 node_id: "1".into(),
                 input: "seed".into(),
                 value_type: "number".into(),
+                media: None,
             },
             Binding {
                 semantic: "enabled".into(),
                 node_id: "1".into(),
                 input: "enabled".into(),
                 value_type: "boolean".into(),
+                media: None,
             },
         ];
         let frame = p.episodes[0].scenes[0].shots[0].frames[0].id.clone();
@@ -568,6 +635,7 @@ mod jobs_tests {
             id: project_core::id(),
             name: "Exact".into(),
             frame_id: frame,
+            context: Default::default(),
             items: vec![item.clone()],
         };
         p.workflows.push(w);
@@ -609,6 +677,7 @@ mod jobs_tests {
             node_id: "1".into(),
             input: "text".into(),
             value_type: "string".into(),
+            media: None,
         }]);
         assert!(resolve_item(&reopened, &d, &media).is_err());
     }

@@ -159,8 +159,17 @@ async fn dispatch(
 ) -> Result<()> {
     let mut semantic = j.snapshot["semantic"].clone();
     let result: Result<Value> = async {
-        for (key, asset, bytes) in uploads { semantic[&key] = json!(b.stage_asset(&asset.name, bytes).await?); }
         let bindings: Vec<Binding> = serde_json::from_value(j.snapshot["bindings"].clone())?;
+        b.validate_compatibility(j.snapshot["compatibility"].as_str().unwrap_or("unspecified")).await?;
+        b.validate_media(&j.snapshot["originalGraph"], &bindings).await?;
+        let mut staged: std::collections::HashMap<String,String> = std::collections::HashMap::new();
+        for (key, asset, bytes) in uploads {
+            let name = if let Some(name) = staged.get(&asset.sha256) { name.clone() } else {
+                let name = b.stage_asset(&asset, bytes).await?;
+                staged.insert(asset.sha256.clone(), name.clone()); name
+            };
+            semantic[&key] = json!(name);
+        }
         let mut graph = workflow_core::bind_exact(&j.snapshot["originalGraph"], &bindings, &semantic)?;
         b.validate_job(&graph).await?;
         if j.snapshot["connection"]["kind"] == "runninghub" {
@@ -474,7 +483,7 @@ mod tests {
         async fn collect(&self, _: &Value) -> Result<(String, Vec<u8>)> {
             unreachable!()
         }
-        async fn stage_asset(&self, _: &str, _: Vec<u8>) -> Result<String> {
+        async fn stage_asset(&self, _: &Asset, _: Vec<u8>) -> Result<String> {
             unreachable!()
         }
     }

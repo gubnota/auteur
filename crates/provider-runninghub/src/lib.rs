@@ -190,8 +190,13 @@ impl ExecutionBackend for RunningHub {
         }
         Ok((name, bytes))
     }
-    async fn stage_asset(&self, name: &str, bytes: Vec<u8>) -> Result<String> {
-        let part = reqwest::multipart::Part::bytes(bytes).file_name(name.to_string());
+    async fn stage_asset(&self, asset: &studio_contracts::Asset, bytes: Vec<u8>) -> Result<String> {
+        if asset.kind != "image" {
+            return Err(
+                "RunningHub media staging currently supports verified image inputs only".into(),
+            );
+        }
+        let part = reqwest::multipart::Part::bytes(bytes).file_name(job_core::staging_name(asset)?);
         let v: Value = self
             .client
             .post(format!("{}/openapi/v2/media/upload/binary", self.endpoint))

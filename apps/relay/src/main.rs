@@ -271,6 +271,27 @@ async fn report(
     ) {
         return Ok(Json(old));
     }
+    // Lease renewal must not overwrite progress or terminal submission state.
+    if v["renewOnly"] == true {
+        let timestamp = now();
+        if matches!(
+            old["state"].as_str(),
+            Some("running" | "collecting" | "cancel_requested")
+        ) {
+            tx.execute(
+                "UPDATE jobs SET lease=?1 WHERE id=?2",
+                rusqlite::params![timestamp + 120, id],
+            )
+            .map_err(failure)?;
+            tx.execute(
+                "UPDATE nodes SET json=json_set(json,'$.lastSeen',?1) WHERE id=?2",
+                rusqlite::params![timestamp, old["nodeId"].as_str()],
+            )
+            .map_err(failure)?;
+        }
+        tx.commit().map_err(failure)?;
+        return Ok(Json(old));
+    }
     if !matches!(
         v["state"].as_str(),
         Some("running" | "collecting" | "completed" | "failed" | "canceled" | "unknown")
@@ -338,7 +359,7 @@ async fn upload(State(s): State<Shared>, h: HeaderMap, bytes: Bytes) -> Reply<Js
         .and_then(|v| v.to_str().ok())
         .unwrap_or("result.png");
     let id = project_core::id();
-    let metadata = json!({"id":id,"name":name,"size":bytes.len(),"sha256":format!("{:x}",Sha256::digest(&bytes))});
+    let metadata = json!({"id":id,"name":name,"kind":h.get("x-asset-kind").and_then(|v|v.to_str().ok()).unwrap_or("image"),"size":bytes.len(),"sha256":format!("{:x}",Sha256::digest(&bytes))});
     let dest = s.root.join("assets").join(&id);
     tokio::fs::write(dest, &bytes).await.map_err(failure)?;
     s.db.lock()
@@ -350,13 +371,36 @@ async fn upload(State(s): State<Shared>, h: HeaderMap, bytes: Bytes) -> Reply<Js
         .map_err(failure)?;
     Ok(Json(metadata))
 }
-async fn asset(State(s): State<Shared>, h: HeaderMap, Path(id): Path<String>) -> Reply<Bytes> {
+async fn asset(
+    State(s): State<Shared>,
+    h: HeaderMap,
+    Path(id): Path<String>,
+) -> Reply<(HeaderMap, Bytes)> {
     either(&s, &h)?;
     uuid::Uuid::parse_str(&id).map_err(|_| (StatusCode::BAD_REQUEST, "Invalid asset ID".into()))?;
+    let raw: String =
+        s.db.lock()
+            .unwrap()
+            .query_row("SELECT json FROM assets WHERE id=?1", [&id], |r| r.get(0))
+            .map_err(failure)?;
+    let metadata: Value = serde_json::from_str(&raw).map_err(failure)?;
+    let mut headers = HeaderMap::new();
+    for key in ["name", "kind", "sha256"] {
+        headers.insert(
+            format!("x-asset-{key}")
+                .parse::<axum::http::HeaderName>()
+                .map_err(failure)?,
+            metadata[key]
+                .as_str()
+                .unwrap_or("")
+                .parse()
+                .map_err(failure)?,
+        );
+    }
     let data = tokio::fs::read(s.root.join("assets").join(id))
         .await
         .map_err(|_| (StatusCode::NOT_FOUND, "Asset missing".into()))?;
-    Ok(data.into())
+    Ok((headers, data.into()))
 }
 
 #[tokio::main]
@@ -455,6 +499,60 @@ mod tests {
         assert_eq!(bad.unwrap_err().0, StatusCode::CONFLICT);
         let _ = report(State(s.clone()),headers("agent"),Path(b),Json(json!({"nodeId":"kaggle-gpu1","leaseToken":second["leaseToken"],"state":"completed"}))).await.unwrap();
         assert_eq!(read(&s.db.lock().unwrap(), &a).unwrap()["state"], "running");
+    }
+    #[tokio::test]
+    async fn renewal_preserves_state_and_never_resurrects_completed_jobs() {
+        let s = state();
+        let id = queue(&s, "kaggle-gpu0").await;
+        let lease = claim(
+            State(s.clone()),
+            headers("agent"),
+            Json(json!({"nodeId":"kaggle-gpu0"})),
+        )
+        .await
+        .unwrap()
+        .0;
+        let mut receipt = json!({"nodeId":"kaggle-gpu0","leaseToken":lease["leaseToken"],"renewOnly":true,"state":"running","remoteId":"should-not-overwrite"});
+        s.db.lock()
+            .unwrap()
+            .execute("UPDATE jobs SET lease=1 WHERE id=?1", [&id])
+            .unwrap();
+        let renewed = report(
+            State(s.clone()),
+            headers("agent"),
+            Path(id.clone()),
+            Json(receipt.clone()),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(renewed, lease);
+        let expiry: i64 =
+            s.db.lock()
+                .unwrap()
+                .query_row("SELECT lease FROM jobs WHERE id=?1", [&id], |r| r.get(0))
+                .unwrap();
+        assert!(expiry > now());
+        receipt["renewOnly"] = json!(false);
+        receipt["state"] = json!("completed");
+        let completed = report(
+            State(s.clone()),
+            headers("agent"),
+            Path(id.clone()),
+            Json(receipt.clone()),
+        )
+        .await
+        .unwrap()
+        .0;
+        receipt["renewOnly"] = json!(true);
+        receipt["state"] = json!("running");
+        assert_eq!(
+            report(State(s.clone()), headers("agent"), Path(id), Json(receipt))
+                .await
+                .unwrap()
+                .0,
+            completed
+        );
     }
     #[tokio::test]
     async fn lost_runtime_is_offline_and_job_is_unknown_without_requeue() {

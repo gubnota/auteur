@@ -9,7 +9,7 @@
 
 ## Current milestone
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
-- Native local-studio foundation implemented; remote hardening remains open.
+- Native Generate/media setup implemented; live private cloud acceptance remains open.
 - Version 0.1.3 installed: Jobs drafts, exact inputs and automatic endpoint queues implemented and locally verified.
 - Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.
@@ -72,12 +72,20 @@
 - Durable jobs/receipts/results; unknown submission blocks blind retry.
 - ComfyUI URL FIFO (one active); relay URL + node FIFO/capacity; RunningHub account capacity.
 - Saved independent batches, exact typed inputs and frozen run/item provenance.
-- v1→v2 requires explicit backup/upgrade; SQLite and manifest backups retained.
+- v1/v2→v3 requires explicit backup/upgrade; SQLite and manifest backups retained.
 - Reopening unsent work pauses it; unknown submissions keep their lane occupied.
 - Desktop polls providers; relay offers authenticated replayable SSE.
 - Desktop SSE consumption and result-handoff chains remain open.
 - Native Dock active-job badge and terminal system notifications implemented.
 - Notifications and Logs histories have clear controls.
+
+## Generate and setup
+- Standalone modes: image/video creation/editing, text/image/audio-to-video, multi-reference.
+- Explicit media slots accept arbitrary image/video/audio roles and order; frame/cast contexts remain available.
+- Saved batches reuse Jobs endpoint lanes; compatibility is declared, not inferred.
+- Flags: unspecified, universal, Apple Silicon, CUDA, ROCm, CPU; providers validate live hardware where available.
+- Setup instructions and artifact source/hash/size/license/category controls: docs/WORKFLOW_SETUP.md.
+- Local real Rust pipeline acceptance: docs/GENERATION_ACCEPTANCE.md.
 
 ## Private runner and storage
 - RunPod ComfyUI is the primary execution target; RunningHub is for workflow tests.
@@ -89,7 +97,7 @@
 - Storage transfer manifests support hash/size verification and resumed download.
 - Storage manifest URL lives in Keychain, outside project settings.
 - Runtime plans require pinned image and authorized artifact metadata.
-- Planning is not automatic dependency installation or attested readiness.
+- Managed workers install reviewed hash-pinned models/plugins/offline wheels; restart and current-session canary gate readiness.
 - Relay/S3/GPU roundtrip and live RunPod acceptance remain pending.
 - Do not present the private runner as production hardened.
 
@@ -100,7 +108,7 @@
 - No public unauthenticated ComfyUI exposure or arbitrary remote shell.
 - Reference repositories stay read-only.
 - No fabricated ownership, node availability, model origins or prices.
-- No paid resources or live provider generation executed during acceptance.
+- No paid resources used. Authorized safe local MPS FaceSwap and weight-free mask execution passed; cloud acceptance remains pending.
 - Path traversal and package symlinks rejected; originals hash deduplicated.
 
 ## Validation and pending delivery

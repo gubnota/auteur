@@ -54,6 +54,15 @@ impl ExecutionBackend for ComfyUi {
             json!({"connected":true,"stats":stats,"nodeTypes":registry.as_object().map(|o|o.keys().collect::<Vec<_>>()),"transport":"HTTP + WebSocket; history recovery","initialization":"Requires private runner; direct ComfyUI has no remote shell"}),
         )
     }
+    async fn validate_compatibility(&self, compatibility: &str) -> Result<()> {
+        let stats = self.get("/system_stats").await?;
+        if !job_core::compatible(compatibility, &stats["devices"]) {
+            return Err(
+                format!("Workflow requires {compatibility}; select a compatible node").into(),
+            );
+        }
+        Ok(())
+    }
     async fn validate_job(&self, graph: &Value) -> Result<()> {
         let registry = self.get("/object_info").await?;
         for (id, n) in graph.as_object().ok_or("Graph is not an object")? {
@@ -83,6 +92,39 @@ impl ExecutionBackend for ComfyUi {
                     Some("STRING") if !v.is_string() => return Err("Expected text".into()),
                     _ => {}
                 }
+            }
+        }
+        Ok(())
+    }
+    async fn validate_media(
+        &self,
+        graph: &Value,
+        bindings: &[studio_contracts::Binding],
+    ) -> Result<()> {
+        let registry = self.get("/object_info").await?;
+        for b in bindings.iter().filter(|b| {
+            b.media.is_some()
+                || matches!(b.semantic.as_str(), "image" | "mask")
+                || b.semantic.starts_with("characterReference")
+        }) {
+            let ty = graph[&b.node_id]["class_type"]
+                .as_str()
+                .ok_or("Media loader missing")?;
+            let definition = &registry[ty];
+            let spec = definition["input"]["required"]
+                .get(&b.input)
+                .or_else(|| definition["input"]["optional"].get(&b.input));
+            let kind = b.media.as_ref().map(|m| m.kind.as_str()).unwrap_or("image");
+            let flag = format!("{kind}_upload");
+            let advertised = spec.is_some_and(|s| s[1][&flag] == true);
+            let supported = match (kind, ty, b.input.as_str()) {
+                ("image", "LoadImage" | "LoadImageMask", "image") => true,
+                ("audio", "LoadAudio", "audio") => true,
+                ("video", "VHS_LoadVideo", "video") => true,
+                _ => advertised,
+            };
+            if !supported {
+                return Err(format!("Unsupported {kind} loader {ty}.{}: map an upload-capable file input instead of a folder or batch loader", b.input).into());
             }
         }
         Ok(())
@@ -184,7 +226,8 @@ impl ExecutionBackend for ComfyUi {
         }
         Ok((filename.into(), bytes))
     }
-    async fn stage_asset(&self, name: &str, bytes: Vec<u8>) -> Result<String> {
+    async fn stage_asset(&self, asset: &studio_contracts::Asset, bytes: Vec<u8>) -> Result<String> {
+        let name = job_core::staging_name(asset)?;
         let form = multipart::Form::new()
             .part(
                 "image",

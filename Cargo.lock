@@ -2535,15 +2535,18 @@ name = "mymovie-agent"
 version = "0.1.5"
 dependencies = [
  "clap",
+ "fs2",
  "job-core",
  "project-core",
  "provider-comfyui",
  "provision-core",
  "reqwest 0.12.28",
  "serde_json",
+ "sha2",
  "storage-s3",
  "studio-contracts",
  "tokio",
+ "workflow-core",
 ]
 
 [[package]]
@@ -3317,15 +3320,18 @@ dependencies = [
 name = "provider-comfyui"
 version = "0.1.5"
 dependencies = [
+ "asset-core",
  "async-trait",
  "futures-util",
  "job-core",
  "project-core",
  "reqwest 0.12.28",
  "serde_json",
+ "studio-contracts",
  "tempfile",
  "tokio",
  "tokio-tungstenite",
+ "workflow-core",
 ]
 
 [[package]]
@@ -3338,6 +3344,7 @@ dependencies = [
  "reqwest 0.12.28",
  "serde_json",
  "storage-s3",
+ "studio-contracts",
 ]
 
 [[package]]
@@ -3349,6 +3356,7 @@ dependencies = [
  "project-core",
  "reqwest 0.12.28",
  "serde_json",
+ "studio-contracts",
  "tokio",
  "workflow-core",
 ]

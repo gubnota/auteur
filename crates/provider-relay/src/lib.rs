@@ -67,6 +67,16 @@ impl ExecutionBackend for Relay {
     async fn health(&self) -> Result<Value> {
         self.get(&format!("/v1/nodes/{}", self.node)).await
     }
+    async fn validate_compatibility(&self, compatibility: &str) -> Result<()> {
+        let health = self.health().await?;
+        if !job_core::compatible(compatibility, &health["comfy"]["stats"]["devices"]) {
+            return Err(format!(
+                "Workflow requires {compatibility}; this node does not report compatible hardware"
+            )
+            .into());
+        }
+        Ok(())
+    }
     async fn validate_job(&self, graph: &Value) -> Result<()> {
         workflow_core_validate(graph)
     }
@@ -126,19 +136,23 @@ impl ExecutionBackend for Relay {
             bytes,
         ))
     }
-    async fn stage_asset(&self, name: &str, bytes: Vec<u8>) -> Result<String> {
+    async fn stage_asset(&self, asset: &studio_contracts::Asset, bytes: Vec<u8>) -> Result<String> {
         let v: Value = self
             .client
             .post(format!("{}/v1/assets", self.url))
             .bearer_auth(&self.token)
-            .header("x-asset-name", name)
+            .header("x-asset-name", job_core::staging_name(asset)?)
+            .header("x-asset-kind", &asset.kind)
             .body(bytes)
             .send()
             .await?
             .error_for_status()?
             .json()
             .await?;
-        Ok(v["id"].as_str().ok_or("Missing relay asset ID")?.into())
+        Ok(format!(
+            "relay-asset:{}",
+            v["id"].as_str().ok_or("Missing relay asset ID")?
+        ))
     }
 }
 fn uuid_check(s: &str) -> Result<()> {

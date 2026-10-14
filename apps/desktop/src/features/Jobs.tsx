@@ -1,3 +1,4 @@
+import { WorkflowInputs } from "../components/WorkflowInputs";
 import { useEffect, useState } from "react";
 import {
   Plus,
@@ -13,24 +14,15 @@ import type { Update } from "../App";
 import {
   uid,
   type AppSettings,
-  type Binding,
   type Job,
   type JobDraft,
   type JobItem,
   type JobRun,
   type Project,
-  type Workflow,
 } from "../lib/types";
 import { call, native } from "../lib/bridge";
-import {
-  castImages,
-  literalInputs,
-  mediaBinding,
-  parseInput,
-  readiness,
-  resolveInputs,
-} from "../lib/job-inputs";
-import { Empty, Field, Modal, Picker, Toggle } from "../components/Controls";
+import { readiness, resolveInputs } from "../lib/job-inputs";
+import { Empty, Field, Modal, Picker } from "../components/Controls";
 
 export function newJobDraft(
   p: Project,
@@ -42,6 +34,11 @@ export function newJobDraft(
     id: uid(),
     name: `Generation ${(p.jobDrafts ?? []).length + 1}`,
     frameId,
+    context: {
+      kind: frameId ? "storyboard" : "standalone",
+      mode: "custom",
+      characterIds: [],
+    },
     items: [
       {
         id: uid(),
@@ -66,7 +63,15 @@ export function Jobs({
   flush,
   onJobs,
   notify,
+  root,
+  importMedia,
 }: {
+  root: string;
+  importMedia: (
+    draftId: string,
+    itemId: string,
+    semantic: string,
+  ) => Promise<void>;
   project: Project;
   settings: AppSettings;
   jobs: Job[];
@@ -230,15 +235,35 @@ export function Jobs({
               </button>
             </div>
             <Picker
-              title="Target keyframe"
-              value={draft.frameId}
-              options={frames}
-              onChange={(frameId) =>
+              title="Generation target"
+              value={draft.context?.kind ?? "storyboard"}
+              options={[
+                { id: "standalone", label: "Custom media / standalone" },
+                { id: "storyboard", label: "Storyboard keyframe" },
+              ]}
+              onChange={(kind) =>
                 editDraft((d) => {
-                  d.frameId = frameId;
+                  d.context = {
+                    kind: kind as "standalone" | "storyboard",
+                    mode: d.context?.mode ?? "custom",
+                    characterIds: d.context?.characterIds ?? [],
+                  };
+                  if (kind === "standalone") d.frameId = "";
                 })
               }
             />
+            {draft.context?.kind !== "standalone" && (
+              <Picker
+                title="Target keyframe"
+                value={draft.frameId}
+                options={frames}
+                onChange={(frameId) =>
+                  editDraft((d) => {
+                    d.frameId = frameId;
+                  })
+                }
+              />
+            )}
             <div className="jobs-item-strip">
               {draft.items.map((i, n) => (
                 <button
@@ -427,8 +452,12 @@ export function Jobs({
                   </section>
                 )}
                 {w && (
-                  <InputEditor
+                  <WorkflowInputs
                     key={`${draft.id}:${item.id}:${w.id}`}
+                    root={root}
+                    importMedia={(semantic) =>
+                      importMedia(draft.id, item.id, semantic)
+                    }
                     p={p}
                     draft={draft}
                     item={item}
@@ -580,282 +609,4 @@ export function Jobs({
       )}
     </div>
   );
-}
-function InputEditor({
-  p,
-  draft,
-  item,
-  workflow: w,
-  edit,
-  error,
-}: {
-  p: Project;
-  draft: JobDraft;
-  item: JobItem;
-  workflow: Workflow;
-  edit: (fn: (i: JobItem) => void) => void;
-  error: (key: string, message: string) => void;
-}) {
-  const bindings = item.bindings ?? w.bindings;
-  const [adding, setAdding] = useState(false);
-  const [field, setField] = useState("");
-  const [semantic, setSemantic] = useState("");
-  const [type, setType] = useState("string");
-  const available = literalInputs(w).filter(
-    (x) => !bindings.some((b) => b.nodeId === x.nodeId && b.input === x.input),
-  );
-  const refs = castImages(p, draft.frameId);
-  const defaultValue = (b: Binding) => w.graph[b.nodeId]?.inputs[b.input];
-  return (
-    <section className="jobs-inputs">
-      <div className="jobs-toolbar">
-        <h2>Exact inputs</h2>
-        <button onClick={() => setAdding(true)}>
-          <Plus size={16} />
-          Bind literal input
-        </button>
-      </div>
-      {!bindings.length && (
-        <p className="muted">
-          This graph uses its imported defaults. Add explicit bindings to
-          configure inputs.
-        </p>
-      )}
-      {bindings.map((b) => {
-        let resolved: unknown = defaultValue(b);
-        try {
-          resolved = resolveInputs(p, draft, { ...item, bindings: [b] }).values[
-            b.semantic
-          ];
-        } catch {
-          /* missing sources are explained in readiness */
-        }
-        const prompt = ["positivePrompt", "negativePrompt"].includes(
-          b.semantic,
-        );
-        const composed =
-          prompt &&
-          !Object.prototype.hasOwnProperty.call(item.values, b.semantic);
-        const value = item.values[b.semantic] ?? resolved;
-        const key = `${b.semantic}:${b.nodeId}.${b.input}`;
-        return (
-          <article className="jobs-input" key={key}>
-            <div className="jobs-toolbar">
-              <div>
-                <strong>{b.semantic}</strong>
-                <small>
-                  {w.graph[b.nodeId]?.class_type} · {b.nodeId}.{b.input} ·{" "}
-                  {b.valueType}
-                </small>
-              </div>
-              <button
-                aria-label={`Remove binding ${b.semantic}`}
-                onClick={() => {
-                  error(key, "");
-                  edit((i) => {
-                    i.bindings = bindings.filter((x) => x !== b);
-                    delete i.values[b.semantic];
-                    delete i.inputText?.[key];
-                    delete i.inputErrors?.[key];
-                    delete i.assets[b.semantic];
-                  });
-                }}
-              >
-                <XIcon />
-              </button>
-            </div>
-            <small className="muted">
-              Imported default: {JSON.stringify(defaultValue(b))}
-            </small>
-            {mediaBinding(b) ? (
-              <Picker
-                title={`Image source for ${b.semantic}`}
-                value={item.assets[b.semantic] ?? ""}
-                options={[
-                  {
-                    id: "",
-                    label:
-                      b.semantic === "image"
-                        ? "Use keyframe image"
-                        : b.semantic.startsWith("characterReference")
-                          ? "Use assigned cast reference"
-                          : "Choose image",
-                  },
-                  ...(b.semantic.startsWith("characterReference")
-                    ? refs
-                    : p.assets.filter((a) => a.kind === "image")
-                  ).map((a) => ({
-                    id: a.id,
-                    label: a.name,
-                    description: a.sha256.slice(0, 12),
-                  })),
-                ]}
-                onChange={(id) =>
-                  edit((i) => {
-                    if (id) i.assets[b.semantic] = id;
-                    else delete i.assets[b.semantic];
-                  })
-                }
-              />
-            ) : (
-              <>
-                {prompt && (
-                  <Toggle
-                    label="Use composed project / scene / keyframe prompt"
-                    checked={composed}
-                    onChange={(checked) => {
-                      error(key, "");
-                      edit((i) => {
-                        if (checked) delete i.values[b.semantic];
-                        else i.values[b.semantic] = resolved;
-                        delete i.inputText?.[key];
-                        delete i.inputErrors?.[key];
-                      });
-                    }}
-                  />
-                )}
-                {!composed &&
-                  (b.valueType === "boolean" ? (
-                    <Toggle
-                      label={b.semantic}
-                      checked={value === true}
-                      onChange={(v) =>
-                        edit((i) => {
-                          i.values[b.semantic] = v;
-                        })
-                      }
-                    />
-                  ) : (
-                    <Field
-                      label={`${b.semantic} · ${b.nodeId}.${b.input}`}
-                      value={
-                        item.inputText?.[key] ??
-                        (typeof value === "string" && b.valueType !== "json"
-                          ? value
-                          : (JSON.stringify(value) ?? ""))
-                      }
-                      multiline={prompt || b.valueType === "json"}
-                      onChange={(text) => {
-                        try {
-                          const v = parseInput(b.valueType, text);
-                          error(key, "");
-                          edit((i) => {
-                            i.values[b.semantic] = v;
-                            (i.inputText ??= {})[key] = text;
-                            delete i.inputErrors?.[key];
-                          });
-                        } catch (e) {
-                          const message = `${b.semantic}: ${(e as Error).message}`;
-                          error(key, message);
-                          edit((i) => {
-                            (i.inputText ??= {})[key] = text;
-                            (i.inputErrors ??= {})[key] = message;
-                          });
-                        }
-                      }}
-                    />
-                  ))}
-                {composed && (
-                  <p className="jobs-composed">{String(resolved)}</p>
-                )}
-                {!prompt &&
-                  Object.prototype.hasOwnProperty.call(
-                    item.values,
-                    b.semantic,
-                  ) && (
-                    <button
-                      className="text-button"
-                      onClick={() => {
-                        error(key, "");
-                        edit((i) => {
-                          delete i.values[b.semantic];
-                          delete i.inputText?.[key];
-                          delete i.inputErrors?.[key];
-                        });
-                      }}
-                    >
-                      Use imported default
-                    </button>
-                  )}
-              </>
-            )}
-          </article>
-        );
-      })}
-      {adding && (
-        <Modal
-          title="Bind a literal workflow input"
-          onClose={() => setAdding(false)}
-        >
-          <p>
-            Connected inputs stay linked. Bindings apply to this job item; the
-            imported graph remains unchanged.
-          </p>
-          <Picker
-            title="Node input"
-            value={field}
-            options={available.map((x) => ({
-              id: JSON.stringify([x.nodeId, x.input]),
-              label: `${x.nodeId}.${x.input}`,
-              description: `${x.classType} · ${JSON.stringify(x.value)}`,
-            }))}
-            onChange={(v) => {
-              setField(v);
-              const [n, i] = JSON.parse(v);
-              const val = w.graph[n].inputs[i];
-              setType(
-                typeof val === "number"
-                  ? "number"
-                  : typeof val === "boolean"
-                    ? "boolean"
-                    : typeof val === "string"
-                      ? "string"
-                      : "json",
-              );
-            }}
-          />
-          <Field
-            label="Semantic input name"
-            value={semantic}
-            onChange={setSemantic}
-            placeholder="seed, width, fps, image, mask, characterReference1…"
-          />
-          <Picker
-            title="Input type"
-            value={type}
-            options={["string", "number", "boolean", "json"].map((t) => ({
-              id: t,
-              label: t,
-            }))}
-            onChange={setType}
-          />
-          <button
-            className="primary"
-            disabled={
-              !field ||
-              !semantic.trim() ||
-              bindings.some((b) => b.semantic === semantic.trim())
-            }
-            onClick={() => {
-              const [nodeId, input] = JSON.parse(field);
-              edit((i) => {
-                i.bindings = [
-                  ...bindings,
-                  { semantic: semantic.trim(), nodeId, input, valueType: type },
-                ];
-              });
-              setAdding(false);
-              setField("");
-              setSemantic("");
-            }}
-          >
-            Add binding
-          </button>
-        </Modal>
-      )}
-    </section>
-  );
-}
-function XIcon() {
-  return <Trash2 size={16} />;
 }

@@ -43,7 +43,11 @@ export function literalInputs(w: Workflow) {
       })),
   );
 }
-export function castImages(p: Project, frameId: string) {
+export function castImages(
+  p: Project,
+  frameId: string,
+  characterIds: string[] = [],
+) {
   const scene = p.episodes
     .flatMap((e) => e.scenes)
     .find((s) => s.shots.some((sh) => sh.frames.some((f) => f.id === frameId)));
@@ -51,6 +55,7 @@ export function castImages(p: Project, frameId: string) {
     .flatMap((s) => s.frames)
     .find((f) => f.id === frameId);
   const cast = new Set([
+    ...characterIds,
     ...(scene?.characterIds ?? []),
     ...(frame?.characterIds ?? []),
   ]);
@@ -60,6 +65,7 @@ export function castImages(p: Project, frameId: string) {
   return p.assets.filter((a) => ids.has(a.id) && a.kind === "image");
 }
 export const mediaBinding = (b: Binding) =>
+  !!b.media ||
   ["image", "mask"].includes(b.semantic) ||
   b.semantic.startsWith("characterReference");
 export function resolveInputs(p: Project, draft: JobDraft, item: JobItem) {
@@ -75,8 +81,17 @@ export function resolveInputs(p: Project, draft: JobDraft, item: JobItem) {
   const frame = scene?.shots
     .flatMap((s) => s.frames)
     .find((f) => f.id === draft.frameId);
-  if (!frame) throw new Error("Select a target keyframe");
-  const refs = castImages(p, draft.frameId);
+  const standalone = draft.context?.kind === "standalone";
+  if (!frame && !standalone) throw new Error("Select a target keyframe");
+  if (standalone && draft.frameId)
+    throw new Error("Standalone drafts must have no target keyframe");
+  if (
+    draft.context?.characterIds.some(
+      (id) => !p.characters.some((c) => c.id === id),
+    )
+  )
+    throw new Error("Assigned character missing");
+  const refs = castImages(p, draft.frameId, draft.context?.characterIds);
   const values: Record<string, unknown> = {};
   const media: Record<string, unknown> = {};
   const graph = structuredClone(w.graph);
@@ -101,22 +116,27 @@ export function resolveInputs(p: Project, draft: JobDraft, item: JobItem) {
       b.semantic === "negativePrompt"
     ) {
       const key = b.semantic;
-      value = [frame.includeCommon ? (scene?.[key] ?? p[key]) : "", frame[key]]
-        .filter((s) => s.trim())
-        .join("\n");
+      value = frame
+        ? [frame.includeCommon ? (scene?.[key] ?? p[key]) : "", frame[key]]
+            .filter((s) => s.trim())
+            .join("\n")
+        : p[key];
     } else if (b.valueType === "json" && typeof value === "string")
       value = parseInput("json", value);
     if (mediaBinding(b)) {
       const id =
         item.assets[b.semantic] ??
         (b.semantic === "image"
-          ? frame.assetId
-          : refs[Number(b.semantic.slice(-1)) - 1]?.id);
+          ? frame?.assetId
+          : refs[Number(b.semantic.replace("characterReference", "")) - 1]?.id);
       const asset = p.assets.find((a) => a.id === id);
-      if (!asset || asset.kind !== "image")
-        throw new Error(`Select an image for ${b.semantic} before generation`);
+      if (!asset || asset.kind !== (b.media?.kind ?? "image"))
+        throw new Error(
+          `Select ${b.media?.kind ?? "image"} media for ${b.semantic} before generation`,
+        );
       if (
-        b.semantic.startsWith("characterReference") &&
+        (b.semantic.startsWith("characterReference") ||
+          b.media?.role === "characterReference") &&
         !refs.some((a) => a.id === asset.id)
       )
         throw new Error("Select a reference from the assigned cast");
@@ -166,6 +186,14 @@ export function readiness(
       )
         errors.push(
           "Configure a hosted Workflow / AI App ID and API family. Importing JSON alone does not create a hosted deployment.",
+        );
+      if (
+        (item.bindings ?? w?.bindings ?? []).some(
+          (b) => b.media && b.media.kind !== "image",
+        )
+      )
+        errors.push(
+          "RunningHub video/audio uploads are not verified. Use a ComfyUI node for these inputs.",
         );
       if (!(item.bindings ?? w?.bindings ?? []).length)
         errors.push("Configure verified provider bindings first");

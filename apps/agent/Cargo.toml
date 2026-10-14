@@ -14,3 +14,6 @@ provider-comfyui={path="../../crates/provider-comfyui"}
 provision-core={path="../../crates/provision-core"}
 storage-s3={path="../../crates/storage-s3"}
 studio-contracts.workspace=true
+sha2.workspace=true
+workflow-core.workspace=true
+fs2="0.4"
