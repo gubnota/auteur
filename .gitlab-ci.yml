@@ -14,6 +14,7 @@ variables:
   RUST_VERSION: "1.96.0"
   NODE_VERSION: "22.14.0"
   MACOS_RUNNER_TAG: saas-macos-medium-m1
+  WINDOWS_RUNNER_TAG: windows-x64
 
 .linux:
   image: ubuntu:22.04
@@ -68,28 +69,62 @@ linux-desktop:
   stage: build
   needs: [verify]
   timeout: 1h
+  parallel:
+    matrix:
+      - TARGET: x86_64-unknown-linux-gnu
+        LINUX_RUNNER_TAG: saas-linux-small-amd64
+      - TARGET: aarch64-unknown-linux-gnu
+        LINUX_RUNNER_TAG: saas-linux-small-arm64
+  tags: ["$LINUX_RUNNER_TAG"]
   script:
     - npm ci
-    - npm run tauri:build -- --target x86_64-unknown-linux-gnu --config src-tauri/tauri.linux.conf.json
+    - npm run tauri:build -- --target "$TARGET" --config src-tauri/tauri.linux.conf.json
   artifacts:
-    name: "linux-desktop-$CI_COMMIT_REF_SLUG"
+    name: "linux-desktop-$TARGET-$CI_COMMIT_REF_SLUG"
     expire_in: 14 days
     paths:
-      - target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
-      - target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+      - target/*/release/bundle/deb/*.deb
+      - target/*/release/bundle/appimage/*.AppImage
+
+windows:
+  stage: build
+  needs: [verify]
+  tags: ["$WINDOWS_RUNNER_TAG"]
+  timeout: 1h
+  before_script:
+    - 'if ((node --version) -ne "v$env:NODE_VERSION") { throw "Install the pinned Node version on the Windows shell runner" }'
+    - rustup toolchain install $env:RUST_VERSION --profile minimal
+    - rustup default $env:RUST_VERSION
+    - rustup target add x86_64-pc-windows-msvc
+  script:
+    - npm ci
+    - npm run tauri:build -- --target x86_64-pc-windows-msvc --config src-tauri/tauri.windows.conf.json
+  artifacts:
+    name: "windows-x64-$CI_COMMIT_REF_SLUG"
+    expire_in: 14 days
+    paths:
+      - target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+      - target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
 
 linux-agent:
   extends: .linux
   stage: build
   needs: [verify]
   timeout: 30m
+  parallel:
+    matrix:
+      - ARCHITECTURE: x86_64
+        LINUX_RUNNER_TAG: saas-linux-small-amd64
+      - ARCHITECTURE: aarch64
+        LINUX_RUNNER_TAG: saas-linux-small-arm64
+  tags: ["$LINUX_RUNNER_TAG"]
   script:
     - cargo build --locked --release -p mymovie-agent -p mymovie-relay
     - target/release/mymovie-agent --help
     - target/release/mymovie-agent --version
-    - python3 scripts/package-agent.py target/release/mymovie-agent release-assets
+    - python3 scripts/package-agent.py target/release/mymovie-agent release-assets --architecture "$ARCHITECTURE" --build-os ubuntu-22.04
   artifacts:
-    name: "comfyui-agent-linux-x86_64-$CI_COMMIT_REF_SLUG"
+    name: "comfyui-agent-linux-$ARCHITECTURE-$CI_COMMIT_REF_SLUG"
     expire_in: 14 days
     paths:
       - release-assets/*
@@ -101,6 +136,8 @@ release:
     - job: macos
       artifacts: true
     - job: linux-desktop
+      artifacts: true
+    - job: windows
       artifacts: true
     - job: linux-agent
       artifacts: true

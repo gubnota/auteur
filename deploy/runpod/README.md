@@ -11,7 +11,13 @@ Branch builds on GitHub publish `comfyui-agent-linux-x86_64`; GitLab publishes
 Use `mymovie-agent-linux-x86_64.tar.gz`, its `.json` metadata and
 `SHA256SUMS-agent.txt` from the **same build**. The archive contains the actual
 ELF x86_64 agent and this guide. It is built on Ubuntu 22.04; use a compatible
-Linux x86_64 image with glibc 2.35 or newer. ARM containers are unsupported.
+Linux x86_64 image with glibc 2.35 or newer.
+
+For ARM64 Linux workers, use `mymovie-agent-linux-aarch64.tar.gz`, its `.json`
+metadata and `SHA256SUMS-agent-aarch64.txt` instead. It is built and smoke-tested
+on Ubuntu 22.04 ARM64 and requires an ARM64 image with glibc 2.35 or newer.
+The executable inside either archive is named `mymovie-agent`; do not mix
+architecture-specific archives or metadata. Colab/Kaggle notebooks use x86_64.
 
 Verify the SHA-256 against metadata from a trusted build before extracting:
 

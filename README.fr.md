@@ -1,6 +1,8 @@
 # MyMovie Studio
 
-La version **0.1.3** ajoute Jobs : lots enregistrés, entrées typées exactes, FIFO pour une instance ComfyUI et envoi parallèle vers des instances distinctes. ComfyUI sur RunPod est la cible principale ; RunningHub sert aux tests de workflows. L’ouverture d’un ancien document demande une mise à niveau sauvegardée vers le schéma v2 ; les anciennes versions ne peuvent pas ouvrir ce paquet mis à niveau.
+[Télécharger les releases](https://github.com/gubnota/auteur/releases) — macOS Apple Silicon/Intel, Windows x64, Linux x86_64/ARM64 et agents ComfyUI. Les installateurs Windows ne sont pas signés ; la notarisation macOS reste à réaliser.
+
+La version **0.1.4** ajoute les builds Windows x64 et Linux ARM64. Jobs propose des lots enregistrés, des entrées typées exactes, une FIFO pour chaque instance ComfyUI et un envoi parallèle vers des instances distinctes. ComfyUI sur RunPod est la cible principale ; RunningHub sert aux tests de workflows. L’ouverture d’un ancien document demande une mise à niveau sauvegardée vers le schéma v2 ; les anciennes versions ne peuvent pas ouvrir ce paquet mis à niveau.
 
 Compilation release : `npm run tauri:build -- --bundles app` ; résultat : `target/release/bundle/macos/MyMovie Studio.app`. L’installation locale utilise une signature ad hoc ; la notarisation Apple reste à réaliser.
 
@@ -72,7 +74,7 @@ L’interface et les contrats ont été vérifiés avec des fixtures ; aucune g�
 
 ## Artefacts CI et notebooks
 
-Le [guide des builds et releases](docs/CI_RELEASES.md) décrit `.gitlab-ci.yml`, GitHub Actions, les DMG macOS ARM/Intel, les paquets Linux et le client ComfyUI Linux x86_64. Les tags doivent correspondre à la version de l’application ; les fichiers sont accompagnés de sommes de contrôle. Les releases GitHub commencent comme brouillons. Le remote actuel est GitHub ; GitLab nécessite un projet et un runner macOS adapté.
+Le [guide des builds et releases](docs/CI_RELEASES.md) décrit `.gitlab-ci.yml`, GitHub Actions, les DMG macOS ARM/Intel, les paquets Linux et le client ComfyUI Linux x86_64. Les tags doivent correspondre à la version de l’application ; les fichiers sont accompagnés de sommes de contrôle. Les tags réussis publient une préversion GitHub complète après validation de toutes les builds natives. Le remote actuel est GitHub ; GitLab nécessite un projet et un runner macOS adapté.
 
 Les notebooks [Colab](deploy/colab) et [Kaggle](deploy/kaggle) déploient l’artefact vérifié du client près d’une installation ComfyUI existante. Kaggle peut utiliser deux processus GPU indépendants, avec ports et node ID distincts. Le déploiement réel nécessite un relay authentifié et un runtime actif autorisant ce fonctionnement.
 
@@ -105,7 +107,7 @@ Le moteur OrbStack/Docker doit rester actif ; la fenêtre OrbStack peut être fe
 
 ## Limites actuelles
 
-Il s’agit d’une base de développement. Génération RunningHub réelle, échange de workflows ComfyUI avec poids, parcours complet relay/S3/RunPod privé, déploiement réel des notebooks, signature/notarisation et validation du glisser-déposer Finder restent à terminer. CI et empaquetage DMG sont configurés ; les builds Intel/Linux sur runners distants ne sont pas encore validés. Les profils de navigateur, l’entraînement LoRA distant et le pipeline FFmpeg complet sont prévus ultérieurement. Aucun traitement payant ni location cloud n’a été effectué pendant la validation.
+Il s’agit d’une base de développement. Génération RunningHub réelle, échange de workflows ComfyUI avec poids, parcours complet relay/S3/RunPod privé, déploiement réel des notebooks, signature/notarisation et validation du glisser-déposer Finder restent à terminer. Les builds macOS ARM/Intel et Linux x86_64 ont réussi pour 0.1.3 ; les résultats Windows et ARM64 figurent dans le journal des tâches. Les profils de navigateur, l’entraînement LoRA distant et le pipeline FFmpeg complet sont prévus ultérieurement. Aucun traitement payant ni location cloud n’a été effectué pendant la validation.
 
 [Architecture](docs/ARCHITECTURE_INDEX.md) · [Contrats](docs/API_CONTRACTS.md) · [Preuves de validation](docs/TASK_LOG.md). Les agents doivent lire les six documents compacts de contexte avant une inspection ciblée. Excluez de Git `drafts/`, secrets et films personnels.
 

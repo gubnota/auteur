@@ -12,8 +12,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class AgentPackageTests(unittest.TestCase):
-    def run_packager(self, binary, dest):
-        return subprocess.run([sys.executable, str(ROOT / "scripts/package-agent.py"), str(binary), str(dest)], capture_output=True, text=True)
+    def run_packager(self, binary, dest, architecture="x86_64"):
+        return subprocess.run([sys.executable, str(ROOT / "scripts/package-agent.py"), str(binary), str(dest), "--architecture", architecture], capture_output=True, text=True)
 
     def test_archive_metadata_and_guide(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -45,3 +45,20 @@ class AgentPackageTests(unittest.TestCase):
                 result = self.run_packager(binary, directory / "dist")
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("Expected a Linux ELF64", result.stderr)
+
+    def test_arm_archive_is_distinct_and_rejects_x86_binary(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            binary = directory / "agent"
+            binary.write_bytes(b"\x7fELF\x02\x01" + bytes(12) + b"\xb7\x00" + b"arm-payload")
+            binary.chmod(0o755)
+            dest = directory / "dist"
+            result = self.run_packager(binary, dest, "aarch64")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            metadata = json.loads((dest / "mymovie-agent-linux-aarch64.json").read_text())
+            self.assertEqual(metadata["target"], "aarch64-unknown-linux-gnu")
+            archive = dest / "mymovie-agent-linux-aarch64.tar.gz"
+            self.assertEqual(metadata["sha256"], hashlib.sha256(archive.read_bytes()).hexdigest())
+            self.assertTrue((dest / "SHA256SUMS-agent-aarch64.txt").exists())
+            binary.write_bytes(b"\x7fELF\x02\x01" + bytes(12) + b"\x3e\x00")
+            self.assertNotEqual(self.run_packager(binary, dest, "aarch64").returncode, 0)

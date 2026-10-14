@@ -25,7 +25,7 @@
 - apps/desktop/src-tauri/src/service.rs: command orchestration and polling.
 - src/service/jobs.rs: batch preflight, per-lane reservation and concurrent scoped provider I/O.
 - src/media.rs: bounded media protocol; src/assistant.rs: optional LLM transport.
-- tauri.conf.json / capabilities/main.json / Info.plist: security and Finder registration.
+- tauri.conf.json / tauri.linux.conf.json / tauri.windows.conf.json / capabilities/main.json / Info.plist: security and Finder registration.
 - crates/studio-contracts/src/lib.rs: serde DTOs, camelCase JSON.
 - crates/project-core/src/lib.rs: revisioned SQLite packages and projections.
 - project-core/migrations/0001_initial.sql: schema v1; JSON rows, not normalized entities.
@@ -62,9 +62,9 @@
 
 ## CI and notebooks
 - .gitlab-ci.yml: checks, macOS/Linux packages, version-tag registry/Release publication.
-- .github/workflows/: shared native build matrix and draft tag release.
+- .github/workflows/: native macOS/Windows/Linux matrix and published tag prereleases.
 - scripts/ci-setup.sh, check-release-version.py, gitlab-release.py: toolchains and immutable release files.
-- scripts/package-agent.py: Linux binary archive, notebooks and checksums.
+- scripts/package-agent.py: architecture-checked Linux x86_64/ARM64 agent archives, notebooks and checksums.
 - scripts/notebook-bootstrap.py / generate-notebooks.py: verified artifact and GPU worker setup.
 - deploy/colab/, deploy/kaggle/: generated notebooks; scripts/tests/: bootstrap/release regression.
 - examples/workflows/: CPU, text-to-image, masked-edit API/editor fixtures; actual UI exchange pending.

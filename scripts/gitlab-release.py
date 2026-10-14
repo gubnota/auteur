@@ -11,14 +11,14 @@ from urllib.request import Request, urlopen
 def prepare(root):
     destination = root / 'release-assets'
     destination.mkdir(exist_ok=True)
-    for folder, pattern in [('target', '*.dmg'), ('target', '*.deb'), ('target', '*.AppImage')]:
+    for folder, pattern in [('target', '*.dmg'), ('target', '*.deb'), ('target', '*.AppImage'), ('target', '*.msi'), ('target', '*-setup.exe')]:
         for source in sorted((root / folder).rglob(pattern)):
-            target = destination / source.name
+            target = destination / source.name.replace(' ', '.')
             if target.exists() and target.read_bytes() != source.read_bytes():
                 raise RuntimeError('Duplicate release filename')
             target.write_bytes(source.read_bytes())
     files = sorted(p for p in destination.iterdir() if p.is_file() and p.name != 'SHA256SUMS.txt')
-    for suffix in ['.dmg', '.deb', '.AppImage', '.tar.gz', '.ipynb']:
+    for suffix in ['.dmg', '.deb', '.AppImage', '.msi', '-setup.exe', '.tar.gz', '.ipynb']:
         if not any(p.name.endswith(suffix) for p in files):
             raise RuntimeError(f'Missing release artifact: {suffix}')
     checksums = destination / 'SHA256SUMS.txt'
@@ -57,7 +57,7 @@ def publish(files, api, project, tag, token):
         if current != {(x['name'], x['url']) for x in links}: raise RuntimeError('Existing release has different assets')
         return
     payload = {'name': f'MyMovie Studio {tag}', 'tag_name': tag,
-               'description': 'macOS Apple Silicon/Intel and Linux x86_64 desktop builds, Linux ComfyUI client and Colab/Kaggle notebooks. Verify SHA256SUMS.txt. macOS builds are ad-hoc signed and not notarized. Live notebook acceptance remains pending.',
+               'description': 'macOS Apple Silicon/Intel, Windows x64 and Linux x86_64/ARM64 desktop builds, Linux ComfyUI agents and Colab/Kaggle notebooks. Verify SHA256SUMS.txt. macOS builds are ad-hoc signed and not notarized; Windows installers are unsigned. Live notebook acceptance remains pending.',
                'assets': {'links': links}}
     status, _ = request('POST', f'{base}/releases', json.dumps(payload).encode())
     if status != 201: raise RuntimeError(f'Unexpected release status: {status}')

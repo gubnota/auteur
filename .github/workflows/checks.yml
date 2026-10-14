@@ -53,6 +53,10 @@ jobs:
             target: x86_64-apple-darwin
           - runner: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+          - runner: windows-2022
+            target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     steps:
@@ -73,6 +77,8 @@ jobs:
           APPLE_SIGNING_IDENTITY: "-"
       - if: runner.os == 'Linux'
         run: npm run tauri:build -- --target ${{ matrix.target }} --config src-tauri/tauri.linux.conf.json
+      - if: runner.os == 'Windows'
+        run: npm run tauri:build -- --target ${{ matrix.target }} --config src-tauri/tauri.windows.conf.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: desktop-${{ matrix.target }}
@@ -80,11 +86,21 @@ jobs:
             target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             target/${{ matrix.target }}/release/bundle/deb/*.deb
             target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
+            target/${{ matrix.target }}/release/bundle/msi/*.msi
+            target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
           retention-days: 14
   linux-agent:
     needs: checks
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            architecture: x86_64
+          - runner: ubuntu-22.04-arm
+            architecture: aarch64
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -94,10 +110,10 @@ jobs:
       - run: cargo build --locked --release -p mymovie-agent -p mymovie-relay
       - name: Actual Linux binary smoke test
         run: target/release/mymovie-agent --help && target/release/mymovie-agent --version
-      - run: python3 scripts/package-agent.py target/release/mymovie-agent release-assets
+      - run: python3 scripts/package-agent.py target/release/mymovie-agent release-assets --architecture ${{ matrix.architecture }} --build-os ubuntu-22.04
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: comfyui-agent-linux-x86_64
+          name: comfyui-agent-linux-${{ matrix.architecture }}
           path: release-assets/*
           if-no-files-found: error
           retention-days: 14

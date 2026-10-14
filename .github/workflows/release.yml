@@ -1,9 +1,12 @@
-name: Draft release
+name: Publish release
 on:
   push:
     tags: ['v*']
 permissions:
   contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   version:
     runs-on: ubuntu-22.04
@@ -17,7 +20,7 @@ jobs:
   build:
     needs: version
     uses: ./.github/workflows/checks.yml
-  draft:
+  publish:
     needs: build
     runs-on: ubuntu-22.04
     permissions:
@@ -39,12 +42,15 @@ jobs:
           root = Path('artifacts')
           files = sorted(p for p in root.rglob('*') if p.is_file())
           for p in files:
-              if p.parent != root:
-                  target = root / p.name
+              target = root / p.name.replace(' ', '.')
+              if p != target:
                   if target.exists(): raise RuntimeError('Duplicate release filename')
                   p.rename(target)
           (root / 'SHA256SUMS.txt').write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in sorted(root.iterdir()) if p.is_file() and p.name != 'SHA256SUMS.txt'))
-          Path('release-notes.md').write_text('Native macOS Apple Silicon/Intel and Linux x86_64 desktop builds, plus the Linux x86_64 ComfyUI agent for private RunPod workers and Colab/Kaggle notebooks.\n\nVerify SHA256SUMS.txt before deploying the agent. README-RunPod.md includes startup and private relay setup. Desktop builds are not Apple-notarized. This is a draft awaiting platform and live notebook acceptance.\n')
+          import os
+          source = os.environ['GITHUB_SHA']
+          run = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          Path('release-notes.md').write_text(f'Native macOS Apple Silicon/Intel, Windows x64 (MSI and EXE), and Linux x86_64/ARM64 (DEB and AppImage) desktop builds. Linux x86_64/ARM64 ComfyUI agents are included for private workers. Colab/Kaggle notebooks use the x86_64 agent.\n\nVerify SHA256SUMS.txt before installation. README-RunPod.md includes startup and private relay setup. macOS builds are ad-hoc signed and are not Apple-notarized; Windows installers are unsigned. Live cloud GPU acceptance remains pending.\n\nSource commit: `{source}`. [Successful checks and builds]({run}).\n')
           PY
       - name: Create or update draft
         env:
@@ -52,8 +58,16 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+            if test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" != true; then
+              echo 'Release is already published; refusing to replace versioned assets.' >&2
+              exit 1
+            fi
             gh release upload "$RELEASE_TAG" artifacts/* --clobber
           else
             gh release create "$RELEASE_TAG" artifacts/* --draft --verify-tag --title "$RELEASE_TAG" --notes-file release-notes.md
           fi
+      - name: Publish complete prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release edit "$RELEASE_TAG" --draft=false --prerelease --notes-file release-notes.md

@@ -37,12 +37,21 @@ class ReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); assets = root / 'release-assets'; assets.mkdir()
             with self.assertRaises(RuntimeError): release.prepare(root)
-            for name in ['arm.dmg', 'intel.dmg', 'desktop.deb', 'desktop.AppImage', 'client.tar.gz', 'colab.ipynb']:
+            for name in ['arm.dmg', 'intel.dmg', 'desktop.deb', 'desktop.AppImage', 'desktop.msi', 'desktop-setup.exe', 'client.tar.gz', 'colab.ipynb']:
                 (assets / name).write_bytes(name.encode())
+            source = root / 'target' / 'release' / 'bundle'
+            source.mkdir(parents=True)
+            (source / 'MyMovie Studio.msi').write_bytes(b'installer')
             files = release.prepare(root)
-            self.assertEqual(len(files), 7)
+            self.assertEqual(len(files), 10)
             self.assertIn('client.tar.gz', (assets / 'SHA256SUMS.txt').read_text())
-            self.assertEqual(len(release.prepare(root)), 7)
+            self.assertIn('MyMovie.Studio.msi', (assets / 'SHA256SUMS.txt').read_text())
+            self.assertEqual(len(release.prepare(root)), 10)
+            (source / 'MyMovie Studio.msi').unlink()
+            (assets / 'MyMovie.Studio.msi').unlink()
+            (assets / 'desktop.msi').unlink()
+            with self.assertRaisesRegex(RuntimeError, 'Missing release artifact: .msi'):
+                release.prepare(root)
 
     def test_uploads_use_job_token_and_release_links_use_versioned_packages(self):
         requests = []

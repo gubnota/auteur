@@ -113,7 +113,9 @@
 - LTX prompt/image bindings and account deployment saved through native UI; live acceptance pending.
 - LTX image input requires an assigned frame image; AI App schema and RunPod choices remain open.
 - GitLab/GitHub CI configure native packages, Linux client and version-tag release artifacts.
-- Hosted GitHub source checks and Linux agent build/smoke/artifact delivery passed; desktop matrix status: TASK_LOG.
+- Published 0.1.3: macOS ARM/Intel, Linux x86_64 desktop/agent and notebooks; all hosted builds passed.
+- Version 0.1.4 adds Windows x64 and Linux ARM64 desktop/agent build targets; hosted acceptance: TASK_LOG.
+- Tags publish complete GitHub prereleases after checks/builds; published assets are protected against rerun overwrite.
 - GitLab execution, signing/notarization and full access audit remain open.
 - Browser profiles, remote training and Homer interoperability are later work.
 

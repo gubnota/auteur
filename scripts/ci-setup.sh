@@ -11,6 +11,7 @@ rustup toolchain install "${RUST_VERSION:-1.96.0}" --profile minimal --component
 rustup default "${RUST_VERSION:-1.96.0}"
 case "$(uname -s)-$(uname -m)" in
   Linux-x86_64) node_platform=linux-x64 ;;
+  Linux-aarch64) node_platform=linux-arm64 ;;
   Darwin-arm64) node_platform=darwin-arm64 ;;
   Darwin-x86_64) node_platform=darwin-x64 ;;
   *) echo 'Unsupported CI host'; return 1 ;;

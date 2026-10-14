@@ -1,5 +1,13 @@
 # Task Log
 
+## 2026-10-14 — Published releases and expanded native platforms
+
+- User requested visible release downloads, then Windows and Linux x86_64/ARM64 binaries.
+- Published v0.1.3 prerelease with 12 verified assets from successful hosted run 38474310778; tag points to exact build commit ab71e49. Both macOS DMGs, Linux x86_64 DEB/AppImage, agent, notebooks, guide and checksums are public. Artifact ZIP digests and uploaded asset digests verified.
+- Future version tags now stage complete assets then publish prereleases; reruns refuse to replace published binaries.
+- Expanded GitHub/GitLab native matrix to Windows x64 MSI/NSIS and Linux ARM64 DEB/AppImage/agent. Added Windows native credential backend, ARM ELF validation/distinct agent metadata/checksums and ARM Node bootstrap. GitLab Windows requires a prepared shell runner.
+- Version 0.1.4: local/hosted validation and publication in progress; see subsequent evidence. No foreign-platform runtime launch or live cloud GPU acceptance claimed.
+
 ## 2026-10-14 — Jobs workspace and RunPod agent delivery, 0.1.3
 
 - User approved Jobs plan with `go`: independent jobs queue on the same ComfyUI instance and run concurrently across different instances. Later steering makes private RunPod ComfyUI primary; RunningHub remains for workflow tests.
