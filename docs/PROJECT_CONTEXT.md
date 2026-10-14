@@ -81,7 +81,7 @@
 
 ## Private runner and storage
 - RunPod ComfyUI is the primary execution target; RunningHub is for workflow tests.
-- Authenticated node-scoped relay and outbound Linux x86_64 agent are initial implementations.
+- Authenticated node-scoped relay and outbound Linux x86_64/ARM64 agents are initial implementations.
 - CI publishes checksummed ELF agent archive and deploy/runpod/README.md; no public pod IP needed.
 - Independent Kaggle workers isolate GPU/port/node identity; live deployment pending.
 - Agent exposes typed doctor/inventory/drain/bootstrap/provision operations.
@@ -113,8 +113,9 @@
 - LTX prompt/image bindings and account deployment saved through native UI; live acceptance pending.
 - LTX image input requires an assigned frame image; AI App schema and RunPod choices remain open.
 - GitLab/GitHub CI configure native packages, Linux client and version-tag release artifacts.
-- Published 0.1.3: macOS ARM/Intel, Linux x86_64 desktop/agent and notebooks; all hosted builds passed.
-- Version 0.1.5 adds Windows x64 and Linux ARM64 desktop/agent build targets; hosted acceptance: TASK_LOG.
+- Published 0.1.5: macOS ARM/Intel, Windows x64, Linux x86_64/ARM64 desktops and agents, notebooks.
+- All seven native builds passed; publication recovered after upload-directory bug; future uploader fixed.
+- All 19 public assets anonymously downloaded and checksum/format/architecture verified; evidence: TASK_LOG.
 - Tags publish complete GitHub prereleases after checks/builds; published assets are protected against rerun overwrite.
 - GitLab execution, signing/notarization and full access audit remain open.
 - Browser profiles, remote training and Homer interoperability are later work.

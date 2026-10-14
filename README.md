@@ -1,6 +1,6 @@
 # MyMovie Studio
 
-[Download releases](https://github.com/gubnota/auteur/releases) — macOS Apple Silicon/Intel, Windows x64, Linux x86_64/ARM64 and headless ComfyUI agents. Windows installers are unsigned; macOS notarization remains pending.
+[Download releases](https://github.com/gubnota/auteur/releases/tag/v0.1.5) — macOS Apple Silicon/Intel, Windows x64, Linux x86_64/ARM64 and headless ComfyUI agents. Windows installers are unsigned; macOS notarization remains pending.
 
 Version **0.1.5** adds Windows x64 and Linux ARM64 builds. The Jobs workspace provides saved batches, exact typed inputs, automatic FIFO on one ComfyUI instance and parallel dispatch to different instances. RunPod ComfyUI is the main execution target; RunningHub is for workflow tests. Opening an older document requests approval for a backed-up schema v2 upgrade; older app versions cannot open the upgraded package.
 
@@ -74,7 +74,7 @@ The UI and provider contracts were tested with fixtures; a paid RunningHub gener
 
 ## CI artifacts and notebooks
 
-[Build and release guide](docs/CI_RELEASES.md) covers `.gitlab-ci.yml`, GitHub Actions, macOS ARM/Intel DMGs, Linux desktop packages, and the Linux x86_64/ARM64 ComfyUI client. Version tags must match the application version and publish checksums; Successful tags publish complete GitHub prereleases after all native builds pass. The current remote is GitHub; GitLab needs a project and eligible macOS runner.
+[Build and release guide](docs/CI_RELEASES.md) covers `.gitlab-ci.yml`, GitHub Actions, macOS ARM/Intel DMGs, Windows x64 MSI/EXE installers, Linux desktop packages, and the Linux x86_64/ARM64 ComfyUI client. Version tags must match the application version and publish checksums. Successful tags publish complete GitHub prereleases after all native builds pass. The current remote is GitHub; GitLab needs a project and eligible macOS runner.
 
 Generated [Colab](deploy/colab) and [Kaggle](deploy/kaggle) notebooks deploy the verified client artifact beside an existing ComfyUI installation. Kaggle supports two independent GPU workers with separate ports/node IDs. Live notebook deployment requires an authenticated relay and a permitted active runtime.
 
@@ -112,7 +112,7 @@ Keep the OrbStack/Docker engine running; the OrbStack window may be closed. The 
 
 ## Current limits
 
-This is a development foundation. Live RunningHub generation, weighted ComfyUI workflow exchange, private relay/S3/RunPod roundtrip, live notebook deployment, signing/notarization and complete Finder-drop acceptance remain pending. Hosted macOS ARM/Intel and Linux x86_64 packaging passed for 0.1.3; Windows and ARM64 build acceptance is recorded in the task log. Browser profiles, remote LoRA training and the complete FFmpeg derivative pipeline are later milestones. No paid generation or cloud rental was performed during validation.
+This is a development foundation. Live RunningHub generation, weighted ComfyUI workflow exchange, private relay/S3/RunPod roundtrip, live notebook deployment, signing/notarization and complete Finder-drop acceptance remain pending. All five native desktop builds and both Linux agent builds/smoke tests passed for 0.1.5; all 19 public downloads passed checksum and format checks. Desktop runtime checks on Windows and Linux remain pending. Browser profiles, remote LoRA training and the complete FFmpeg derivative pipeline are later milestones. No paid generation or cloud rental was performed during validation.
 
 See [architecture](docs/ARCHITECTURE_INDEX.md), [contracts](docs/API_CONTRACTS.md) and [test evidence](docs/TASK_LOG.md). Agents should read the six compact context documents before targeted source inspection. Keep `drafts/`, secrets and personal movie packages out of Git.
 
