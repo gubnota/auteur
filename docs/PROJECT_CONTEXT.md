@@ -10,7 +10,7 @@
 ## Current milestone
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
 - Native Generate/media setup implemented; live private cloud acceptance remains open.
-- Current main/local install: 0.1.8; reusable workflow inputs, one Generate composer, queue/history Jobs and shared Library/Renders implemented.
+- Current main/local install: 0.1.9; reusable workflow inputs, one Generate composer, queue/history Jobs and shared Library/Renders implemented.
 - Published download: v0.1.6; no new tag in this refinement. Evidence: TASK_LOG and CI_RELEASES.
 - Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.

@@ -79,6 +79,16 @@ impl RunningHub {
 }
 #[async_trait]
 impl ExecutionBackend for RunningHub {
+    async fn validate_compatibility(&self, compatibility: &str) -> Result<()> {
+        // Hosted deployments run on RunningHub's GPU fleet, not a discoverable
+        // ComfyUI /system_stats endpoint. The provider validates the deployment.
+        if matches!(compatibility, "unspecified" | "universal" | "cuda") {
+            return Ok(());
+        }
+        Err(format!(
+            "RunningHub uses hosted GPU deployments and cannot verify {compatibility} compatibility; select a compatible ComfyUI node"
+        ).into())
+    }
     async fn health(&self) -> Result<Value> {
         let v = self
             .post("/uc/openapi/accountStatus", json!({"apiKey":self.key}))
@@ -253,6 +263,19 @@ mod tests {
         io::{AsyncReadExt, AsyncWriteExt},
         net::TcpListener,
     };
+    #[tokio::test]
+    async fn hosted_gpu_compatibility_does_not_require_comfyui_inventory() {
+        for family in ["workflow", "ai-app"] {
+            let p = RunningHub::new("test-only-key".into(), "123456789", family).unwrap();
+            for compatibility in ["unspecified", "universal", "cuda"] {
+                p.validate_compatibility(compatibility).await.unwrap();
+            }
+            for compatibility in ["apple-silicon", "rocm", "cpu", "invalid"] {
+                let error = p.validate_compatibility(compatibility).await.unwrap_err();
+                assert!(error.to_string().contains(compatibility));
+            }
+        }
+    }
     async fn mock(
         family: &str,
         status: u16,

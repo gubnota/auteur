@@ -1,6 +1,14 @@
 # Generation acceptance — current main
 
-Date: 2026-10-14. Checks below distinguish published 0.1.6 from current 0.1.8. Publication is recorded in CI_RELEASES. No paid cloud jobs ran.
+Date: 2026-10-14. Checks below distinguish published 0.1.6 from current 0.1.9. Publication is recorded in CI_RELEASES. No paid cloud jobs ran.
+
+## 0.1.9 RunningHub compatibility regression
+
+- Latest Redux/r01 failure stopped at the app hardware guard before any media staging or task creation; remote ID absent. The workflow's CUDA flag had inherited the default backend restriction.
+- RunningHub Workflow and AI App now accept unspecified/universal/cuda; Apple Silicon/ROCm/CPU/invalid remain rejected. Seven provider tests and six job tests plus doc tests passed. Direct ComfyUI/relay behavior unchanged.
+- No paid provider retry performed; this proves admission and mocked provider contracts, not live hosted execution. Old failure receipts remain in history.
+- Native ARM64 build, installed version 0.1.9 and strict ad-hoc signature verified; saved movie reopened. Previous app preserved at `/private/tmp/MyMovie Studio-0.1.8-before-0.1.9.app`.
+- Native Reuse as draft restored both exact image slots and r01; review opened with Add to queue and Run now available. Left at review without submission. Private verification screenshot retained only in `/private/tmp/mymovie-runninghub-review-0.1.9.png`.
 
 ## 0.1.8 installed acceptance
 

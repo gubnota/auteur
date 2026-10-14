@@ -1,5 +1,14 @@
 # Task Log
 
+## 2026-10-14 — RunningHub CUDA admission hotfix, 0.1.9
+
+- Redux/r01 failed before staging or provider submission: the default backend hardware guard rejected its CUDA declaration; no remote task ID was created.
+- RunningHub now owns compatibility admission: unspecified/universal/cuda accepted for hosted Workflow and AI App deployments; Apple Silicon/ROCm/CPU/invalid still rejected. Direct ComfyUI/relay checks and hosted bindings remain intact.
+- Regression covers both API families and all declared flags without network requests. Targeted provider/job suite: 13 tests plus doc tests passed. Version parity and frontend production build passed.
+- EN/RU/FR README and setup/contracts updated. Historical receipts remain immutable; reuse the failed attempt as a new reviewed draft. Paid provider generation remains unverified.
+- Native ARM64 production build and strict ad-hoc signature verified; installed /Applications/MyMovie Studio.app 0.1.9 after preserving 0.1.8 in /private/tmp/MyMovie Studio-0.1.8-before-0.1.9.app. Saved personal movie reopened normally.
+- Reuse as draft/review retained two Redux media slots and r01; left at explicit Run now review without creating a new job. Private screenshot in /private/tmp only; no secrets/private media staged.
+
 ## 2026-10-14 — Studio refinement, 0.1.7
 
 - User approved STUDIO_REFINEMENT_PLAN.md with `go`; implemented on main with later requested batch deletion, collapsible Jobs editor, execution-node editing and bottom queue cleanup.

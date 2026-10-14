@@ -106,6 +106,7 @@
 - JobDraft.context: {kind:standalone|storyboard,mode,characterIds}; storyboard frameId is on JobDraft. Legacy contexts default to storyboard.
 - WorkflowBinding.media?: {kind:image|video|audio,role,order}; media sources require string bindings and exact asset-kind validation.
 - Workflow.requirements defaults {compatibility:unspecified,artifacts:[]}; accepted flags: unspecified/universal/apple-silicon/cuda/rocm/cpu.
+- RunningHub accepts unspecified/universal/cuda without ComfyUI hardware inventory; rejects apple-silicon/rocm/cpu/invalid before staging. Hosted deployment/input validation still applies. Direct ComfyUI/relay retain live hardware checks.
 - Dependency artifact: kind/category/relative target/SHA256/size/architecture/license plus public HTTPS source or private sourceRef; plugins pin full revision and optional stripPrefix.
 - Export setup contains workflows, immutable graphs, bindings and requirements; no credentials/media bytes.
 - Agent inventory reports actual ComfyUI runtime fingerprint, hardware, node registry, paths and verified file states.

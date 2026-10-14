@@ -4,8 +4,11 @@ Open **Workflows → workflow → Compatibility & initialization**. Set Unspecif
 Universal, Apple Silicon only, NVIDIA CUDA, AMD ROCm or CPU. Imported workflows
 start Unspecified; a filename does not establish compatibility. Universal is an
 explicit declaration, not an automatic conversion. Hardware restrictions are
-checked against the live node before uploads. Hosted APIs do not expose enough
-hardware inventory to verify restrictive flags.
+checked against the live ComfyUI node before uploads. RunningHub accepts
+Unspecified, Universal and NVIDIA CUDA for its hosted deployments; it does not
+probe a ComfyUI hardware endpoint. Apple Silicon, ROCm and CPU declarations
+require a compatible ComfyUI connection. The hosted deployment still validates
+its own graph, models and inputs; a CUDA flag alone is not a readiness receipt.
 
 Add each model, LoRA, plugin archive and offline Python wheel. Record its exact
 HTTPS source or private transfer object reference, SHA256, byte size, destination,
