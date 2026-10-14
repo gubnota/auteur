@@ -21,6 +21,10 @@ class RuntimeTests(unittest.TestCase):
     def tearDown(self):self.paths.stop();self.runtime.stop();self.tmp.cleanup()
     def artifact(self,source,kind='model',target='test.safetensors'):
         return {'kind':kind,'category':'loras','target':target,'sha256':h.sha(source),'size':source.stat().st_size,'architecture':'any','revision':'a'*40,'stripPrefix':''}
+    def stale_hash(self,path,digest):
+        # Deterministically model a same-size rewrite on a coarse-clock filesystem.
+        stat=path.stat()
+        h.HASH_CACHE[str(path.resolve())]=[[stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns,stat.st_ino],digest]
     def test_external_is_read_only_and_shared_model_path_is_used(self):
         source=self.root/'download';source.write_bytes(b'weights');a=self.artifact(source)
         with self.assertRaisesRegex(ValueError,'read-only'):h.install(self.root,a,source,False)
@@ -29,6 +33,25 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(h.inventory(self.root,[a])['files'][0]['state'],'verified')
         (self.root/'shared/loras/test.safetensors').write_bytes(b'changed')
         with self.assertRaisesRegex(ValueError,'conflicts'):h.install(self.root,a,source,True)
+    def test_install_rechecks_destination_despite_matching_cached_metadata(self):
+        source=self.root/'download';source.write_bytes(b'weights');a=self.artifact(source)
+        h.install(self.root,a,source,True)
+        dest=self.root/'shared/loras/test.safetensors';dest.write_bytes(b'changed')
+        self.stale_hash(dest,a['sha256'])
+        self.assertEqual(h.sha(dest),a['sha256'])
+        with self.assertRaisesRegex(ValueError,'conflicts'):h.install(self.root,a,source,True)
+        self.assertEqual(dest.read_bytes(),b'changed')
+    def test_install_rechecks_source_despite_matching_cached_metadata(self):
+        source=self.root/'download';source.write_bytes(b'weights');a=self.artifact(source)
+        source.write_bytes(b'changed');self.stale_hash(source,a['sha256'])
+        self.assertEqual(h.sha(source),a['sha256'])
+        with self.assertRaisesRegex(ValueError,'integrity'):h.install(self.root,a,source,True)
+        self.assertFalse((self.root/'shared/loras/test.safetensors').exists())
+    def test_verified_dependency_is_reused_after_fresh_check(self):
+        source=self.root/'download';source.write_bytes(b'weights');a=self.artifact(source)
+        h.install(self.root,a,source,True)
+        self.assertEqual(h.install(self.root,a,source,True)['state'],'verified')
+        self.assertEqual(h.install(self.root,a,source,False)['state'],'verified')
     def archive(self,name='pinned/plugin.py'):
         source=self.root/'plugin.tar.gz'
         with tarfile.open(source,'w:gz') as tar:
@@ -40,6 +63,13 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(h.inventory(self.root,[a])['files'][0]['state'],'verified')
         (self.root/'custom_nodes/example/injected.py').write_text('unsafe')
         self.assertEqual(h.inventory(self.root,[a])['files'][0]['state'],'conflict')
+    def test_install_rechecks_plugin_files_despite_matching_cached_metadata(self):
+        source=self.archive();a=self.artifact(source,'plugin','example');a['stripPrefix']='pinned'
+        h.install(self.root,a,source,True)
+        dest=self.root/'custom_nodes/example/plugin.py';digest=h.sha(dest)
+        dest.write_bytes(b'X'*dest.stat().st_size);self.stale_hash(dest,digest)
+        with self.assertRaisesRegex(ValueError,'conflicts'):h.install(self.root,a,source,True)
+        self.assertEqual(dest.read_bytes(),b'X'*len(b'NODE_CLASS_MAPPINGS = {}'))
     def test_traversal_and_symlink_destinations_rejected(self):
         source=self.archive('../escape.py');a=self.artifact(source,'plugin','example')
         with self.assertRaises(ValueError):h.install(self.root,a,source,True)

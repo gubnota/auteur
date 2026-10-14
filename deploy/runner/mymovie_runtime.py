@@ -15,13 +15,13 @@ import tarfile
 
 HASH_CACHE = {}
 
-def sha(path):
+def sha(path, *, refresh=False):
     path=Path(path)
     stat=path.stat()
     key=str(path.resolve())
     signature=[stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns,stat.st_ino]
     cached=HASH_CACHE.get(key)
-    if cached and cached[0]==signature: return cached[1]
+    if not refresh and cached and cached[0]==signature: return cached[1]
     h = hashlib.sha256()
     with Path(path).open('rb') as f:
         for block in iter(lambda: f.read(1024 * 1024), b''):
@@ -74,7 +74,7 @@ def runtime(root):
     return value, fingerprint
 
 
-def inventory(root, artifacts):
+def inventory(root, artifacts, *, refresh=False):
     dirs = paths(root)
     identity, fingerprint = runtime(root)
     rows = []
@@ -89,7 +89,7 @@ def inventory(root, artifacts):
             marker = confined(dest, '.mymovie-integrity.json')
             installed = json.loads(marker.read_text()) if marker.is_file() else None
             # A marker is insufficient: every extracted file is rechecked.
-            valid = installed and installed.get('archiveHash') == a['sha256'] and installed.get('revision') == a['revision'] and all(confined(dest,k).is_file() and sha(confined(dest,k)) == h for k,h in installed.get('files', {}).items()) and bool(installed.get('files'))
+            valid = installed and installed.get('archiveHash') == a['sha256'] and installed.get('revision') == a['revision'] and all(confined(dest,k).is_file() and sha(confined(dest,k), refresh=refresh) == h for k,h in installed.get('files', {}).items()) and bool(installed.get('files'))
             if valid:
                 expected = set(installed['files'])
                 # Runtime bytecode is transient; any new source/config code invalidates verification.
@@ -97,18 +97,20 @@ def inventory(root, artifacts):
                 valid = actual == expected and not any(p.is_symlink() for p in dest.rglob('*'))
             state = 'verified' if valid else 'conflict' if dest.exists() else 'missing'
         else:
-            state = 'verified' if dest.is_file() and dest.stat().st_size == a['size'] and sha(dest) == a['sha256'] else 'conflict' if dest.exists() else 'missing'
+            state = 'verified' if dest.is_file() and dest.stat().st_size == a['size'] and sha(dest, refresh=refresh) == a['sha256'] else 'conflict' if dest.exists() else 'missing'
         rows.append({'target': a['target'], 'category': category, 'state': state, 'path': str(dest)})
     return {'runtime': identity, 'runtimeFingerprint': fingerprint, 'dockerImage': os.getenv('MYMOVIE_RUNTIME_IMAGE', ''), 'modelDirectories': dirs, 'files': rows}
 
 
 def install(root, artifact, source, managed):
     a = artifact
-    if sha(source) != a['sha256'] or Path(source).stat().st_size != a['size']:
+    if sha(source, refresh=True) != a['sha256'] or Path(source).stat().st_size != a['size']:
         raise ValueError('Source integrity mismatch')
     if a['architecture'] not in ('any', platform.machine(), 'arm64' if platform.machine() == 'aarch64' else 'aarch64' if platform.machine() == 'arm64' else platform.machine()):
         raise ValueError('Dependency architecture mismatch')
-    inv = inventory(root, [a]); row = inv['files'][0]
+    # Installation decisions must recheck bytes even when filesystem timestamps
+    # are too coarse to invalidate the routine inventory hash cache.
+    inv = inventory(root, [a], refresh=True); row = inv['files'][0]
     if row['state'] == 'verified': return row
     if row['state'] != 'missing': raise ValueError('Existing dependency conflicts; resolve it before initialization')
     if not managed:
@@ -148,7 +150,7 @@ def install(root, artifact, source, managed):
     else:
         temporary = confined(dest.parent, f'.{dest.name}.installing')
         shutil.copyfile(source, temporary)
-        if sha(temporary) != a['sha256']: temporary.unlink(); raise ValueError('Installed dependency integrity mismatch')
+        if sha(temporary, refresh=True) != a['sha256']: temporary.unlink(); raise ValueError('Installed dependency integrity mismatch')
         temporary.rename(dest)
     return {'target': a['target'], 'state': 'installed'}
 

@@ -1,5 +1,11 @@
 # Task Log
 
+## 2026-10-15 — Runtime installation CI conflict regression
+
+- CI reported a same-size changed model being reused instead of rejected. Local baseline passed; timestamp-based hash caching can conceal rewrites on coarse-clock filesystems.
+- Installation now freshly hashes sources, existing model/plugin files and staged model bytes. Routine inventory retains its cache; verified dependencies remain reusable and conflicts preserve existing bytes.
+- Deterministic regressions simulate matching cached metadata for changed source/model/plugin files and verify idempotent reuse. Python suite: 32 tests passed; diff whitespace check passed. Remote GitHub CI has not been rerun here.
+
 ## 2026-10-14 — Hosted design-reference interaction audit
 
 - Playwright inspected all twelve sidebar tabs at foamy-scene-craft-studio.base44.app; 59 batches / 301 state-inventory records, including 220 completed text/form comparison actions. Three window sizes, keyboard focus/reorder, media drops and temporary comment/frame CRUD covered.

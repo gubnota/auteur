@@ -107,6 +107,7 @@
 - Export setup contains workflows, immutable graphs, bindings and requirements; no credentials/media bytes.
 - Agent inventory reports actual ComfyUI runtime fingerprint, hardware, node registry, paths and verified file states.
 - Managed provisioning installs only verified bytes into effective folder_paths; conflicting files fail, plugins/wheels require restart and re-inventory.
+- Installation rehashes source/destination bytes (including plugin files), bypassing timestamp-based inventory caches before reuse or conflict decisions.
 - Ready attestation binds agent session/profile/workflow/bindings/runtime/dependency hashes; only mapped input changes are allowed at generation.
 - Relay stage metadata includes asset kind; wrong-kind references fail before submission.
 - renewOnly lease reports refresh running/collecting/cancel_requested leases without overwriting state/progress/remoteId; terminal jobs stay terminal.
