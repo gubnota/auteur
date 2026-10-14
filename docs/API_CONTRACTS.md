@@ -3,7 +3,7 @@
 ## Project persistence
 - Rust DTOs: crates/studio-contracts/src/lib.rs; camelCase serde JSON.
 - Manual TS mirror: apps/desktop/src/lib/types.ts; generated parity pending.
-- Schema v4: manifest.json + project.sqlite; SQLite authoritative.
+- Schema v5: manifest.json + project.sqlite; SQLite authoritative.
 - Tables: project(id=1, revision, json), jobs(id,json), history(revision,json), projections(id,pending), job_runs(id,json).
 - save_project(project, expectedRevision): UUID identity, revision conflict check, validated references.
 - Recoverable projections: manifest, scene keyframes/board.json, character.json, versioned workflow definition.json.
@@ -37,7 +37,6 @@
 - Import graph preserves node IDs/types; binding names/types are explicitly edited.
 - Workflow id is local UUID; version is graph hash; deployment/account identity is separate.
 - Workflow.deployments defaults empty: {connectionId,deploymentId,apiFamily}; one mapping per account.
-- RunningHub family is workflow or ai-app; numeric deployment ID must identify this graph/published input schema.
 - Workflow.mediaKind defaults other; optional editorGraph/editorHash preserve paired editor export.
 - Backend resolves mapped deployment before submission; frozen receipts preserve destination when account settings change.
 
@@ -46,11 +45,8 @@
 - Job freezes graph/semantic/frame/bindings/connection deployment and scene cast/reference context.
 - Durable submission/receipt written before provider request; no blind retry of unknown outcome.
 - States include waiting/paused/staging/ready/submitted/queued/running/collecting/completed/failed/cancel_requested/canceled/unknown.
-- Active/unknown attempts consume a normalized endpoint lane slot; ComfyUI allows one, relay uses URL+node and configured capacity, RunningHub uses account capacity.
 - SubmissionRejected denotes definitive provider refusal; transport/ambiguous outcomes stay unknown.
 - reconcile_job(jobId,remoteId?,confirmedAbsent): unknown/no-ID only; verify task in original account or explicitly confirm absent in provider history. Duplicate task attachment is rejected.
-- RunningHub refusal receipts include the API operation, documented reason translations and bounded symbolic provider identifiers. For unknown codes, bounded plain-language msg/message/error fields may be retained, including nested data errors and HTTP refusals. Whole fields containing request echoes, credential markers, private locations, long tokens, markup or serialized data are omitted; full responses are never stored. Unknown code 605 has no inferred cause; old receipts are immutable. Retry/admission semantics are unchanged.
-- RunningHub endpoint allowlist: https://www.runninghub.ai or https://www.runninghub.cn; no arbitrary credential forwarding.
 - Legacy workflow create + v2 AI App run use typed nodeInfoList; usePersonalQueue is JSON boolean. Both use /task/openapi/upload (apiKey/fileType=input/file multipart, bearer authentication), returning data.fileName for ComfyUI loader overrides; standard-model v2 download URLs are not interchangeable. Image-only staging is bounded to 30 MB.
 - Desktop refresh polls every five seconds; ComfyUI transport also exposes WS support.
 - Relay /v1/events: authenticated SSE, monotonic id and Last-Event-ID replay.
@@ -64,7 +60,7 @@
 
 ## Open acceptance gaps
 - Full private runner/S3/GPU roundtrip, desktop SSE consumer and deployment hardening.
-- Normalized entity migrations/schema parity; variants, derivatives other than video posters, prompt version history.
+- Normalized entity migrations/schema parity; derivatives other than video posters, prompt version history.
 - Browser/training/Homer interfaces require later implementation; no fabricated contract.
 
 ## Native document startup
@@ -107,7 +103,6 @@
 - JobDraft.context: {kind:standalone|storyboard,mode,characterIds}; storyboard frameId is on JobDraft. Legacy contexts default to storyboard.
 - WorkflowBinding.media?: {kind:image|video|audio,role,order}; media sources require string bindings and exact asset-kind validation.
 - Workflow.requirements defaults {compatibility:unspecified,artifacts:[]}; accepted flags: unspecified/universal/apple-silicon/cuda/rocm/cpu.
-- RunningHub accepts unspecified/universal/cuda without ComfyUI hardware inventory; rejects apple-silicon/rocm/cpu/invalid before staging. Hosted deployment/input validation still applies. Direct ComfyUI/relay retain live hardware checks.
 - Dependency artifact: kind/category/relative target/SHA256/size/architecture/license plus public HTTPS source or private sourceRef; plugins pin full revision and optional stripPrefix.
 - Export setup contains workflows, immutable graphs, bindings and requirements; no credentials/media bytes.
 - Agent inventory reports actual ComfyUI runtime fingerprint, hardware, node registry, paths and verified file states.
@@ -146,3 +141,16 @@
 - Preparation preserves saved layouts/values and uses session/revision checks around outside-lock registry/compiler I/O. Structural errors retain the draft for correction.
 - Generate uses Custom for new standalone drafts; older mode/context values remain readable. Jobs Edit/Reuse restores exact values/media into Generate.
 - Render tags/provenance derive from job.results asset IDs; Renders contains unique shared assets and links all producing attempts.
+
+## Designer wrappers and selected tasks (0.1.12)
+- Workflow.wrapper defaults: familyId/variantName/collection/description/readme/illustration?/os/architecture/precision. Family identity is a UUID; every variant retains immutable graph/version and independent requirements.
+- Illustrations: embedded PNG/JPEG/WebP only, <=4 MiB data URL; UI imports <=2 MiB. README <=128 KiB, no raw HTML execution.
+- InputLayout.optional defaults false. Unassigned optional media preserves the literal default; explicit invalid assignment still fails.
+- Portable JSON: format=mymovie.workflow-collection, schemaVersion=1, workflows[1..64], <=16 MiB. Hashes/identities validated; preparations/lastTarget/deployments stripped; private sourceRef replaced with configure-private-source.
+- export_workflow_bundle({workflowId,collection,path}) writes .mymovie-workflow.json. import_workflows accepts editor/API JSON or this wrapper; same immutable graph identities reuse catalogue entries.
+- JobDraft.queuedJobIds defaults []; subset queue edits replace only these paused unsent attempts atomically. queuedRunId retains whole-idle-batch replacement.
+- control_job_tasks({jobIds,action:resume|cancel}) validates all selected attempts before atomic mutation; started/unknown/terminal tasks are excluded.
+- notebook_setup_script({host:colab|kaggle}) returns configuration/start code, excluding the notebook Stop cell.
+- for_setup permits validated immutable pending editor sources for dependency review; for_target rejects unprepared execution. Agent returns needs-restart or needs-preparation before readiness/canary.
+- Settings migration converts the retired provider kind to retired, retaining IDs/names/vault references. No generation adapter handles retired destinations.
+- Schema v5 upgrade backs up existing package database and manifest before migration; older apps cannot edit v5.

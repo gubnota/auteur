@@ -1,8 +1,8 @@
 # RunPod ComfyUI agent
 
-RunPod ComfyUI is the primary production execution target. RunningHub is an
-optional workflow test destination. The same Jobs draft can target either;
-private RunPod uses a **relay** connection and an outbound Linux agent.
+RunPod ComfyUI is the primary cloud execution target. Local and private nodes
+reuse the same workflow wrappers and Jobs composer. Private RunPod uses a
+**relay** connection and an outbound Linux agent; live cloud acceptance remains pending.
 
 ## Download the agent
 

@@ -8,7 +8,7 @@ The configured remote is currently GitHub. A GitLab pipeline requires importing/
 Branches and merge requests run checks before packaging:
 
 - Rust formatting and workspace tests; frontend types, tests and production build.
-- Mocked RunningHub browser acceptance and provider HTTP contract tests.
+- Mocked workflow-wrapper, optional-input, queue-selection and ComfyUI interaction acceptance; provider HTTP contract tests.
 - Notebook bootstrap/release tests and generated notebook parity.
 - macOS Apple Silicon and Intel DMGs, Windows x64 MSI/EXE installers, Linux x86_64/ARM64 desktop DEB/AppImage.
 - Linux and macOS x86_64/ARM64 headless ComfyUI client archives, workflow compiler helper, SHA-256 metadata, shared bootstrap and Colab/Kaggle notebooks.
@@ -54,3 +54,7 @@ The notebooks require an existing ComfyUI checkout, its dependencies and authori
 Generated sources: `scripts/generate-notebooks.py` and `scripts/notebook-bootstrap.py`. Tests: `scripts/tests/`. No public unauthenticated ComfyUI tunnel is created by our bootstrap.
 
 Sources: [GitLab macOS runners](https://docs.gitlab.com/ci/runners/hosted_runners/macos/), [Generic packages](https://docs.gitlab.com/user/packages/generic_packages/), [Release API](https://docs.gitlab.com/api/releases/).
+
+## 0.1.12 local delivery
+
+The desktop, agent and package versions are 0.1.12. The existing release matrix includes Linux x86_64/ARM64 and macOS agents, plus macOS, Windows and Linux desktop packages. This change does not publish a tag or replace the verified v0.1.6 public artifacts. Download the agent from the matching new CI build when testing the new pending-editor initialization flow; an older published agent does not include it. Live GitLab and cloud GPU acceptance remain unverified.

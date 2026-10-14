@@ -10,7 +10,7 @@
 ## Current milestone
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
 - Native Generate/media setup implemented; live private cloud acceptance remains open.
-- Current main/local install: 0.1.11; reusable workflow inputs, one Generate composer, queue/history Jobs and shared Library/Renders implemented.
+- Current source: 0.1.12; designer wrappers, platform families, portable collections and selective queued-task control. Installation evidence is in TASK_LOG.
 - Published download: v0.1.6; no new tag in this refinement. Evidence: TASK_LOG and CI_RELEASES.
 - Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.
@@ -66,21 +66,21 @@
 - Frame sort uses pointer handling plus explicit keyboard-accessible move buttons.
 
 ## Connections and jobs
-- One Connections route for typed ComfyUI, RunningHub, relay and other APIs.
+- One Connections route for ComfyUI, private relay and optional prompt/configuration APIs.
 - Multiple connection/account records; secrets stay in Keychain.
-- Execution adapters: ComfyUI, RunningHub and private relay.
+- Execution adapters: ComfyUI and private relay; retired destinations remain archived and disabled.
 - Google, DeepSeek and OpenRouter optional prompt assistance implemented.
 - fal/custom API generation adapters remain configuration-only.
 - Prepared graphs expose registry-derived literal inputs; explicit aliases/media roles remain editable. No guessed graph IDs.
-- Workflows expose keyframe job creation and per-account RunningHub deployment/family maps.
+- Workflow editor separates Inputs, Outputs, Setup and Guide; metadata never rewrites original graphs.
 - Provider rejections become failed; ambiguous submissions require history reconciliation.
 - Durable jobs/receipts/results; unknown submission blocks blind retry.
-- ComfyUI URL FIFO (one active); relay URL + node FIFO/capacity; RunningHub account capacity.
+- ComfyUI URL FIFO (one active); relay URL + node FIFO/capacity; distinct lanes run concurrently.
 - Saved independent batches, exact typed inputs and frozen run/item provenance.
 - Add to queue freezes idle work; explicit start required, including after reopening.
-- Queued edits replace only unstarted batches atomically; original receipts remain canceled.
+- Queued edits replace unstarted batches or selected tasks atomically; original receipts remain canceled.
 - Bottom Clear finished hides terminal rows persistently without deleting history/results.
-- v1/v2/v3→v4 requires explicit backup/upgrade; SQLite and manifest backups retained.
+- v1–v4→v5 requires explicit backup/upgrade; SQLite and manifest backups retained.
 - Reopening unsent work pauses it; unknown submissions keep their lane occupied.
 - Desktop polls providers; relay offers authenticated replayable SSE.
 - Desktop SSE consumption and result-handoff chains remain open.
@@ -89,17 +89,19 @@
 
 ## Generate and setup
 - Generate is the single Custom input editor for standalone/storyboard jobs; Jobs owns queue/history and opens edits/reuse in Generate.
-- Workflows → Reusable inputs saves exact literal bindings, labels/media roles and advanced/hidden choices once; prepared profiles override by node/input identity.
+- Workflows → Inputs saves exact literal bindings, labels/media roles and advanced/hidden choices once; prepared profiles override by node/input identity.
 - Searchable thumbnail gallery assigns asset IDs; external job-slot imports return exact IDs atomically.
 - Legacy/changed ComfyUI forms refresh before a new preview/freeze; historical snapshots and the final dispatch guard remain intact.
 - Explicit media slots accept arbitrary image/video/audio roles and order; frame/cast contexts remain available.
 - Saved batches reuse Jobs endpoint lanes; compatibility is declared, not inferred.
-- Flags: unspecified, universal, Apple Silicon, CUDA, ROCm, CPU; providers validate live hardware where available.
+- Flags: unspecified, universal, Apple Silicon, CUDA, ROCm, CPU; providers validate live hardware where available. Separate OS/architecture/precision variants group into reusable families.
+- Complete script modal covers Mac/Linux/SSH/Colab/Kaggle; reviewed dependency setup accepts pending editor sources before preparation.
+- Guide supports safe Markdown/embedded raster illustrations; portable collections strip destination profiles and private vault references.
 - Setup instructions and artifact source/hash/size/license/category controls: docs/WORKFLOW_SETUP.md.
 - Local real Rust pipeline acceptance: docs/GENERATION_ACCEPTANCE.md.
 
 ## Private runner and storage
-- RunPod ComfyUI is the primary execution target; RunningHub is for workflow tests.
+- RunPod ComfyUI is the primary execution target; Colab first for live cloud acceptance.
 - Authenticated node-scoped relay and outbound Linux/macOS x86_64/ARM64 agents are initial implementations.
 - CI publishes checksummed ELF agent archive and deploy/runpod/README.md; no public pod IP needed.
 - Independent Kaggle workers isolate GPU/port/node identity; live deployment pending.
@@ -128,7 +130,6 @@
 - Latest exact check evidence and gaps: docs/TASK_LOG.md.
 - OrbStack engine must run for Docker; its GUI window may be closed.
 - LTX/MINIMAX graphs were inspected, not GPU-executed.
-- User confirmed RunningHub Workflow 2110044532631932930 matches the supplied LTX API JSON.
 - LTX prompt/image bindings and account deployment saved through native UI; live acceptance pending.
 - LTX image input requires an assigned frame image; AI App schema and RunPod choices remain open.
 - GitLab/GitHub CI configure native packages, Linux client and version-tag release artifacts.

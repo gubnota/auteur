@@ -41,7 +41,6 @@
 - crates/job-core/src/lib.rs: durable attempts, backend trait and recovery.
 - job-core/src/runs.rs / tests/runs.rs: run persistence, endpoint FIFO/capacity and recovery.
 - crates/provider-comfyui/src/lib.rs: ComfyUI HTTP/WS/history transport.
-- crates/provider-runninghub/src/lib.rs: RunningHub workflow/AI App transport.
 - crates/provider-relay/src/lib.rs: relay HTTPS/SSE API client.
 - crates/integration-core/src/lib.rs: app settings, connection validation, recent/history.
 - crates/provision-core/src/lib.rs: pinned runtime/dependency validation and readiness plans.
@@ -69,6 +68,7 @@
 - WORKFLOW_CATALOGUE_PLAN.md: approved reusable editor workflow/target pool, implemented schema-generated forms and agent conversion, with acceptance limits.
 - DESIGN_HANDOFF.md / WORKFLOW_AUDIT.md / BRIDGE_CONTRACT.md: design/workflow/boundary notes.
 - drafts/: ignored Base44 references; never stage these.
+- UI_UX_AUDIT.md: twelve-tab hosted reference audit, state transitions, coverage limits and improvement priorities; raw evidence in ignored artifacts/ui-audit-2026-10-14/.
 - Sibling astrofenki, homer_studio, unipuni, whatsapp-sender: read-only references.
 
 ## CI and notebooks
@@ -79,7 +79,7 @@
 - scripts/notebook-bootstrap.py / generate-notebooks.py: verified artifact and GPU worker setup.
 - deploy/colab/, deploy/kaggle/: generated notebooks; scripts/tests/: bootstrap/release regression.
 - examples/workflows/: CPU, text-to-image, masked-edit API/editor fixtures; native mask editor import/preparation/export passed.
-- playwright.config.ts / e2e/: mocked native Jobs exact-input/persistence and RunningHub mapping acceptance.
+- playwright.config.ts / e2e/: mocked native Jobs exact-input/persistence and portable wrapper/selection acceptance.
 - docs/CI_RELEASES.md: runner requirements, tag and notebook artifact usage.
 
 ## Studio refinement modules (0.1.7)
@@ -98,3 +98,13 @@
 - Asset.archivedAt: recoverable shared Library/Renders visibility; original identity remains project-core-owned.
 - e2e/library.e2e.ts / workflow-catalogue.e2e.ts: shared result Trash/Restore, exact gallery IDs and reusable API-only media form.
 - docs/MEDIA_WORKFLOW_SIMPLIFICATION_PLAN.md: approved 0.1.8 scope and acceptance.
+
+## Workflow wrappers and selected tasks (0.1.12)
+- components/WorkflowEditor.tsx / WorkflowReadme.tsx: Inputs/Outputs/Setup/Guide, family variants and safe README rendering.
+- components/WorkflowBootstrap.tsx / lib/setup-script.ts: complete verified artifact scripts, host-specific notebooks and connection instructions.
+- workflow-core/src/bundle.rs: bounded portable collection format, graph hashes and machine-profile stripping.
+- project-core/migrations/0005_workflow_wrappers.sql: backed-up v5 upgrade; wrapper defaults stay in JSON rows.
+- job-core/runs.rs: atomic selected-task resume/cancel/replacement; receipts retained.
+- service/catalogue.rs: portable catalogue import/export and reusable forms.
+- scripts/tests/setup-script.test.ts: shell syntax/data quoting and archive guards.
+- docs/WORKFLOW_WRAPPERS.md: approved behavior, setup order and validation limits.

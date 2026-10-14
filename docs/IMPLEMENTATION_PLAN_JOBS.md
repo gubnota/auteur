@@ -1,5 +1,7 @@
 # Implementation Plan: Jobs workspace and exact workflow inputs
 
+> Historical plan: hosted-provider steps are superseded by the 0.1.12 ComfyUI wrapper implementation.
+
 Date: 2026-10-14
 Status: Implemented and locally verified; hosted artifact and live cloud acceptance tracked in TASK_LOG.
 Approval: user approved implementation with “go”.
@@ -12,7 +14,7 @@ same ComfyUI instance; different instances run in parallel by default.
 
 Add a Jobs sidebar workspace for saved generation drafts, exact typed inputs,
 workflow combinations and durable execution history. Reuse the existing
-ComfyUI/RunningHub/relay adapters and portable .mymovie storage.
+ComfyUI/retired hosted provider/relay adapters and portable .mymovie storage.
 
 ## Existing behavior
 
@@ -22,7 +24,7 @@ ComfyUI/RunningHub/relay adapters and portable .mymovie storage.
 - Prompts are always composed from project/scene/frame; the dialog cannot override
   them. Image input always uses the frame asset. Other bound inputs accept values.
 - Boolean inputs currently use text and JSON inputs remain strings in the dialog.
-- RunningHub deployment/family is account-scoped and frozen in attempt snapshots.
+- retired hosted provider deployment/family is account-scoped and frozen in attempt snapshots.
 - Missing images are rejected natively, but do not disable the current submit button.
 - SQLite schema v1 stores project and individual job JSON; no workflow-run records.
 - The user confirmed LTX Workflow 2110044532631932930; its prompt/image bindings
@@ -83,7 +85,7 @@ ComfyUI/RunningHub/relay adapters and portable .mymovie storage.
 - Default to one active dispatch slot per ComfyUI instance; additional batch items
   remain waiting and start automatically when that instance's slot is released.
   ComfyUI may itself report queued when earlier external work is ahead of our job.
-  Independent instances dispatch concurrently. RunningHub honors each configured
+  Independent instances dispatch concurrently. retired hosted provider honors each configured
   account's concurrency; relay jobs honor their configured worker identity/capacity.
 - Refactor native orchestration so provider network awaits do not hold the global
   Studio mutex. Reserve durable attempts under lock, dispatch outside it, then
@@ -135,7 +137,7 @@ Modify:
 - apps/desktop/src/features/Library.tsx — route Create generation job to Jobs;
   show attempt/run associations in result details.
 - apps/desktop/src/styles/studio.css — Jobs layout, input panels and batch item states.
-- e2e/runninghub.e2e.ts — migrate existing entry/mapping tests to shared composer.
+- e2e/retired hosted provider.e2e.ts — migrate existing entry/mapping tests to shared composer.
 - Cargo.toml, Cargo.lock, package.json, package-lock.json,
   apps/desktop/package.json, apps/desktop/src-tauri/tauri.conf.json — version 0.1.3
   parity after implementation; no new dependency planned.
@@ -163,7 +165,7 @@ the bundled RunPod guide are included in this increment.
 4. Build Jobs UI and redirect existing entry points. Verify complete exact-value
    editing, modal controls, draft persistence and actionable readiness errors.
 5. Verify provider payloads with fixtures and mocked execution, including LTX
-   mappings. Keep real RunningHub execution separate from mocked acceptance.
+   mappings. Keep real retired hosted provider execution separate from mocked acceptance.
 6. Update docs/version, build native 0.1.3, verify signature and replace installed
    app under existing authorization, preserving a backup. Capture native sample
    screenshot; commit/push coherent increments on main.
@@ -179,7 +181,7 @@ the bundled RunPod guide are included in this increment.
 - Two mock ComfyUI instances: same-instance FIFO, distinct-instance overlap,
   unrelated progress during a slow request, and no stale-project receipt writes.
 - Use a temporary project for acceptance; never fabricate user frame media or
-  submit a paid RunningHub job as an incidental UI test.
+  submit a paid retired hosted provider job as an incidental UI test.
 
 ## Risks / edge cases
 
@@ -195,7 +197,7 @@ the bundled RunPod guide are included in this increment.
 - v2 projects cannot be edited with installed 0.1.2 after migration; keep a backup
   and show the migration requirement before upgrading user documents.
 - Provider placeholders are resolved during staging, not in a no-upload preview.
-- Actual RunningHub entitlement and generation remain a distinct live check.
+- Actual retired hosted provider entitlement and generation remain a distinct live check.
 
 ## Out of scope
 

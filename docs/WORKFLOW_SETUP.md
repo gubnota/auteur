@@ -1,14 +1,10 @@
 # Workflow compatibility and portable setup
 
-Open **Workflows → workflow → Compatibility & initialization**. Set Unspecified,
+Open **Workflows → workflow → Setup**. Set Unspecified,
 Universal, Apple Silicon only, NVIDIA CUDA, AMD ROCm or CPU. Imported workflows
 start Unspecified; a filename does not establish compatibility. Universal is an
 explicit declaration, not an automatic conversion. Hardware restrictions are
-checked against the live ComfyUI node before uploads. RunningHub accepts
-Unspecified, Universal and NVIDIA CUDA for its hosted deployments; it does not
-probe a ComfyUI hardware endpoint. Apple Silicon, ROCm and CPU declarations
-require a compatible ComfyUI connection. The hosted deployment still validates
-its own graph, models and inputs; a CUDA flag alone is not a readiness receipt.
+checked against the live ComfyUI node before uploads. Each family variant keeps its own immutable graph, requirements and prepared profiles.
 
 Add each model, LoRA, plugin archive and offline Python wheel. Record its exact
 HTTPS source or private transfer object reference, SHA256, byte size, destination,
@@ -22,19 +18,18 @@ but cannot attest or install their filesystem dependencies.
 In **Workflows**, import ordinary ComfyUI editor JSON or API JSON once. It is
 pinned inside this movie and added to the local catalogue. In **Generate**,
 choose **Browse workflow catalogue**, select a saved connection, then
-**Prepare / refresh inputs**. Preparation reads the live node registry and uses
+**Prepare inputs / Refresh inputs**. Preparation reads the live node registry and uses
 that instance’s frontend exporter for editor graphs. It does not submit a job.
 Two image loaders produce two independent media cards; text, numbers, booleans,
 choices and supported media loaders use typed controls. Linked inputs remain
 links. Unsupported custom controls are marked for manual bindings.
 
-Use **Customize input form** for saved labels, groups, order, advanced controls
+Use **Inputs / Outputs** for saved labels, groups, order, advanced controls
 and output selection. Ratio applies to an explicit width/height pair, including
 active dynamic branch fields. Switching a dynamic branch requires re-export and
 preparation; arbitrary plugin frontend behavior is not universally guaranteed.
 **Export editor** preserves the source; **Export API** writes the prepared target
 profile. Runtime schema changes require refreshing preparation before dispatch.
-RunningHub reuses a saved authorized hosted deployment, not arbitrary graph uploads.
 
 ### Compiler prerequisites (Mac or Linux)
 
@@ -92,13 +87,45 @@ Preparation errors retain the draft; correct the runtime and retry, or choose an
 node. Existing attempts keep their frozen profile and final dispatch guard. Checks
 ignore unrelated nodes and changing media lists; selected models must still exist.
 
-Configure API-only jobs once in **Workflows → Reusable inputs**, then select that
-workflow/node and assign media in Generate. RunningHub additionally needs the
-matching hosted Workflow/AI App URL for each account; importing JSON does not
-create a deployment. The user-confirmed Redux Workflow is `2110376761482002434`:
-`19.image` is the face reference and `86.image` is the base photograph. Save both
-string/image bindings with explicit roles. The disconnected `88.image` is inactive.
-Use Review → Add to queue for idle work, or Run now for immediate execution.
+Configure reusable slots in **Workflows → Inputs**. Name each input, set its media role,
+and mark Optional/Advanced/Hidden. In **Outputs**, select returned files to keep;
+ComfyUI still executes its original sink nodes. **Guide** stores an illustrated Markdown
+README and collection. Export/import `.mymovie-workflow.json` to reuse wrappers in
+another movie; prepare each destination separately. Enter private artifact sources
+again in secure settings after import.
+
+## Complete script and first-session order
+
+Open **Setup → Complete setup script**. For Mac/Linux/SSH, choose Inspect, Connect,
+Import original workflow, Export API, or Preview dependency installation. Set archive
+path/public HTTPS URL and trusted SHA256 from the same build, ComfyUI root, instance
+Python and local URL. Run the copied script on that ComfyUI machine, including through
+SSH. It verifies archive bytes and OS/architecture before invoking the typed utility.
+Export the setup/profile files first where requested; the preview command does not install.
+
+For Colab/Kaggle, the modal provides the notebook Configure/start cells; it intentionally
+excludes the Stop cell. Install pinned ComfyUI and dependencies first following the
+[notebook guide](../deploy/runpod/README.md), upload the checked agent archive, configure
+its checksum and reachable authenticated relay URL, and add separate tokens in notebook
+Secrets. Kaggle uses independent processes/ports per GPU, without pooled memory.
+
+1. Connect the agent and inspect Inventory. Direct ComfyUI is read-only for filesystem setup.
+2. Save reviewed model/LoRA/plugin/offline-wheel metadata and a runtime profile.
+3. Review initialization, then apply on an isolated managed runtime. Pending original
+   editor sources may install their dependencies before they can be compiled.
+4. If plugins/wheels changed, stop the idle managed runner, restart, inspect the new runtime
+   fingerprint and update its pin. Existing jobs are not interrupted automatically.
+5. Prepare inputs against that node to compile the original source. `needs-preparation`
+   is not ready and does not run the canary. Re-export/review the prepared setup.
+6. Initialize and verify the weight-free canary for this session. An on-disk receipt reuses
+   verified files, but a new session/profile/runtime always needs fresh readiness verification.
+7. Assign media in Generate and Add to queue; select only intended tasks in Jobs to start.
+
+The **HTTPS address** belongs to the authenticated relay, not the notebook's 127.0.0.1.
+Deploy the relay behind HTTPS or expose it with a configured named tunnel. Put its origin
+and allowlisted worker ID in Connections. Keep ComfyUI private. Temporary Quick Tunnels
+support polling only and require the notebook's explicit opt-in. See the relay guide for
+its launch/configuration; no new ngrok utility is required.
 
 ## Portable paths and activation
 
@@ -115,7 +142,7 @@ Download the matching archive; a Linux binary cannot run on a Mac. For Windows, 
 and use `python.exe` paths with the helper; a Windows outbound agent is not shipped.
 
 Export **workflow-setup.json** from the workflow modal. It contains a list of
-workflows with API graphs, exact bindings and setup requirements. Normal editor imports retain their original JSON; preparation creates a separate
+workflows with prepared API graphs or pending editor sources, exact bindings and setup requirements. Normal editor imports retain their original JSON; preparation creates a separate
 target-specific API profile.
 
 ```sh

@@ -1,5 +1,7 @@
 # Implementation Plan: MyMovie Studio for macOS
 
+> Historical plan: hosted-provider steps are superseded by the 0.1.12 ComfyUI wrapper implementation.
+
 Date: 2026-10-13
 Status: Proposed; implementation has not been approved.
 Approval scope: Phases 0–3 below, delivered in tested increments: native studio, multi-account jobs/batches, and the private relay/runner/S3 system. Live cloud acceptance requires the selected image/hosting/storage and authorized workflow inputs; paid resource creation is excluded. Later prompt-AI, Homer, browser/training and additional-platform milestones retain separate integration plans.
@@ -17,8 +19,8 @@ Build a real, portable macOS film studio in auteur: Finder document packages, sh
 - Origin is https://github.com/gubnota/auteur.git; latest inspected commit is 195713e, dual licensing.
 - Node 26.8.2, npm 11.19.1, Rust/Cargo 1.96.0, Xcode 26.6, FFmpeg and FFprobe are installed on this ARM64 Mac. Dependency compatibility still needs build verification.
 - OrbStack and Docker commands are available. Read-only health checks could not connect to either 127.0.0.1:8188 or debian.orb.local:8188; this does not establish that ComfyUI is installed or configured elsewhere.
-- User currently uses RunningHub and selects an ordered storyboard with scene/shot lanes. Base44 board export supplied; the latest eleven requirements expand editing, navigation, multi-account and private-runner scope.
-- User supplied LTX API/editor and MINIMAX API exports. Static structural inspection found no missing node references; custom node/runtime validity remains unverified. docs/WORKFLOW_AUDIT.md records exact binding candidates and risks. The supplied RunningHub page identifies a separate AI App, with no visible app-specific input mappings; no live provider test has run.
+- User currently uses retired hosted provider and selects an ordered storyboard with scene/shot lanes. Base44 board export supplied; the latest eleven requirements expand editing, navigation, multi-account and private-runner scope.
+- User supplied LTX API/editor and MINIMAX API exports. Static structural inspection found no missing node references; custom node/runtime validity remains unverified. docs/WORKFLOW_AUDIT.md records exact binding candidates and risks. The supplied retired hosted provider page identifies a separate AI App, with no visible app-specific input mappings; no live provider test has run.
 - An API credential was supplied in conversation. It has not been written to files, used, or recorded in this plan. Rotate it and enter its replacement through Keychain-backed settings after implementation.
 
 ### Inspected reference patterns
@@ -35,7 +37,7 @@ Build a real, portable macOS film studio in auteur: Finder document packages, sh
 
 1. Phase 0: architecture, contracts, ERD, threat model, supplied-design mapping and approval of this revised plan.
 2. Phase 1: native document lifecycle and welcome screen; portable libraries/characters; complete episode/scene/keyframe editing; imported workflow bindings; durable local ComfyUI execution; all requested navigation views and explicit sample content; original icon, native progress, ARM64 app/DMG and three READMEs with actual screenshots.
-3. Phase 2: multiple RunningHub accounts and ComfyUI connections, account-scoped deployments/uploads, batches, per-target admission limits, failed-only retry, reconciliation and truthful available cost information. Implement Workflow and AI App transports with official fixtures and authorized live acceptance.
+3. Phase 2: multiple retired hosted provider accounts and ComfyUI connections, account-scoped deployments/uploads, batches, per-target admission limits, failed-only retry, reconciliation and truthful available cost information. Implement Workflow and AI App transports with official fixtures and authorized live acceptance.
 4. Phase 3, mandatory and included: real outbound runner/relay, replayable SSE, private S3 LoRA synchronization and output collection, bulk workflow deployment plans, pinned dependency resolution, standard-image bootstrap and shared verified cache. First prove the system in a local Docker integration environment, then validate on the chosen private RunPod image and storage. Live configuration may remain pending; fixture success never substitutes for private-pod acceptance.
 5. Phase 4: Ollama structured prompt assistance, continuity, first/last-frame chaining and render comparison/approval.
 6. Phase 5: Homer Tier 1, then a versioned opt-in Tier 2 contract where supported; release hardening and signing/notarization path.
@@ -75,7 +77,7 @@ Static source audit of drafts/index.html; the browser refused the local-file pre
 | 7. Desktop controls | Styled semantic inputs/textareas, custom checkbox/toggle visuals and modal/list choices. No native HTML select appearance or browser-default control CSS. Focus trapping, Escape/cancel, validation and VoiceOver semantics remain intact. Native file dialogs deliberately use macOS controls. |
 | 8. Notifications/logs | Dismissable timed toasts pause on hover/focus; notification history has read/dismiss/clear controls. Logs view has filters, redacted detail/export and Clear. Clearing UI history/diagnostics does not remove durable job receipts or cancel work. |
 | 9. Ratios | Project default and frame inherit/override: 9:16, 16:9, 1:1, 3:4, 4:3, 2:3, 3:2, 21:9, plus validated custom width:height. Display inherited source. Actual pixel dimensions obey the selected workflow's constraints; changes never rewrite previously submitted jobs. |
-| 10. Servers/accounts | Manage multiple ComfyUI nodes and RunningHub accounts; test capability/health; choose execution target per job; account-scoped workflow mappings, limits and uploads. Servers view offers connection help, client installation, initialization, Doctor/inventory and setup progress. |
+| 10. Servers/accounts | Manage multiple ComfyUI nodes and retired hosted provider accounts; test capability/health; choose execution target per job; account-scoped workflow mappings, limits and uploads. Servers view offers connection help, client installation, initialization, Doctor/inventory and setup progress. |
 | 11. Private storage/runner | Settings includes S3 endpoints/bucket/prefix, secure credential entry, LoRA manifest/sync and transfers. Servers includes private-pod setup and bulk workflow/profile initialization, dependency diff/approval and readiness. Runner sends outputs through private S3 and outbound relay without public ComfyUI access. |
 
 Modal choice controls share one component with large selectable rows, typeahead, keyboard navigation and explicit apply/cancel for multi-selection. Ordinary text editing remains inline or in focused edit dialogs rather than launching a modal for every keystroke. Custom CSS covers all control states, including disabled/error/focus.
@@ -136,14 +138,14 @@ Create reserved directories when needed rather than filling them with placeholde
 
 - Preserve unknown properties in real ComfyUI API graphs; explicitly map node/field bindings. Separate logical UUID, immutable graph version/hash, graph node ID, account-scoped workflowId/webappId, deployment ID and returned task ID.
 - Semantic slots include identity_reference, first_frame, last_frame, motion_video, source_video, audio_track, mask, location_reference and prompt. Type/capability support comes from the graph and provider schema, not guessed node names.
-- Supplied LTX: bind positive 121.text, negative 110.text, FPS 285.value, duration 291.value, target dimensions 292/293.value, image 167.image and seed 364.seed only after registry validation. Preserve its two-pass schedule, resize dependencies and unknown fields. MINIMAX: typed parse/edit/re-encode of 29.track_data, preserving tracks, segments, continuity and references; stage nested image paths deliberately. Validate disconnected SaveVideo node 35 rather than silently deleting it. Attached graphs remain distinct from RunningHub AI App 2021554630848684033.
+- Supplied LTX: bind positive 121.text, negative 110.text, FPS 285.value, duration 291.value, target dimensions 292/293.value, image 167.image and seed 364.seed only after registry validation. Preserve its two-pass schedule, resize dependencies and unknown fields. MINIMAX: typed parse/edit/re-encode of 29.track_data, preserving tracks, segments, continuity and references; stage nested image paths deliberately. Validate disconnected SaveVideo node 35 rather than silently deleting it. Attached graphs remain distinct from retired hosted provider AI App 2021554630848684033.
 - Keep heavy graph originals as user project imports. Exercise safe minimal graph fragments and sanitized multitrack strings in graph_bindings.rs; no original prompt/private-media values in tracked fixtures. No model origins, license rights or runnable deployment are inferred from filenames. Resolve concrete random seed before submission only when the actual node contract supports it.
 - The supplied AI App page documents v2 Bearer-authenticated run/ai-app/<id> and query endpoints, task states and 24-hour result URLs. Its example omits nodeInfoList despite listing it as required and uses a string for usePersonalQueue despite a Boolean table type: validate actual schema before submission. Collect results promptly and recover expired transfers without resubmitting billable work.
 - Global workflow registry lives in app data; pin an immutable version into each project. Hosted equivalents require explicit mapping; matching model family is not proof of compatibility.
 - Rust ExecutionBackend: health, capabilities, stage_assets, validate_job, submit, status, cancel, collect; optional estimate_cost/list_models. Provider-specific payloads stay in adapters.
 - Native ComfyUI uses real HTTP APIs plus WebSocket events and history reconciliation. Remote owned relay will use SSE with durable event IDs, Last-Event-ID replay, bounded backoff and history catchup. Commands remain authenticated HTTPS requests. Do not label ComfyUI's native transport SSE.
-- RunningHub: select the documented API family, retrieve/validate authorized schema, upload real files as documented, capture remote identifiers and return results. Workflow, AI App and standard-model payloads are distinct. Use opaque Keychain credential references; never persist the supplied chat key.
-- Multiple selectable RunningHub accounts and ComfyUI targets are included in this plan. Admission limits apply per account/target, upload caches are keyed by account and asset hash, and a workflow mapping is never assumed portable across accounts. Batch expansion snapshots each selected frame/variant and execution target; failed-only retry creates explicit new attempts after reconciliation. Redact authorization headers, signed URLs and provider diagnostics.
+- retired hosted provider: select the documented API family, retrieve/validate authorized schema, upload real files as documented, capture remote identifiers and return results. Workflow, AI App and standard-model payloads are distinct. Use opaque Keychain credential references; never persist the supplied chat key.
+- Multiple selectable retired hosted provider accounts and ComfyUI targets are included in this plan. Admission limits apply per account/target, upload caches are keyed by account and asset hash, and a workflow mapping is never assumed portable across accounts. Batch expansion snapshots each selected frame/variant and execution target; failed-only retry creates explicit new attempts after reconciliation. Redact authorization headers, signed URLs and provider diagnostics.
 - Persist immutable submission and attempt state before network submission. Ambiguous submission becomes unknown/reconcile-required; never automatically resubmit a possibly billable request. Cancellation respects provider capability and never globally interrupts a shared ComfyUI instance.
 - States: draft, validated, staging, ready, submitted, queued, running, collecting, completed, failed, cancel_requested, canceled, unknown and paused. Reopening resumes reconciliation; retrieved outputs attach to exact scene/shot/frame with graph/prompt/model/account provenance.
 
@@ -233,9 +235,9 @@ The following files cover the revised Phases 0–3 scope. All are proposed, not 
 | crates/provider-comfyui/Cargo.toml | Create | HTTP/WebSocket adapter dependencies. |
 | crates/provider-comfyui/src/lib.rs | Create | Object registry validation, upload/prompt/history/events/collect. |
 | crates/provider-comfyui/tests/http_ws_contract.rs | Create | Local fixture server transport and reconnection tests. |
-| crates/provider-runninghub/Cargo.toml | Create | HTTP/upload adapter dependencies. |
-| crates/provider-runninghub/src/lib.rs | Create | API-family selection, schema-validated upload/submit/status/results. |
-| crates/provider-runninghub/tests/api_contract.rs | Create | Official-shape sanitized fixtures for Workflow/AI App and error/redaction cases. |
+| removed provider adapter/Cargo.toml | Create | HTTP/upload adapter dependencies. |
+| removed provider adapter | Create | API-family selection, schema-validated upload/submit/status/results. |
+| removed provider adapter/tests/api_contract.rs | Create | Official-shape sanitized fixtures for Workflow/AI App and error/redaction cases. |
 
 ### Global integrations and private infrastructure
 
@@ -357,8 +359,8 @@ The following files cover the revised Phases 0–3 scope. All are proposed, not 
 | --- | --- | --- |
 | fixtures/contracts/board-v1.json | Create | Synthetic nonprivate contract fixture. |
 | fixtures/workflows/cpu-image-roundtrip.json | Create after registry verification | Real weight-free ComfyUI graph, never a guessed executable graph. |
-| fixtures/runninghub/workflow.json | Create | Sanitized official contract fixture; live ownership separately required. |
-| fixtures/runninghub/ai-app.json | Create | Sanitized distinct AI App contract fixture. |
+| fixtures/retired hosted provider/workflow.json | Create | Sanitized official contract fixture; live ownership separately required. |
+| fixtures/retired hosted provider/ai-app.json | Create | Sanitized distinct AI App contract fixture. |
 | fixtures/assets/test-frame.svg | Create | Original tiny fixture asset. |
 | fixtures/assets/test-clip.mp4 | Create/generated | Short original FFmpeg sample for Library/Renders and video-transfer checks. |
 | scripts/comfyui-cpu-smoke.py | Create | CPU smoke setup/check, hash/version report, submit/collect and cleanup. |
@@ -393,7 +395,7 @@ The following files cover the revised Phases 0–3 scope. All are proposed, not 
 6. **Ordered board.** board.rs, KeyframesBoard, EmptyEpisode and FrameInspector: first-frame transaction, visible add/delete/edit, character refs/comments/prompt revisions, inherited ratios and atomic cross-lane membership/order. Test mouse/keyboard moves, pointer cancel, save conflicts, restart and relocated-project roundtrip.
 7. **Workflow binding.** workflow-core, schemas and WorkflowEditor: actual API import, unknown-property preservation, semantic node-field binding, immutable versions and per-account deployment distinction. Validate against real registry/schema; unresolved bindings block submit.
 8. **Durable local jobs.** job-core/provider-comfyui, JobQueue and RenderReview: attempt before submit, staging, WS/history, scoped cancel and verified result import. Fixture servers test ambiguous POST/restart/disconnect; actual weight-free CPU workflow verifies prompt ID/output hash/provenance.
-9. **Accounts/batches/RunningHub.** provider-runninghub, integration-core, credentials and ProviderSettings: multiple selectable accounts, explicit family/schema, scoped uploads/mappings, limits/budgets and matrix batches. Test account isolation, expired uploads/results, unknown outcomes, failed-only retry and official API-family differences; test supplied-graph bindings and nested serialized tracks using safe fragments. Live jobs require an authorized export/schema and reviewed submission.
+9. **Accounts/batches/retired hosted provider.** provider-retired hosted provider, integration-core, credentials and ProviderSettings: multiple selectable accounts, explicit family/schema, scoped uploads/mappings, limits/budgets and matrix batches. Test account isolation, expired uploads/results, unknown outcomes, failed-only retry and official API-family differences; test supplied-graph bindings and nested serialized tracks using safe fragments. Live jobs require an authorized export/schema and reviewed submission.
 10. **Private runner and S3.** storage-s3/provider-relay, apps/relay, apps/agent, protocol schema and local Docker deployment: scoped auth, outbound leases/acks, SSE replay, signed private media transfers and immutable LoRA manifests. Wire ServersView, SetupHelp, StorageSettings and DeploymentPlanner to real commands. Local smoke proves original task recovery and hash-verified output without public ComfyUI.
 11. **Provision and bulk initialize.** provision-core, profile/lock fixtures and standard-image wrapper: approved dependency resolution, missing-only downloads, typed initialization, inventory/Doctor, READY gates, cache locks, runtime isolation and canary rollback. Inspect selected image before its wrapper; test fresh/cached/corrupt/partial/conflicting cases. Complete real private RunPod acceptance once image, relay/S3 and authorized artifacts are selected. Do not create paid infrastructure implicitly.
 12. **Native release.** Styles, icon, Info.plist, capabilities and macos.rs: readable Fenki light/dark, rem sizing, menus, coalesced Dock progress and permission-aware notifications. Build ARM64 app/DMG; verify Finder cold/warm opening, media, Keychain and progress cleanup.
@@ -428,7 +430,7 @@ python3 scripts/private-runner-smoke.py --compose deploy/compose.test.yml
 - Browser test-only bridge is never shipped as an active provider. Browser screenshot/harness success does not establish native Tauri behavior.
 - Packaged acceptance: real .app/.dmg, correct icon and Finder package appearance, double-click/drop cold/warm opening, no duplicate window, moved-project roundtrip, library deduplication, media playback, board drag/comment/prompt persistence, keychain credentials/redaction, Dock/notification cleanup.
 - CPU test must show actual prompt/task ID, fetched output/hash and project provenance; failure or missing service stays explicitly pending.
-- RunningHub fixture checks can pass without a key; actual live generation acceptance stays pending until an authorized workflow/schema and reviewed budget are available. Never present fixture success as a live test.
+- retired hosted provider fixture checks can pass without a key; actual live generation acceptance stays pending until an authorized workflow/schema and reviewed budget are available. Never present fixture success as a live test.
 - Capture docs/screenshots/keyframes-macos.png only from the running native app with safe sample data; inspect it at normal and high-DPI sizes. Verify all three READMEs accurately label later features.
 - Ensure drafts, browser profiles, credentials, user exports and build artifacts are absent from staged changes before every push.
 
@@ -436,7 +438,7 @@ python3 scripts/private-runner-smoke.py --compose deploy/compose.test.yml
 
 - The supplied single-file export is a bundled prototype; rebuild typed components and verify the actual app visually. Its source inspection does not establish runtime appearance or working persistence.
 - No current ComfyUI service was reachable at the two tested endpoints. Setup/version compatibility must be verified; CPU smoke is not a performance benchmark.
-- Real RunningHub workflow access/schema may be unavailable for seed URLs; register URLs and return explicit authorization/export requirements instead of fabricated graphs.
+- Real retired hosted provider workflow access/schema may be unavailable for seed URLs; register URLs and return explicit authorization/export requirements instead of fabricated graphs.
 - A conversation credential cannot be removed from already stored chat history by editing the repository. It will not be reused or copied; replacement belongs in Keychain.
 - Provider timeouts after POST require reconciliation before retry; result collection must be retryable without creating another job.
 - JSON projections and SQLite need a recovery journal; external modification of board.json is not silently merged into the database in this milestone.
@@ -456,7 +458,7 @@ For this revised Phases 0–3 approval: paid pod creation or automatic start/sto
 
 ### Before live integration acceptance
 
-- Supplied graph exports satisfy the graph-inspection input. Live RunningHub acceptance still needs an account-accessible deployment and its verified input schema; AI App 2021554630848684033 is separate from LTX/MINIMAX and exposes no app-specific input mappings in the public page. Resolve this through authenticated discovery/secure app settings after approval. Local studio and fixture verification can proceed without live credentials.
+- Supplied graph exports satisfy the graph-inspection input. Live retired hosted provider acceptance still needs an account-accessible deployment and its verified input schema; AI App 2021554630848684033 is separate from LTX/MINIMAX and exposes no app-specific input mappings in the public page. Resolve this through authenticated discovery/secure app settings after approval. Local studio and fixture verification can proceed without live credentials.
 - Heavy graph execution needs a compatible GPU runtime, verified custom node registry, approved model sources and actual staged reference media. Docker CPU smoke uses a weight-free graph; no rental needed for initial validation.
 - Confirmed CPU environment: Docker via OrbStack, with proposed loopback port 8188 after checking availability and verified setup. Existing Debian/native endpoints remain configurable.
 - Replacement credentials entered through secure app settings, never source/drafts/chat.
@@ -473,8 +475,8 @@ For this revised Phases 0–3 approval: paid pod creation or automatic start/sto
 - [Tauri document/bundle configuration](https://v2.tauri.app/reference/config/)
 - [Tauri notification permissions](https://v2.tauri.app/plugin/notification/)
 - [ComfyUI server transport/routes](https://github.com/Comfy-Org/ComfyUI/blob/master/server.py)
-- [RunningHub current API families](https://www.runninghub.ai/runninghub-api-doc-en/)
-- [Supplied RunningHub AI App API](https://www.runninghub.ai/call-api/api-detail/2021554630848684033?apiType=4)
+- retired hosted provider current API families (retired external deployment)
+- Supplied retired hosted provider AI App API (retired external deployment)
 - [OrbStack headless operation](https://docs.orbstack.dev/headless)
 - [RunPod templates](https://docs.runpod.io/pods/templates/overview)
 - [RunPod storage constraints](https://docs.runpod.io/pods/storage/types)

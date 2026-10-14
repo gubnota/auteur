@@ -9,7 +9,7 @@ Original Downloads files remain unchanged and outside the repository.
 - `/Users/vm/Downloads/LTX 2.3 T2V & I2V  Quality & Fast_api.json`
 - `/Users/vm/Downloads/LTX+2.3+T2V+&+I2V++Quality+&+Fast.json`
 - `/Users/vm/Downloads/MINIMAX H3 Motion Context V2_api.json`
-- [RunningHub page](https://www.runninghub.ai/call-api/api-detail/2021554630848684033?apiType=4)
+- retired hosted provider page (retired external deployment)
 
 ## LTX API and editor
 
@@ -59,7 +59,7 @@ Original Downloads files remain unchanged and outside the repository.
 - Bind serialized inputs by parsing/validating and re-encoding while preserving
   untouched fields/tracks. Snapshot exact serialized job inputs and reference hashes.
 
-## RunningHub identity and public contract
+## retired hosted provider identity and public contract
 
 - User confirmed on 2026-10-14 that Workflow 2110044532631932930 matches
   the supplied LTX API JSON. This association comes from the user, not public

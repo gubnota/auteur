@@ -31,7 +31,7 @@ Keep drafts untracked and unmodified. No additional Base44 exports required.
 | Workflows | Real graph importer/bindings, versioning, deployment target, common prompt preview and validation. |
 | Renders | Images/videos, frame association, provenance and variant review. |
 | Servers/Nodes | Multiple ComfyUI connections/private agents, real health/capabilities, client help, initialization, Doctor, inventory, bulk profile plans and readiness. |
-| Settings | Multiple RunningHub accounts, private S3/LoRA sync/transfers, FFmpeg, appearance and notifications. |
+| Settings | Multiple retired hosted provider accounts, private S3/LoRA sync/transfers, FFmpeg, appearance and notifications. |
 | Notifications | Dismissable toast history, read/dismiss/clear; native opt-in notifications. |
 | Logs | Redacted diagnostics/filter/export/clear; durable job history remains intact. |
 

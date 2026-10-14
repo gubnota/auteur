@@ -1,5 +1,7 @@
 # Implementation Plan: reusable custom workflows and execution targets
 
+> Historical plan: hosted-provider steps are superseded by the 0.1.12 ComfyUI wrapper implementation.
+
 Date: 2026-10-14
 Status: Approved by user (“go”); implemented in 0.1.6 with acceptance limits below.
 
@@ -7,20 +9,20 @@ Status: Approved by user (“go”); implemented in 0.1.6 with acceptance limits
 
 Catalogue/version pins, selected-runtime compilation, typed forms, saved target reuse, API/editor exports and macOS/Linux agent packaging are implemented. Local normal-editor mask compilation and the approved FaceSwap GPU pipeline passed; native import/prepare/ratio/API-export verified. TASK_LOG and GENERATION_ACCEPTANCE record evidence.
 
-The runtime helper requires separately installed Python/Playwright/Chromium. Agent installation preserves sources in its registry without replacing a live canvas. Managed dependency setup reuses reviewed manifests; unknown model/plugin origins still need explicit configuration. Remote live preparation and paid RunningHub execution need an active authorized session. Comprehensive primitive/reroute/bypass/subgraph serializer fixtures and native Finder drag/drop remain unverified; unsupported serializers fail with diagnostics.
+The runtime helper requires separately installed Python/Playwright/Chromium. Agent installation preserves sources in its registry without replacing a live canvas. Managed dependency setup reuses reviewed manifests; unknown model/plugin origins still need explicit configuration. Remote live preparation and paid retired hosted provider execution need an active authorized session. Comprehensive primitive/reroute/bypass/subgraph serializer fixtures and native Finder drag/drop remain unverified; unsupported serializers fail with diagnostics.
 
 ## Goal
 
-Import a normal ComfyUI editor workflow once, select a saved execution target, and let the agent prepare and compile it into an executable API graph. Build an editable input form from the real node schemas. Reuse the workflow, input layout, target and RunningHub deployment for later jobs without uploading JSON or recreating connection settings.
+Import a normal ComfyUI editor workflow once, select a saved execution target, and let the agent prepare and compile it into an executable API graph. Build an editable input form from the real node schemas. Reuse the workflow, input layout, target and retired hosted provider deployment for later jobs without uploading JSON or recreating connection settings.
 
-The intended creation flow is **Choose saved workflow → Choose execution target → Fill generated inputs → Review → Queue/run**. Import is a catalogue-management action, not a required step for every job. An execution target means a saved Mac/Linux ComfyUI instance, private relay worker, or RunningHub account; a graph node means an operator inside the workflow.
+The intended creation flow is **Choose saved workflow → Choose execution target → Fill generated inputs → Review → Queue/run**. Import is a catalogue-management action, not a required step for every job. An execution target means a saved Mac/Linux ComfyUI instance, private relay worker, or retired hosted provider account; a graph node means an operator inside the workflow.
 
 ## Existing behavior
 
 - `workflow-core::import` accepts API graphs and explicitly rejects editor graphs. `attach_editor` preserves a supplied pair but does not compile editor JSON.
 - Project workflows and global connections already persist; Generate/Jobs have selectors and endpoint queues. These are useful foundations, but bindings remain manual and workflow schemas are not automatically generated from the selected runtime.
 - `WorkflowInputs.tsx` lists literal API values for manual binding. Input type, media meaning and allowed values are not yet discovered comprehensively from the selected node registry.
-- Per-workflow/account RunningHub deployment IDs and API families already exist. They must remain separate from local graph IDs.
+- Per-workflow/account retired hosted provider deployment IDs and API families already exist. They must remain separate from local graph IDs.
 - Managed dependency inventory/install, runtime fingerprinting and session canaries exist. Agent commands do not yet include workflow compilation or workflow installation.
 - Linux agents are packaged; equivalent macOS utility publication must be added. The package format is v3 with explicit backed-up upgrades.
 - The Base44 Custom Nodes screen inspected on 2026-10-14 starts with Upload/Paste/Parse; its Workflow page shows sample catalogue entries. This observation establishes prototype UI, not real agent conversion or native execution.
@@ -63,7 +65,7 @@ New target preparation: inspect → resolve missing nodes/models → review sour
 
 Preparation state belongs to workflow-version plus target/session. Repeated jobs reuse ready compiled profiles; a new Colab/Kaggle session rechecks capabilities, dependencies and workflow presence before executing.
 
-RunningHub is a selectable test execution target using a saved authorized hosted workflow/AI App mapping and account. Reuse verified schema/export metadata and input mappings from the catalogue. Verify that the hosted graph/input schema matches; never infer a hosted deployment ID from local node IDs. The known LTX deployment `2110044532631932930` remains its existing explicit mapping. An arbitrary local editor graph cannot be assumed uploadable/publishable through RunningHub's execution API; importing/associating a hosted deployment is a one-time separate action.
+retired hosted provider is a selectable test execution target using a saved authorized hosted workflow/AI App mapping and account. Reuse verified schema/export metadata and input mappings from the catalogue. Verify that the hosted graph/input schema matches; never infer a hosted deployment ID from local node IDs. The known LTX deployment `2110044532631932930` remains its existing explicit mapping. An arbitrary local editor graph cannot be assumed uploadable/publishable through retired hosted provider's execution API; importing/associating a hosted deployment is a one-time separate action.
 
 Jobs freeze exact typed inputs, media hashes, API graph/profile, output selections and destination. Preserve current same-instance FIFO, cross-instance parallel dispatch and unknown-outcome reconciliation. Draft cloning reuses workflow and target while keeping each job's values independently editable.
 
@@ -81,7 +83,7 @@ Paths are relative to the repository; no implementation files are deleted.
 | `crates/project-core/src/lib.rs` | Modify: backed-up v4 upgrade, workflow source/profile projections and legacy receipt preservation. |
 | `crates/project-core/migrations/0004_workflow_catalogue.sql` | Create: advance package format for workflow sources/profiles, retaining existing rows. |
 | `crates/provider-comfyui/src/lib.rs` | Modify: typed schema/capability discovery, profile validation and output-node metadata. |
-| `crates/provider-runninghub/src/lib.rs` | Modify: validate saved deployment/input descriptors against supported provider metadata; preserve explicit family routing. |
+| `removed provider adapter` | Modify: validate saved deployment/input descriptors against supported provider metadata; preserve explicit family routing. |
 | `crates/provider-relay/src/lib.rs` | Modify: typed inspect/install/compile workflow commands and preparation status. |
 | `apps/relay/src/main.rs` | Modify: allowlist new workflow operations, node scoping, bounded payloads and durable operation results. |
 | `apps/agent/src/main.rs` | Modify: workflow CLI operations and relay dispatch, scoped caches and idempotent install/compile receipts. |
@@ -109,7 +111,7 @@ Paths are relative to the repository; no implementation files are deleted.
 | `.github/workflows/release.yml` | Modify: publish matching macOS/Linux utility artifacts and verified helper metadata. |
 | `.gitlab-ci.yml` | Modify: equivalent utility artifacts and tag release links. |
 | `e2e/workflow-catalogue.e2e.ts` | Create: import-once, select-reuse, target switching and dynamically generated controls. |
-| `e2e/generate.e2e.ts` / `e2e/jobs.e2e.ts` / `e2e/runninghub.e2e.ts` | Modify each: media roles, ratio, repeated job reuse, deployment reuse and routing regression coverage. |
+| `e2e/generate.e2e.ts` / `e2e/jobs.e2e.ts` / `e2e/retired hosted provider.e2e.ts` | Modify each: media roles, ratio, repeated job reuse, deployment reuse and routing regression coverage. |
 | `scripts/tests/test_workflow_compiler.py` | Create: real exporter parity and unsupported/side-effect/timeout cases. |
 | `scripts/tests/test_agent_package.py` | Modify: helper manifests and Linux/macOS binary format/architecture checks. |
 | `docs/WORKFLOW_SETUP.md` / `docs/CI_RELEASES.md` | Modify each: import/export, dependency preparation and exact utility installation guidance. |
@@ -123,7 +125,7 @@ Paths are relative to the repository; no implementation files are deleted.
 3. **Analyse inputs/outputs.** Add schema normalization, runtime inspection and form descriptors. Verify non-media graph links remain connected; choices, numeric constraints, multiple loaders, masks and custom unsupported types produce correct descriptors.
 4. **Connect agent preparation.** Add inspect/install/compile operations through CLI/relay and direct local utility invocation. Reuse provisioning and require reinspection after plugin installation. Verify idempotence, changed runtime invalidation and session-loss handling.
 5. **Make catalogue and targets the primary UI.** Wire Generate/Jobs/Workflows to shared selections and generated forms. Save layouts and defaults; fix overflowing picker rows, ratio edits, FaceSwap media cards and contrast. Verify keyboard/native file-picker and drag/drop behavior.
-6. **Route and freeze jobs.** Select target-specific API profile, exact inputs and outputs before dispatch. Reuse RunningHub mappings. Verify same-node queueing, different-node concurrency and unchanged unknown-job safeguards.
+6. **Route and freeze jobs.** Select target-specific API profile, exact inputs and outputs before dispatch. Reuse retired hosted provider mappings. Verify same-node queueing, different-node concurrency and unchanged unknown-job safeguards.
 7. **Deliver utilities and evidence.** Extend native agent artifacts, update EN/RU/FR guides, build/install the requested macOS application increment, capture real screenshots and document live tests separately from fixtures. Published release tags remain immutable; use a new version for delivery.
 
 ## Verification
@@ -135,7 +137,7 @@ Paths are relative to the repository; no implementation files are deleted.
 - Native acceptance: import normal editor JSON once; close/reopen app/project; select saved workflow and local target; see automatically generated inputs; replace two FaceSwap images; change mapped dimensions; export editor/API; queue a second job without another JSON upload.
 - Local pipeline: compare export with ComfyUI, run weight-free canary and authorized non-explicit FaceSwap inputs; collect actual results with provenance. No unreviewed model/plugin downloads.
 - Remote acceptance: use an available authenticated relay worker to prepare/import/compile/run, restart its session and confirm recheck. If unavailable, report remote execution as pending while local/fixture evidence remains explicit.
-- RunningHub: validate saved LTX deployment/account reuse without resupplying API JSON. Any live paid test requires secure account configuration and authorized credit use; mock success is not provider acceptance.
+- retired hosted provider: validate saved LTX deployment/account reuse without resupplying API JSON. Any live paid test requires secure account configuration and authorized credit use; mock success is not provider acceptance.
 - Screen evidence: long-prompt modal, reusable workflow picker, execution-target picker, two-image FaceSwap, ratio controls and preparation status.
 
 ## Risks / edge cases
@@ -143,10 +145,10 @@ Paths are relative to the repository; no implementation files are deleted.
 - Arbitrary plugins may require frontend-only/dynamic serialization or unsupported values; runtime fidelity and actionable errors take precedence over promising universal conversion.
 - ComfyUI runtime upgrades change schemas and exporter adapters. Offline catalogue browsing/editing works, but first compilation needs a compatible reachable runtime; stale readiness cannot authorize a job.
 - Model filenames do not establish trusted download URLs. Missing origins and plugin Python dependencies remain explicit reviewed requirements.
-- RunningHub tests only authorized hosted deployments with corresponding schemas; it is not a general remote installation destination.
+- retired hosted provider tests only authorized hosted deployments with corresponding schemas; it is not a general remote installation destination.
 - Global catalogue updates cannot mutate project pins or previously frozen receipts. Copying projects never transports credentials.
 - Browser/compiler sidecars add install size and native platform dependencies; report exact prerequisites and verify artifacts instead of assuming availability.
 
 ## Out of scope
 
-Building a replacement ComfyUI graph editor, automatic publication of arbitrary graphs to RunningHub, automatic paid cloud rental, LoRA training, browser-account automation and job-to-job result chains. Workflow preparation and repeated independent jobs are in scope.
+Building a replacement ComfyUI graph editor, automatic publication of arbitrary graphs to retired hosted provider, automatic paid cloud rental, LoRA training, browser-account automation and job-to-job result chains. Workflow preparation and repeated independent jobs are in scope.

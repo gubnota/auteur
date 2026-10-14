@@ -2,28 +2,28 @@
 
 Date: 2026-10-14. Checks below distinguish published 0.1.6 from current 0.1.11. Publication is recorded in CI_RELEASES. No paid cloud jobs were submitted by the agent.
 
-## 0.1.11 RunningHub workflow upload contract
+## 0.1.11 retired hosted provider workflow upload contract
 
 - Latest user receipt 89883f5d-b6a0-49cf-ad80-a6c070f13cd6 confirms the Redux hosted workflow and two image bindings. Creation returned code 605 without a task ID; the original reason is unavailable. No definitive cause is established.
-- Official [workflow-resource upload](https://www.runninghub.ai/runninghub-api-doc-en/api-425761099) requires multipart apiKey/fileType=input/file and returns data.fileName for loader overrides. The previous adapter mixed this contract with [standard-model upload](https://www.runninghub.ai/runninghub-api-doc-en/api-425761098), which returns a download URL. The adapter now uses workflow-resource uploads and the documented 30 MB limit for both hosted families. This is a verified contract correction, not proof that it caused code 605.
+- Official workflow-resource upload (retired external deployment) requires multipart apiKey/fileType=input/file and returns data.fileName for loader overrides. The previous adapter mixed this contract with standard-model upload (retired external deployment), which returns a download URL. The adapter now uses workflow-resource uploads and the documented 30 MB limit for both hosted families. This is a verified contract correction, not proof that it caused code 605.
 - New errors retain bounded safe plain-language provider reasons from JSON and HTTP rejection responses. Submitted values, secrets, paths, URLs, markup and suspicious tokens are omitted; full raw responses and historical receipts remain untouched.
 - Fourteen provider and six job tests plus doc tests passed against local fixtures, including multipart fields/path/authentication, size rejection, plain/nested/Chinese reasons, private-value omission and HTTP status classification. No real provider retry or private upload performed; successful hosted generation remains unverified.
 - Native ARM64 production build, TypeScript/Vite, version parity and strict ad-hoc signature passed. Installed /Applications/MyMovie Studio.app 0.1.11, preserving 0.1.10 at /private/tmp/MyMovie Studio-0.1.10-before-0.1.11.app. Saved movie reopened with original queue history retained. Private screenshot: /private/tmp/mymovie-workflows-0.1.11.png.
 
-## 0.1.10 RunningHub refusal diagnostics
+## 0.1.10 retired hosted provider refusal diagnostics
 
 - User attempt 56bccb6a-4df5-403f-b4f4-4aab7b39b528 reached `/task/openapi/create` after both image uploads. Provider code 605, no task ID; the old receipt did not preserve its reason. User reports no provider history/logs.
-- Official error table (`runninghub-api-doc-en/doc-8287467`) does not list 605. No balance/account/deployment cause is established. New receipts record the operation and safe symbolic identifiers or documented translations, excluding free text and submitted private values.
+- Official error table (`retired hosted provider-api-doc-en/doc-8287467`) does not list 605. No balance/account/deployment cause is established. New receipts record the operation and safe symbolic identifiers or documented translations, excluding free text and submitted private values.
 - Ten provider and six durable-job tests plus doc tests passed against local fixtures. No real provider retry performed; successful hosted generation remains unverified.
 - Native ARM64 production build, TypeScript/Vite and version parity passed. Strict ad-hoc signature verified; installed 0.1.10 in /Applications after backing up 0.1.9 to /private/tmp/MyMovie Studio-0.1.9-before-0.1.10.app. Saved movie reopened and original Jobs history retained. Private screenshot: /private/tmp/mymovie-jobs-0.1.10.png.
 
-## 0.1.9 RunningHub compatibility regression
+## 0.1.9 retired hosted provider compatibility regression
 
 - Earlier Redux/r01 failure stopped at the app hardware guard before any media staging or task creation; remote ID absent. The workflow's CUDA flag had inherited the default backend restriction.
-- RunningHub Workflow and AI App now accept unspecified/universal/cuda; Apple Silicon/ROCm/CPU/invalid remain rejected. Seven provider tests and six job tests plus doc tests passed. Direct ComfyUI/relay behavior unchanged.
+- retired hosted provider Workflow and AI App now accept unspecified/universal/cuda; Apple Silicon/ROCm/CPU/invalid remain rejected. Seven provider tests and six job tests plus doc tests passed. Direct ComfyUI/relay behavior unchanged.
 - No paid provider retry performed; this proves admission and mocked provider contracts, not live hosted execution. Old failure receipts remain in history.
 - Native ARM64 build, installed version 0.1.9 and strict ad-hoc signature verified; saved movie reopened. Previous app preserved at `/private/tmp/MyMovie Studio-0.1.8-before-0.1.9.app`.
-- Native Reuse as draft restored both exact image slots and r01; review opened with Add to queue and Run now available. Left at review without submission. Private verification screenshot retained only in `/private/tmp/mymovie-runninghub-review-0.1.9.png`.
+- Native Reuse as draft restored both exact image slots and r01; review opened with Add to queue and Run now available. Left at review without submission. Private verification screenshot retained only in `/private/tmp/mymovie-retired hosted provider-review-0.1.9.png`.
 
 ## 0.1.8 installed acceptance
 
@@ -32,7 +32,7 @@ Date: 2026-10-14. Checks below distinguish published 0.1.6 from current 0.1.11. 
 - Refreshed local Klein against ComfyUI 0.40.0/MPS: persisted 37 inputs and scope-v1 registry hash. Fixed preparation panic on one-element model inventory schemas; regression test passes. Old failed-job errors remain historical; Clear finished removed the old row without deleting history.
 - Disposable movie: bulk Trash/Restore of three materials passed; repeated video import reused its asset identity. Renders and Library display the same render assets. Native screenshot: [media-workflow-0.1.8.png](screenshots/media-workflow-0.1.8.png).
 - Frontend: 20 unit tests and 15 mocked browser acceptance tests passed; TypeScript/Vite and native release builds passed. Rust workspace: all 49 tests and doc tests passed, including the inventory regression.
-- Public artifacts remain v0.1.6 until a separately authorized tag/release. Paid RunningHub and cloud GPU acceptance remain open.
+- Public artifacts remain v0.1.6 until a separately authorized tag/release. Paid retired hosted provider and cloud GPU acceptance remain open.
 
 ## Real local executions
 
@@ -97,7 +97,7 @@ Exact counts and commands are recorded in [TASK_LOG.md](TASK_LOG.md).
   not run on a cloud GPU. The included weight-free mask is the first smoke test.
 - Local-plus-cloud parallel dispatch and two real Kaggle GPU workers remain
   unverified. Existing queue tests verify endpoint isolation and ordering.
-- RunningHub charged generation, cross-platform desktop runtime launch and
+- retired hosted provider charged generation, cross-platform desktop runtime launch and
   signing/notarization remain separate acceptance steps.
 
 See [WORKFLOW_SETUP.md](WORKFLOW_SETUP.md) for reviewed dependency metadata,
@@ -126,8 +126,14 @@ portable activation commands, and first-session initialization. See
 - Mac utility published the unchanged FaceSwap editor source into ComfyUI Userdata at `workflows/MyMovie/Flux2_Klein_FaceSwap-d4b5e41e606c42b0.json`, verified readback, and returned installed=true/loadedCanvas=false. Source SHA256 `d4b5e41e606c42b0944603e012e52c888f95b839b437157643463160bd3d683f`. This publication did not submit a new FaceSwap generation or replace the active canvas.
 - Actual published v0.1.6 Linux ARM64 artifact ran doctor in OrbStack Debian (aarch64, glibc 2.41) against local CPU ComfyUI. Current 0.1.7 ELF was separately built in the Rust 1.90 Bookworm image, then executed in the VM.
 - 0.1.7 VM utility published/reused `workflows/MyMovie/MyMovie_mask_canary-8032a4936f6b188a.json` with reused=true and compiled the three-node API using isolated Python/Chromium. Source SHA256 `8032a4936f6b188a9522a70288b1c07abcb18b7ac4c76cdaf817e5dab6214447`; API SHA256 `93850c796b13989e0029365bd1fd707fcea57b24a8f795637c75300a42533714`; frontend SHA256 `13f8f99e0b7a2ec0f9248e9f8935671a3bed11058793dc94d3167c10c8f26892`; compiler `frontend-export-v1`. CPU server: ComfyUI 0.3.76 / frontend 1.32.10.
-- Cloud GPU/relay/S3 roundtrip, paid RunningHub generation, foreign desktop launch and release signing remain pending. No cloud resources or large weights were downloaded for the VM test.
+- Cloud GPU/relay/S3 roundtrip, paid retired hosted provider generation, foreign desktop launch and release signing remain pending. No cloud resources or large weights were downloaded for the VM test.
 
 ### Native bottom queue cleanup — 0.1.7
 
 Installed the rebuilt app in /Applications; Clear finished removed seven completed mask attempts from the bottom queue. All seven receipts remained in Jobs history across three finished batches, and reopening the same disposable movie still showed zero bottom entries. No job records or render files were deleted. Screenshot: `screenshots/native-queue-cleared-0.1.7.png`. Mixed terminal/active/unknown behavior is covered by the browser fixture test.
+
+## 0.1.12 wrapper and queue acceptance
+
+- Fixture browser checks verify optional inputs retain original defaults, reusable input/output labels persist, guide saves preserve the graph, and selected queue items start/cancel independently. Canceling an idle item does not submit it. These are mocked UI checks, not GPU execution.
+- Rust tests cover portable graph integrity, exact form validation, schema migration, atomic selected-task changes and pending-editor dependency-first readiness. Frontend tests verify quoted setup scripts, syntax, extraction guards, and typed job inputs.
+- Remote Colab/RunPod GPU execution and reviewed private LoRA/model downloads still require the user's running runtime and authenticated relay. No live generation or new cloud acceptance is claimed for this update.

@@ -1,5 +1,7 @@
 # Implementation Plan: Generate and first-session node readiness
 
+> Historical plan: hosted-provider steps are superseded by the 0.1.12 ComfyUI wrapper implementation.
+
 Status: Implemented and locally verified; live cloud acceptance pending. Date: 2026-10-14.
 Extends the approved original IMPLEMENTATION_PLAN.md. Work sequentially on main.
 
@@ -38,7 +40,7 @@ Provide a Generate workspace for image/video creation and editing with custom me
 
 - Make staging metadata explicit (name, kind, MIME type and hash); preserve real extensions and hash-based safe filenames across ComfyUI and relay. Deduplicate same immutable asset within a dispatch.
 - Check node registry/input schema and loader compatibility before submission. Use /upload/image byte staging only for tested compatible loaders; unsupported folder/batch/plugin loaders show an actionable mapping error.
-- RunningHub remains a test adapter. Advertise only verified upload kinds/API families; block unsupported video/audio slots before uploading or charging. Configuration-only providers remain configuration-only.
+- retired hosted provider remains a test adapter. Advertise only verified upload kinds/API families; block unsupported video/audio slots before uploading or charging. Configuration-only providers remain configuration-only.
 - Mask slots preserve alpha/channel semantics; upload alone does not establish a usable mask. Include a known mask graph and exact binding demonstration.
 - Bound transfer size/time; retain existing linked-file integrity checks and immutable receipts. Cancellation must not interrupt another client's whole ComfyUI queue.
 
@@ -95,7 +97,7 @@ All changes below are concrete; no deletions.
 - crates/job-core/src/lib.rs: metadata-aware stage_asset contract.
 - crates/job-core/tests/runs.rs: standalone batch retains endpoint FIFO/concurrency and frozen inputs.
 - crates/provider-comfyui/src/lib.rs: registry capabilities, real-format staging, canary tests.
-- crates/provider-runninghub/src/lib.rs: explicit supported media capabilities and pre-upload failures.
+- removed provider adapter: explicit supported media capabilities and pre-upload failures.
 - crates/provider-relay/src/lib.rs: stage metadata and typed initialization/status payloads.
 - crates/storage-s3/src/lib.rs: cache reuse and validated transfers without leaking source URLs; resume/conflict tests.
 - crates/provision-core/src/lib.rs: profile/inventory/readiness types, diff planning and verification policy.
@@ -144,7 +146,7 @@ Existing CI already runs workspace/frontend/browser/Python checks and builds the
 - cargo fmt --all -- --check
 - cargo test --workspace --locked
 - npm run typecheck; npm run build; npm test
-- npm run test:e2e (existing Jobs/RunningHub plus Generate)
+- npm run test:e2e (existing Jobs/retired hosted provider plus Generate)
 - python3 -m unittest discover -s scripts/tests
 - python3 scripts/generate-notebooks.py followed by generated-file diff review
 - python3 scripts/check-release-version.py
@@ -165,7 +167,7 @@ Existing CI already runs workspace/frontend/browser/Python checks and builds the
 
 ## Out of scope
 
-- Paid pod rental, account creation, automatic purchases, or RunningHub charged acceptance without a concrete authorized job.
+- Paid pod rental, account creation, automatic purchases, or retired hosted provider charged acceptance without a concrete authorized job.
 - Training, arbitrary workflow chaining, new fal/Google generation adapters, universal custom-node lowering and timeline editing.
 - Automatic modification/deletion of the Mac's ComfyUI or existing weights, public unauthenticated ComfyUI exposure, changing ignored drafts or personal movie packages.
 - Release retagging, cross-platform live desktop acceptance and a new release/install operation in this feature plan.

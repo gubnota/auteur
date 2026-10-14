@@ -1,5 +1,7 @@
 # Implementation Plan: Image workflows, ComfyUI exchange, notebook runners and CI/CD
 
+> Historical plan: hosted-provider steps are superseded by the 0.1.12 ComfyUI wrapper implementation.
+
 Status: Accepted; user approved implementation on 2026-10-13 ("давай"), including dual-GPU Kaggle.
 Date: 2026-10-13
 Branch: main (already checked out, aligned with origin/main).
@@ -14,7 +16,7 @@ Extend the existing native studio with a dedicated image-workflow workspace, los
 - workflow-core accepts API-format graphs only, hashes the original graph and applies explicit bindings to job copies.
 - Workflows has a shared import/binding screen; no image-specific workspace or export command.
 - Jobs stage the keyframe image and up to four assigned character references. Masks have no asset selector/staging contract.
-- Connections already supports multiple RunningHub accounts with Keychain references. Each connection currently holds one deployment ID/API family.
+- Connections already supports multiple retired hosted provider accounts with Keychain references. Each connection currently holds one deployment ID/API family.
 - Local ComfyUI at http://127.0.0.1:8188 responds (0.3.76, CPU), exposes core image nodes, but CheckpointLoaderSimple reports no checkpoints.
 - ComfyUI Desktop now responds at http://127.0.0.1:8189 (0.39.2, Apple MPS); its registry exposes the existing test checkpoint. Weighted execution has not yet been tested.
 - Existing Docker CPU configuration mounts input/output, not the user's models directory.
@@ -26,7 +28,7 @@ Extend the existing native studio with a dedicated image-workflow workspace, los
 
 ### Workflow exchange and compatibility
 
-- Keep Workflow.graph/version as the immutable executable API graph and its existing hash. Add backward-compatible defaulted metadata: media category, optional original editor graph/hash, and per-connection RunningHub deployment mappings.
+- Keep Workflow.graph/version as the immutable executable API graph and its existing hash. Add backward-compatible defaulted metadata: media category, optional original editor graph/hash, and per-connection retired hosted provider deployment mappings.
 - Import API JSON as before. Support importing an editor/API pair and verify node IDs/types align before attaching editor metadata; reject mismatched pairs without modifying the project.
 - An editor-only import opens a guided request for its companion API export. Do not infer arbitrary custom-node widget ordering or execute an unverified conversion.
 - Export the original API graph, preserved editor JSON when available, or a resolved job API graph through the native save dialog. API JSON can also be opened by ComfyUI Desktop, with its frontend arranging nodes when layout is absent.
@@ -40,8 +42,8 @@ Extend the existing native studio with a dedicated image-workflow workspace, los
 - Select a keyframe as the destination for image results; preserve existing frame media and originals. Result assignment is explicit.
 - Add safe native staging for a mask asset selected by project asset ID; never pass a local filesystem path as a provider image filename.
 - Create paired API/editor example files from core nodes: text-to-image and masked clothing-region editing with the existing checkpoint name, plus the existing weight-free CPU canary.
-- Local masked editing is an inpainting example; dedicated virtual try-on requires a verified model/workflow. Display the RunningHub outfit-change catalog reference as requiring authorized API export/schema until those are available.
-- Configure RunningHub workflow/AI App IDs per workflow and connection so two accounts and image/video workflows can coexist. Keep legacy connection defaults as a compatibility fallback.
+- Local masked editing is an inpainting example; dedicated virtual try-on requires a verified model/workflow. Display the retired hosted provider outfit-change catalog reference as requiring authorized API export/schema until those are available.
+- Configure retired hosted provider workflow/AI App IDs per workflow and connection so two accounts and image/video workflows can coexist. Keep legacy connection defaults as a compatibility fallback.
 - Freeze the resolved deployment/API family in the job snapshot; status/cancel/collection use that snapshot with the selected account's credential, even after configuration changes.
 
 ### Local acceptance
@@ -51,14 +53,14 @@ Extend the existing native studio with a dedicated image-workflow workspace, los
 - Reopen exported JSON in ComfyUI Desktop and verify node links, checkpoint selection, prompts and the preserved layout for paired imports.
 - Prepare workflow files inside the repository/temporary acceptance directory. Reuse existing weights without copying, replacing or downloading them.
 - Document an optional read-only model-directory Docker mount for CPU acceptance. Large SDXL generation may be slow on CPU; prefer the user's Desktop runtime when available.
-- RunningHub acceptance uses two credentials entered through the native Connections UI and an authorized workflow/schema; verify account health and one explicit test submission per configured account. No conversation credentials are used.
+- retired hosted provider acceptance uses two credentials entered through the native Connections UI and an authorized workflow/schema; verify account health and one explicit test submission per configured account. No conversation credentials are used.
 
 ### Colab and Kaggle deployment
 
 - Dual-GPU Kaggle runs two independent ComfyUI/agent pairs: GPU 0/1, ports 8188/8189, isolated input/output/temp/user/receipt directories and distinct node IDs. No VRAM pooling. Extend the authenticated single-owner relay with an explicit multi-node allowlist, lease isolation and stale heartbeat reporting; keep MYMOVIE_NODE_ID backward compatible. Tests must cover simultaneous independent claims, wrong-node reports and runtime loss.
 - Additional affected files: apps/relay/src/main.rs (multi-node broker/tests), apps/agent/src/main.rs (node identity in reports), scripts/generate-notebooks.py (shared-helper notebook generation).
 
-- Add Google Colab and Kaggle presets in Connections, using the existing authenticated relay backend and node identity. These are hosting presets for ComfyUI, not separate job engines. Keep the local/RunningHub flows intact.
+- Add Google Colab and Kaggle presets in Connections, using the existing authenticated relay backend and node identity. These are hosting presets for ComfyUI, not separate job engines. Keep the local/retired hosted provider flows intact.
 - Ship separate ready-to-upload Colab and Kaggle notebooks with a shared bootstrap helper. Deploy the actual CI-built Linux x86_64 mymovie-agent artifact into the notebook runtime; do not require Rust compilation or a GUI there.
 - Pin the artifact version, bootstrap helper and manifest; verify trusted expected SHA256 before extracting/executing anything. Reject wrong architectures, digest mismatches, unsafe archives and unsupported runtime libraries. Support a user-uploaded artifact/manifest when release downloads are unavailable. Draft/private GitHub artifacts need an explicit authenticated download path; do not assume public release URLs exist.
 - Use Colab userdata or Kaggle UserSecretsClient for relay/optional private-download credentials. Pass agent tokens only through subprocess environment, never notebook source, command arguments, saved outputs or logs. Redact diagnostics.
@@ -138,7 +140,7 @@ No files are deleted.
 5. Add Images and shared workflow controls; check modal fields, reference selection, ratios, explicit result assignment and document reopen.
 6. Implement Linux keyring/bundle settings and CI/CD. Build macOS locally; validate Linux through its native CI runner, not a macOS cross-compile assumption.
 7. Add shared notebook bootstrap, Colab/Kaggle notebooks and guided Connections presets; run security/lifecycle tests and local runner-relay acceptance.
-8. Perform local canary and Desktop weighted exchange acceptance. Live notebook tests need an active eligible runtime and reachable relay; RunningHub tests need native account credentials and authorized schema.
+8. Perform local canary and Desktop weighted exchange acceptance. Live notebook tests need an active eligible runtime and reachable relay; retired hosted provider tests need native account credentials and authorized schema.
 9. Capture the native screen, update compact memory/three READMEs, and commit small coherent changes on main; push within the user's existing authorization.
 
 ## Verification
@@ -170,7 +172,7 @@ No files are deleted.
 - Arbitrary editor JSON cannot be converted reliably without the exact node registry/frontend behavior. Paired exports preserve compatibility without guessing custom widget order.
 - API/editor node/type agreement is validated, but execution semantics come from the API export; incompatible versions are surfaced rather than silently converted.
 - Linux secret storage depends on an available/unlocked Secret Service. Headless runner uses its existing token configuration, not GUI keyring assumptions.
-- RunningHub catalog visibility does not prove account access, API schema or cost. An unconfigured catalog card remains blocked for execution.
+- retired hosted provider catalog visibility does not prove account access, API schema or cost. An unconfigured catalog card remains blocked for execution.
 - An SDXL masked-edit example cannot guarantee specialized garment fidelity; the UI describes its actual capability.
 - Ad-hoc signing does not provide Apple notarization. Linux GUI/Finder-style package interactions need platform-specific acceptance.
 
@@ -183,8 +185,8 @@ Remote LoRA training, browser-profile automation, full private RunPod/S3 deploym
 - Tauri build/release pipeline: https://v2.tauri.app/distribute/pipelines/github/
 - ComfyUI save/API formats: https://github.com/Comfy-Org/docs/blob/main/development/api-development/workflow-api-format.mdx
 - keyring 3.6.3 platform features: https://docs.rs/crate/keyring/3.6.3/source/Cargo.toml
-- RunningHub catalog: https://www.runninghub.ai/page-workflow
-- Outfit-change candidate (API schema/access unverified): https://www.runninghub.ai/ai-detail/2075022130445643778
+- retired hosted provider catalog: https://example.invalid/retired-provider
+- Outfit-change candidate (API schema/access unverified): https://example.invalid/retired-provider
 
 - Google Colab runtime restrictions/lifecycle: https://research.google.com/colaboratory/faq.html
 - Kaggle secret API: https://github.com/Kaggle/docker-python/blob/main/patches/kaggle_secrets.py

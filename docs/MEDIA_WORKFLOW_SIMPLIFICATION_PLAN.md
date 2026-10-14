@@ -1,5 +1,7 @@
 # Implementation Plan: reusable workflow forms and a unified media library
 
+> Historical plan: hosted-provider steps are superseded by the 0.1.12 ComfyUI wrapper implementation.
+
 Status: Implemented; local verification complete. Live provider/cloud acceptance remains pending.
 Date: 2026-10-14.
 Branch: main.
@@ -11,7 +13,7 @@ Make the normal flow “saved workflow → saved node → media and values → A
 ## Existing behavior
 
 - Imported workflow versions and original asset identities are immutable. SQLite is authoritative; serialized native mutations preserve revision/session checks.
-- Workflows' manual binding UI has a fixed semantic menu without explicit custom media descriptors. Prepared ComfyUI profiles generate a richer form, while unprepared API/RunningHub graphs have no equivalent setup. Job-specific bindings do not update the reusable workflow.
+- Workflows' manual binding UI has a fixed semantic menu without explicit custom media descriptors. Prepared ComfyUI profiles generate a richer form, while unprepared API/retired hosted provider graphs have no equivalent setup. Job-specific bindings do not update the reusable workflow.
 - Generate and Jobs both contain an input editor. Generate mode tabs change labels/filter hints but do not establish workflow capability. Jobs owns review as well as history and queue controls.
 - Library selectors use searchable text lists, without thumbnails. Drop/file assignment sometimes finds the imported asset by basename; this fails when a duplicate has another name or names collide.
 - Native collection already registers outputs in project.assets. Library lacks Render tags and receipt links; Renders repeats results per job, without removal.
@@ -19,7 +21,7 @@ Make the normal flow “saved workflow → saved node → media and values → A
 - Asset imports deduplicate after creating a temporary copy; a duplicate copied import can implicitly collect an existing linked asset.
 - The supplied Redux graph matches the saved project version. LoadImage literals 19.image and 86.image feed connected branches; loader 88 has no consumers. Roles must be assigned explicitly, rather than inferred from enumeration order.
 - The supplied movie's local Klein FaceSwap profile has a legacy registry hash. Dispatch rejects it after queueing, without an actionable preparation path.
-- The user confirmed Redux's hosted RunningHub Workflow URL with ID 2110376761482002434. Its current saved mapping uses AI App family and it has no bindings. The public page could not be inspected, so graph/deployment correspondence is user-confirmed, not provider-verified.
+- The user confirmed Redux's hosted retired hosted provider Workflow URL with ID 2110376761482002434. Its current saved mapping uses AI App family and it has no bindings. The public page could not be inspected, so graph/deployment correspondence is user-confirmed, not provider-verified.
 
 ## Proposed approach
 
@@ -31,7 +33,7 @@ Make the normal flow “saved workflow → saved node → media and values → A
 - Persist stable semantic keys, Binding.media and Workflow.layout. Apply the same layout to base API graphs and target profiles. Explicit workflow bindings override generated descriptors for the same node/input.
 - Expose two connected Redux image slots once; leave disconnected loader 88 out of active job bindings and show it in Advanced setup with an explanation. Its imported literal stays intact; hiding a connected field must still preserve and submit its value. Role labels follow the graph and explicit user selection; never assume “first image = source.”
 - Remove the ordinary job-level “Bind literal input” requirement. Link to “Configure workflow inputs” instead. Preserve existing per-job overrides when restoring historical drafts, clearly marking them as overrides.
-- Save URL-derived RunningHub ID/family once per workflow/account. For the user-confirmed Redux deployment use workflow / 2110376761482002434; retain independent LTX mappings. Do not infer unrelated deployments from imported JSON.
+- Save URL-derived retired hosted provider ID/family once per workflow/account. For the user-confirmed Redux deployment use workflow / 2110376761482002434; retain independent LTX mappings. Do not infer unrelated deployments from imported JSON.
 
 ### Generate edits; Jobs executes and records
 
@@ -62,7 +64,7 @@ All paths are repository-relative; create only the new files listed here. No sou
 - `apps/desktop/src/App.tsx` — modify: route all draft creation/editing to Generate; connect queue review, preparation and exact-ID job imports; pass shared result/usage data to Library/Renders; preserve serialized saves and session guards.
 - `apps/desktop/src/features/Generate.tsx` — modify: single Custom composer for standalone/storyboard contexts, compact workflow/node/batch controls, queue replacement, preparation readiness and review; render true result media.
 - `apps/desktop/src/features/Jobs.tsx` — modify: remove duplicate input composer; retain queue/history controls and restore drafts into Generate.
-- `apps/desktop/src/features/Library.tsx` — modify: workflow form setup and RunningHub URL mapping; shared media/result grid, search, Render/Trash filters, selection/removal/restoration and provenance; character gallery selection.
+- `apps/desktop/src/features/Library.tsx` — modify: workflow form setup and retired hosted provider URL mapping; shared media/result grid, search, Render/Trash filters, selection/removal/restoration and provenance; character gallery selection.
 - `apps/desktop/src/features/Board.tsx` — modify: use thumbnail media picker for frame selection, excluding archived choices.
 - `apps/desktop/src/components/WorkflowTarget.tsx` — modify: use shared workflow input setup; clear preparation states/actions; preserve installation/export functionality.
 - `apps/desktop/src/components/WorkflowInputs.tsx` — modify: display saved labels/media roles and gallery slots; replace routine per-job binding creation with Configure workflow inputs; preserve restored override support.
@@ -97,7 +99,7 @@ All paths are repository-relative; create only the new files listed here. No sou
 - `e2e/jobs.e2e.ts` — modify: queue/history-only page, restored exact receipts, replacement stays idle and existing bottom Clear finished behavior.
 - `e2e/library.e2e.ts` — modify: searched tile selection, render tag/provenance, bulk Trash/Restore, usage and unchanged asset IDs/files.
 - `e2e/workflow-catalogue.e2e.ts` — modify: setup once, used-field badges, target refresh with retained values and incompatible-field review.
-- `e2e/runninghub.e2e.ts` — modify: URL family/ID parsing, per-account persistence, reusable provider bindings and actionable incomplete setup.
+- `e2e/retired hosted provider.e2e.ts` — modify: URL family/ID parsing, per-account persistence, reusable provider bindings and actionable incomplete setup.
 - `docs/PROJECT_CONTEXT.md`, `docs/ARCHITECTURE_INDEX.md`, `docs/MODULE_OWNERSHIP.md`, `docs/API_CONTRACTS.md`, `docs/DECISIONS.md`, `docs/TASK_LOG.md` — modify: compact implementation-aligned memory after verified changes.
 - `docs/WORKFLOW_SETUP.md`, `docs/GENERATION_ACCEPTANCE.md`, `README.md`, `README.ru.md`, `README.fr.md` — modify: new setup/queue/library flow and accurate acceptance limits.
 - `docs/screenshots/media-workflow-0.1.8.png` — create: native acceptance screenshot using a disposable movie and safe fixture media.
@@ -122,7 +124,7 @@ All paths are repository-relative; create only the new files listed here. No sou
 - Native close/reopen persistence: workflow forms, node selection, queue edits, Render tags and Trash/Restore.
 - Compare asset IDs and original file counts before/after selecting, dropping and reusing the same imported media; verify linked assets stay linked until explicit Collect.
 - Prepare/export the supplied Redux API graph on a compatible available node; if its plugins/models are absent, show their exact requirements rather than claim generation readiness.
-- Verify Redux RunningHub review uses workflow family/confirmed ID and both media fields, without creating a paid task.
+- Verify Redux retired hosted provider review uses workflow family/confirmed ID and both media fields, without creating a paid task.
 - Verify legacy Klein preparation retains values and removes the legacy-hash blocker; final provider validation still rejects real registry/model incompatibility before uploads.
 - Build ARM64 macOS release and verify installed version/signature. Test using disposable media/packages; a real weighted run or paid cloud task is separate from UI/preflight acceptance.
 
@@ -138,6 +140,6 @@ All paths are repository-relative; create only the new files listed here. No sou
 
 ## Out of scope
 
-- Permanent file purge, paid RunningHub submission, new GPU rentals, remote infrastructure provisioning, new workflow-specific model installers, and automatic inference of private provider deployment schemas.
+- Permanent file purge, paid retired hosted provider submission, new GPU rentals, remote infrastructure provisioning, new workflow-specific model installers, and automatic inference of private provider deployment schemas.
 - A release tag/publication or new CI design in this UI refinement; retain existing cross-platform CI and agent packaging.
 - Modification of ignored Base44 drafts or committing personal media, credentials, session state or the supplied movie.

@@ -1,5 +1,7 @@
 # Implementation Plan: Studio refinement and real ComfyUI workflow installation
 
+> Historical plan: hosted-provider steps are superseded by the 0.1.12 ComfyUI wrapper implementation.
+
 Status: Approved by user `go`; implemented in 0.1.7. Verification: TASK_LOG.md.
 Date: 2026-10-14
 Branch: main
@@ -110,7 +112,7 @@ All changes below are modifications unless marked create. No files are deleted.
 - VM can test ARM64 CPU utility behavior, not CUDA/GPU cloud deployment.
 
 ## Out of scope
-Paid RunningHub jobs, rented cloud nodes, GPU/cloud acceptance, changing existing active ComfyUI canvases, arbitrary plugin/weight installation, release notarization, and automatic modification of historical jobs. Existing reviewed provisioning remains available unchanged.
+Paid retired hosted provider jobs, rented cloud nodes, GPU/cloud acceptance, changing existing active ComfyUI canvases, arbitrary plugin/weight installation, release notarization, and automatic modification of historical jobs. Existing reviewed provisioning remains available unchanged.
 
 ## Accepted refinements during implementation
 - Remove selected Generate batch items, including the last item, with an empty-state recovery action.

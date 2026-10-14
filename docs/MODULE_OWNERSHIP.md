@@ -44,7 +44,7 @@
 - Frontend: exact input parsing/persistence and native coordinate conversion; native interaction acceptance via actual app.
 - Providers/infrastructure: local CPU canary; cloud/GPU acceptance remains separately gated.
 
-- workflow-core owns account deployment resolution and frozen job destination; providers cannot infer hosted IDs from graphs.
+- workflow-core owns immutable graph preparation and typed input validation; native job freezing owns the exact selected ComfyUI destination.
 - CI tests use fixtures; release scripts never submit generation jobs or embed credentials.
 
 - Native Jobs reserves/persists before dispatch; provider I/O runs outside the global project mutex.
@@ -52,7 +52,7 @@
 - React edits saved drafts only; native preflight is authoritative before any upload.
 
 ## Catalogue/compiler ownership
-- integration-core/catalogue owns local immutable workflow versions; project-core owns portable pins and v4 migration/backups.
+- integration-core/catalogue owns local immutable workflow versions; project-core owns portable pins and schema-v5 migration/backups.
 - workflow-core/schema normalizes live registries and validates target profiles; it cannot perform UI or provider I/O.
 - Agent and desktop service coordinate compilation; Python helper delegates serialization to selected ComfyUI frontend, without generation.
 - WorkflowCatalogue/WorkflowTarget/WorkflowInputs own saved selection and forms; no frontend JSON-to-API conversion heuristics.
@@ -64,3 +64,8 @@
 - Bottom queue dismissal belongs to app settings; jobs/results stay in package-owned storage. Nonterminal jobs cannot be hidden by dismissal.
 - provider-comfyui owns bounded typed Userdata publication/readback; desktop, relay and agent coordinate it without arbitrary remote shell commands.
 - Native thumbnails own optional derived cache/process concurrency; originals remain asset-core-owned. project-usage selectors label available cast references separately from actual render provenance.
+
+- WorkflowEditor owns public inputs/output collection and guide presentation; workflow-core/bundle owns immutable portable validation and removes destination profiles/vault references.
+- Hardware variants are separate graphs with separate requirements/preparations; UI metadata never translates model architecture.
+- WorkflowBootstrap emits reviewed typed utility commands; it cannot submit arbitrary shell to a remote runner. Managed agent/provision-core own installation and session readiness.
+- job-core owns selected-task mutation transactions; desktop Jobs only selects IDs and routes exact receipt edits to Generate. Submitted receipts cannot be edited.

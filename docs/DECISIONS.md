@@ -35,8 +35,8 @@ Related files: docs/API_CONTRACTS.md, docs/MODULE_OWNERSHIP.md, docs/IMPLEMENTAT
 Date: 2026-10-13
 Status: Accepted
 
-Context: User uses RunningHub and explicitly requires multiple accounts, Servers/Nodes, private S3 LoRA/output transfer and bulk runner initialization in the latest UI requirements.
-Decision: Revised approval covers Phases 0–3 in tested increments. Native local studio precedes multi-account RunningHub/batches, then a real outbound agent/relay/S3 and pinned provisioning. First test locally with Docker; cloud acceptance waits for image/hosting/storage and authorized artifacts.
+Context: User uses retired hosted provider and explicitly requires multiple accounts, Servers/Nodes, private S3 LoRA/output transfer and bulk runner initialization in the latest UI requirements.
+Decision: Revised approval covers Phases 0–3 in tested increments. Native local studio precedes multi-account retired hosted provider/batches, then a real outbound agent/relay/S3 and pinned provisioning. First test locally with Docker; cloud acceptance waits for image/hosting/storage and authorized artifacts.
 Consequences: Supersedes the earlier single-account-only proposal. All requested routes/settings are present in the first UI; actions reflect implemented/validated capabilities. No implicit paid infrastructure creation.
 Related files: docs/IMPLEMENTATION_PLAN.md, docs/PROJECT_CONTEXT.md.
 
@@ -81,7 +81,7 @@ Decision: Create a shared path inbox before Builder, inject it into Studio, and 
 Consequences: Existing saved packages open after initialization without migration. Post-setup frontend event and polling contracts stay unchanged.
 Related files: apps/desktop/src-tauri/src/main.rs, apps/desktop/src-tauri/src/service.rs.
 
-# ADR-0009: Per-workflow RunningHub deployments and explicit recovery
+# ADR-0009: Per-workflow retired hosted provider deployments and explicit recovery
 
 Date: 2026-10-14
 Status: Accepted
@@ -89,7 +89,7 @@ Status: Accepted
 Context: Imported API graphs do not contain an authorized hosted deployment, and account defaults cannot describe multiple workflows. Provider refusals were hidden as ambiguous failures.
 Decision: Persist per-workflow/account ID and API family, expose job creation from Workflows, freeze the resolved destination in receipts. Definitive refusals fail safely; uncertain outcomes require provider history reconciliation with no blind retry.
 Consequences: Graphs stay immutable and old documents default to empty mappings. Hosted IDs/input schema still need real verification. Account credentials stay outside documents.
-Related files: crates/workflow-core/src/lib.rs, crates/provider-runninghub/src/lib.rs, apps/desktop/src/features/Library.tsx, apps/desktop/src-tauri/src/service.rs.
+Related files: crates/workflow-core/src/lib.rs, removed provider adapter, apps/desktop/src/features/Library.tsx, apps/desktop/src-tauri/src/service.rs.
 
 # ADR-0010: Versioned CI artifacts for desktop and notebook workers
 
@@ -107,7 +107,7 @@ Date: 2026-10-14
 Status: Accepted
 
 Context: User wants configurable Jobs, queued on one ComfyUI and parallel across instances.
-Decision: Persist ordered independent drafts/runs, preserve exact typed overrides and invalid raw edits, freeze each attempt before dispatch. Normalize ComfyUI URL as a single-slot lane; relay URL+node identifies a worker; RunningHub capacity belongs to the account. Provider I/O occurs outside the global lock, scoped to the originating session.
+Decision: Persist ordered independent drafts/runs, preserve exact typed overrides and invalid raw edits, freeze each attempt before dispatch. Normalize ComfyUI URL as a single-slot lane; relay URL+node identifies a worker; retired hosted provider capacity belongs to the account. Provider I/O occurs outside the global lock, scoped to the originating session.
 Consequences: Unknown outcomes retain their slot; reopening unsent work pauses it. No result-handoff chains. Schema v2 upgrade requires UI acknowledgement and backed-up v1 SQLite/manifest before migration.
 Related files: crates/job-core/src/runs.rs, crates/project-core/migrations/0002_job_runs.sql, apps/desktop/src-tauri/src/service/jobs.rs, apps/desktop/src/features/Jobs.tsx.
 
@@ -116,7 +116,7 @@ Related files: crates/job-core/src/runs.rs, crates/project-core/migrations/0002_
 Date: 2026-10-14
 Status: Accepted
 
-Context: User clarified that RunningHub tests workflows, while private RunPod ComfyUI is the main execution path.
+Context: User clarified that retired hosted provider tests workflows, while private RunPod ComfyUI is the main execution path.
 Decision: Name CI artifacts for the Linux x86_64 ComfyUI agent, reject non-ELF/non-x86_64 package inputs, ship checksums and a RunPod guide. Keep outbound authenticated relay transport and independent GPU workers.
 Consequences: No exposed ComfyUI port or public pod IP is required. CI builds do not provision cloud resources. Actual RunPod/relay/S3 acceptance and automatic LoRA/runtime sync remain pending.
 Related files: .gitlab-ci.yml, .github/workflows/checks.yml, scripts/package-agent.py, deploy/runpod/README.md, docs/CI_RELEASES.md.
@@ -148,7 +148,7 @@ Status: Accepted
 
 Context: Repeated JSON upload and guessed widgets prevented reliable custom workflow jobs.
 Decision: Import once into a local immutable catalogue and portable movie pin. Preserve editor JSON and export API through the selected ComfyUI frontend in an isolated read-only browser context. Describe literal inputs from its live registry; remember targets and editable layouts. Freeze target profile/output selection and recheck registry before dispatch. Publish compiler sidecars in native Linux/macOS agent artifacts.
-Consequences: Requires Python/Playwright/Chromium and a reachable compatible runtime for preparation. Unsupported custom controls and dynamic branch switching need explicit bindings/re-export. RunningHub uses authorized hosted maps. Global catalogue changes never mutate project pins or old receipts.
+Consequences: Requires Python/Playwright/Chromium and a reachable compatible runtime for preparation. Unsupported custom controls and dynamic branch switching need explicit bindings/re-export. retired hosted provider uses authorized hosted maps. Global catalogue changes never mutate project pins or old receipts.
 Related files: docs/WORKFLOW_CATALOGUE_PLAN.md, crates/workflow-core/src/schema.rs, crates/integration-core/src/catalogue.rs, deploy/runner/mymovie_workflow_compiler.py, apps/desktop/src/components/WorkflowTarget.tsx.
 
 # ADR-0016: Explicit queue edits and verified workflow publication
@@ -179,4 +179,14 @@ Status: Accepted
 Context: Redux reached creation but received undocumented 605; the previous diagnostic dropped plain-language messages. Public docs distinguish workflow-relative fileName from standard-model v2 download URLs.
 Decision: Use documented workflow upload with apiKey/fileType=input for ComfyUI loader overrides in both hosted families. Preserve bounded non-sensitive reason fields instead of raw provider responses. Keep typed refusal/unknown admission and immutable receipts unchanged.
 Consequences: Tests establish request correctness, not the cause of 605 or live provider acceptance. Suspicious reason fields remain omitted rather than partially redacted; no automatic paid retry.
-Related files: crates/provider-runninghub/src/lib.rs, docs/API_CONTRACTS.md, docs/GENERATION_ACCEPTANCE.md.
+Related files: removed provider adapter, docs/API_CONTRACTS.md, docs/GENERATION_ACCEPTANCE.md.
+
+# ADR-0019: Portable designer wrappers and dependency-first preparation
+
+Date: 2026-10-15
+Status: Accepted
+
+Context: Users need named media slots, output selection, visual guides and hardware variants, without reimporting graphs or confusing composer and queue. An uncompiled editor may require plugins before frontend preparation can succeed.
+Decision: Preserve graphs immutably; attach reusable presentation metadata, independently prepared platform families and credential-free portable collections. Keep Generate as the composer and Jobs as selective task control. Accept pending sources for reviewed dependency installation; require restart/preparation/current-session verification before readiness. Remove the retired hosted adapter while retaining history.
+Consequences: Schema v5 upgrade is backed up. Optional defaults require actual files on the node. Variant badges do not convert graphs. Setup is typed and hash-pinned; no arbitrary remote shell or stale-marker readiness.
+Related files: workflow-core/src/bundle.rs, studio-contracts, job-core/src/runs.rs, WorkflowEditor.tsx, WorkflowBootstrap.tsx, agent/src/provision.rs.
