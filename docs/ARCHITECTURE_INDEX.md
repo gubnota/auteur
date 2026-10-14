@@ -79,7 +79,7 @@
 - .github/workflows/: native macOS/Windows/Linux matrix and published tag prereleases.
 - scripts/ci-setup.sh, check-release-version.py, gitlab-release.py: toolchains and immutable release files.
 - scripts/package-agent.py: architecture-checked Linux/macOS x86_64/ARM64 agent archives, compiler helpers, notebooks and checksums.
-- scripts/notebook-bootstrap.py / generate-notebooks.py: verified artifact and GPU worker setup.
+- scripts/notebook-bootstrap.py / generate-notebooks.py: public release/prerelease resolution, checksum/relay preflight, verified artifact and GPU worker setup.
 - deploy/colab/, deploy/kaggle/: generated notebooks; scripts/tests/: bootstrap/release regression.
 - examples/workflows/: CPU, text-to-image, masked-edit API/editor fixtures; native mask editor import/preparation/export passed.
 - playwright.config.ts / e2e/: mocked native Jobs exact-input/persistence and portable wrapper/selection acceptance.

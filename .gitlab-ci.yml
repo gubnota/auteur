@@ -50,7 +50,7 @@ macos:
   parallel:
     matrix:
       - TARGET: [aarch64-apple-darwin]
-      # , x86_64-apple-darwin
+      # - TARGET: [x86_64-apple-darwin]
   variables:
     APPLE_SIGNING_IDENTITY: "-"
   before_script:
@@ -124,7 +124,7 @@ linux-agent:
     - cargo build --locked --release -p mymovie-agent -p mymovie-relay
     - target/release/mymovie-agent --help
     - target/release/mymovie-agent --version
-    - python3 scripts/package-agent.py target/release/mymovie-agent release-assets --architecture "$ARCHITECTURE" --build-os ubuntu-22.04
+    - python3 scripts/package-agent.py target/release/mymovie-agent release-assets --relay-binary target/release/mymovie-relay --architecture "$ARCHITECTURE" --build-os ubuntu-22.04
   artifacts:
     name: "comfyui-agent-linux-$ARCHITECTURE-$CI_COMMIT_REF_SLUG"
     expire_in: 14 days
@@ -147,8 +147,8 @@ macos-agent:
     - source scripts/ci-setup.sh
   script:
     - rustup target add "$TARGET"
-    - cargo build --locked --release -p mymovie-agent --target "$TARGET"
-    - python3 scripts/package-agent.py "target/$TARGET/release/mymovie-agent" release-assets --platform macos --architecture "$ARCHITECTURE" --build-os macos-15
+    - cargo build --locked --release -p mymovie-agent -p mymovie-relay --target "$TARGET"
+    - python3 scripts/package-agent.py "target/$TARGET/release/mymovie-agent" release-assets --relay-binary "target/$TARGET/release/mymovie-relay" --platform macos --architecture "$ARCHITECTURE" --build-os macos-15
   artifacts:
     name: "comfyui-agent-macos-$ARCHITECTURE-$CI_COMMIT_REF_SLUG"
     expire_in: 14 days

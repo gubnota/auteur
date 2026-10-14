@@ -46,6 +46,6 @@ npx playwright test
 npm run tauri:build -- --bundles app
 ```
 
-[CI/release guide](docs/CI_RELEASES.md): GitHub Actions and `.gitlab-ci.yml` build macOS ARM/Intel, Windows x64, Linux x86_64/ARM64 desktops and Linux/macOS agents. Agent archives include compiler/runtime/notebook helpers and checksums. Tags must match the source version. Windows outbound agents are not shipped.
+[CI/release guide](docs/CI_RELEASES.md): GitHub Actions and `.gitlab-ci.yml` build macOS Apple Silicon, Windows x64 and Linux x86_64 desktops, plus Linux x86_64/macOS Apple Silicon agents with matching relays. GitHub also builds Linux ARM64 desktop; GitLab keeps that entry disabled. macOS Intel desktop/agent and Linux ARM64 agent entries are commented out. Notebooks automatically resolve public releases (including prereleases) and verify the archive checksum; custom uploads still require SHA256. Local Cloudflare mode requires a current relay-inclusive archive. Tags must match the source version. Windows outbound agents are not shipped.
 
 Persistent project memory: [context](docs/PROJECT_CONTEXT.md), [architecture](docs/ARCHITECTURE_INDEX.md), [contracts](docs/API_CONTRACTS.md), [task log](docs/TASK_LOG.md). English / [Русский](README.ru.md) / [Français](README.fr.md). License: Apache-2.0 OR MIT.

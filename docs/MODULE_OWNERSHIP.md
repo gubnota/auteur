@@ -58,6 +58,7 @@
 - Agent and desktop service coordinate compilation; Python helper delegates serialization to selected ComfyUI frontend, without generation.
 - WorkflowCatalogue/WorkflowTarget/WorkflowInputs own saved selection and forms; no frontend JSON-to-API conversion heuristics.
 - CI packages sidecars and architecture-verified agents; tests separate mock UI evidence from live execution.
+- Notebook bootstrap owns bounded GitHub release discovery/checksum verification; CI explicitly bundles matching relay binaries. Release metadata never supplies arbitrary authenticated download hosts.
 
 ## Queue, publication and derived media
 - job-core owns transactional unstarted-run replacement. Native service validates and freezes replacement inputs under the project lock; canceled historical snapshots remain immutable.

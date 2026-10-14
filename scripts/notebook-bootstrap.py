@@ -76,7 +76,57 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return urllib.request.Request(target, headers=headers)
 
 
-def install_artifact(source: str, digest: str, destination: Path, download_token=None) -> Path:
+def release_artifact(repository="gubnota/auteur", tag="", download_token=None, *, require_relay=True) -> dict:
+    """Resolve a published release (including prereleases), without executing downloads."""
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+        raise SetupError("Use a GitHub owner/repository name.")
+    api = f"https://api.github.com/repos/{repository}"
+
+    def request_json(url, asset=False):
+        headers = {"User-Agent": "MyMovie-Notebook", "Accept": "application/octet-stream" if asset else "application/vnd.github+json"}
+        if download_token:
+            headers["Authorization"] = f"Bearer {download_token}"
+        try:
+            with urllib.request.build_opener(NoRedirect()).open(urllib.request.Request(url, headers=headers), timeout=30) as response:
+                data = response.read(2 * 1024 * 1024 + 1)
+            if len(data) > 2 * 1024 * 1024:
+                raise ValueError()
+            return json.loads(data)
+        except Exception:
+            raise SetupError("Cannot read the GitHub release metadata. Check the repository/tag and Internet access. Public releases need no token; private releases need download access.") from None
+
+    releases = [request_json(f"{api}/releases/tags/{urllib.parse.quote(tag, safe='')}")] if tag else request_json(f"{api}/releases?per_page=20")
+    if not isinstance(releases, list):
+        raise SetupError("Unexpected GitHub release list.")
+    archive_name = "mymovie-agent-linux-x86_64.tar.gz"
+    for release in releases:
+        if not isinstance(release, dict) or release.get("draft") or not release.get("published_at"):
+            continue
+        assets = {a.get("name"): a for a in release.get("assets", []) if isinstance(a, dict)}
+        archive = assets.get(archive_name)
+        metadata = assets.get("mymovie-agent-linux-x86_64.json")
+        if not archive or not metadata:
+            continue
+        # Construct API URLs ourselves so a release cannot forward credentials to an arbitrary host.
+        if any(type(a.get("id")) is not int for a in [archive, metadata]):
+            raise SetupError("Invalid release asset IDs.")
+        manifest = request_json(f"{api}/releases/assets/{metadata['id']}", asset=True)
+        if not isinstance(manifest, dict) or manifest.get("target") != "x86_64-unknown-linux-gnu":
+            raise SetupError("Release metadata does not describe the Linux x86_64 agent.")
+        digest = manifest.get("sha256", "")
+        if not isinstance(digest, str) or not re.fullmatch(r"[a-fA-F0-9]{64}", digest):
+            raise SetupError("Release metadata has no valid archive SHA256.")
+        github_digest = archive.get("digest")
+        if github_digest and (not isinstance(github_digest, str) or github_digest.lower() != f"sha256:{digest.lower()}"):
+            raise SetupError("GitHub and release metadata checksums disagree; nothing was installed.")
+        relay_digest = manifest.get("relayBinarySha256", "")
+        if require_relay and (not isinstance(relay_digest, str) or not re.fullmatch(r"[a-fA-F0-9]{64}", relay_digest)):
+            raise SetupError("This published agent archive lacks mymovie-relay for local Cloudflare mode. Publish a new version from the updated CI, or upload a current agent+relay archive with its SHA256. Changing tokens cannot fix an old archive.")
+        return {"source": f"{api}/releases/assets/{archive['id']}", "sha256": digest.lower(), "tag": release.get("tag_name", "")}
+    raise SetupError("No published release contains the Linux x86_64 agent and metadata. A Git tag alone does not publish artifacts; wait for the release build, or supply an archive and SHA256.")
+
+
+def install_artifact(source: str, digest: str, destination: Path, download_token=None, *, require_relay=False) -> Path:
     if platform.system() != "Linux" or platform.machine() not in ("x86_64", "AMD64"):
         raise SetupError("This artifact requires Linux x86_64 (Colab/Kaggle GPU runtime).")
     if not re.fullmatch(r"[a-fA-F0-9]{64}", digest):
@@ -141,6 +191,8 @@ def install_artifact(source: str, digest: str, destination: Path, download_token
         if data[:6] != b"\x7fELF\x02\x01" or data[18:20] != b"\x3e\x00":
             raise SetupError("The artifact binary is not Linux x86_64 ELF.")
         relay = auxiliary.get("mymovie-relay")
+        if require_relay and relay is None:
+            raise SetupError("This archive lacks mymovie-relay. Use a current agent+relay archive for local Cloudflare mode.")
         if relay is not None and (relay[:6] != b"\x7fELF\x02\x01" or relay[18:20] != b"\x3e\x00"):
             raise SetupError("The relay binary is not Linux x86_64 ELF.")
         final_dir = destination / digest.lower()

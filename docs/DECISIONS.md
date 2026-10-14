@@ -200,3 +200,13 @@ Context: User explicitly requests predefined token values in UI/notebooks and a 
 Decision: Keep the user-selected pair as public test defaults in deploy/node-auth.defaults.json. Generate active Python assignments with optional env/Secrets overrides commented out. Native stores private overrides atomically in the OS vault. New notebook connections inherit only the desktop credential. Bundle relay in CI client archives; notebook can own relay and cloudflared while ComfyUI/agents stay on loopback. Explicit temporary mode uses existing desktop REST polling.
 Consequences: Defaults provide no private access protection; private deployments must replace both values consistently. Existing connection credentials remain independent. Temporary URLs/session IDs change and notebook disk is ephemeral; live cloud acceptance is separate from fixture tests. No general remote shell or automatic generation added.
 Related files: apps/desktop/src/components/RunnerTokens.tsx, apps/desktop/src-tauri/src/service/runner_tokens.rs, scripts/generate-notebooks.py, scripts/notebook-bootstrap.py, scripts/package-agent.py.
+
+# ADR-0021: Automatic notebook release resolution and reduced CI matrix
+
+Date: 2026-10-15
+Status: Accepted
+
+Context: Empty manual artifact SHA256 blocked notebook setup; published v0.1.12 lacks the relay. User requested disabling macOS Intel desktop/agent and Ubuntu ARM64 agent builds.
+Decision: Resolve published GitHub releases including prereleases, validate archive metadata/checksums and require the bundled relay for local Cloudflare mode. Retain explicit source+SHA256 overrides. Both CI systems explicitly package matching relays; comment out requested matrix entries without deleting target support.
+Consequences: No token needed for public release metadata; verification stays mandatory. Old archives cannot gain relay support through notebook changes; a new version or uploaded current CI archive is required. GitHub Linux ARM64 desktop remains active; GitLab's existing disabled entry stays disabled.
+Related files: scripts/notebook-bootstrap.py, scripts/generate-notebooks.py, .github/workflows/checks.yml, .github/workflows/release.yml, .gitlab-ci.yml.

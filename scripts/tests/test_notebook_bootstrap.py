@@ -54,6 +54,81 @@ class BootstrapTests(unittest.TestCase):
         request = b.urllib.request.Request("https://api.github.com/assets/1", headers={"Authorization":"Bearer secret"})
         redirect = b.NoRedirect().redirect_request(request, None, 302, "", {}, "https://release-assets.githubusercontent.com/asset?signature=example")
         self.assertFalse(redirect.has_header("Authorization"))
+    def release_response(self, manifest=None, **archive_overrides):
+        manifest = manifest if manifest is not None else {
+            'target': 'x86_64-unknown-linux-gnu', 'sha256': 'a'*64, 'relayBinarySha256': 'b'*64}
+        release = {'tag_name': 'v0.1.13', 'draft': False, 'prerelease': True,
+                   'published_at': '2026-10-15T00:00:00Z', 'assets': [
+                       {'id': 1, 'name': 'mymovie-agent-linux-x86_64.tar.gz', 'digest': 'sha256:'+'a'*64, **archive_overrides},
+                       {'id': 2, 'name': 'mymovie-agent-linux-x86_64.json'}]}
+        calls = []
+        def open_request(request, **kwargs):
+            calls.append(request)
+            data = manifest if request.full_url.endswith('/assets/2') else release if '/tags/' in request.full_url else [release]
+            return io.BytesIO(json.dumps(data).encode())
+        return types.SimpleNamespace(open=open_request), calls
+
+    def test_release_resolution_includes_prereleases_and_verifies_metadata(self):
+        opener, calls = self.release_response()
+        with patch.object(b.urllib.request, 'build_opener', return_value=opener):
+            release = b.release_artifact()
+            self.assertEqual(release, {'source': 'https://api.github.com/repos/gubnota/auteur/releases/assets/1', 'sha256': 'a'*64, 'tag': 'v0.1.13'})
+            self.assertIn('/releases?per_page=', calls[0].full_url)
+            self.assertFalse(any(r.has_header('Authorization') for r in calls))
+            b.release_artifact(tag='v0.1.13', download_token='PRIVATE_TEST_TOKEN')
+            self.assertIn('/tags/v0.1.13', calls[-2].full_url)
+            self.assertEqual(calls[-1].get_header('Authorization'), 'Bearer PRIVATE_TEST_TOKEN')
+
+    def test_release_rejects_legacy_relay_missing_and_checksum_conflicts(self):
+        for manifest, archive, message in [
+            ({'target': 'x86_64-unknown-linux-gnu', 'sha256': 'a'*64}, {}, 'lacks mymovie-relay'),
+            (None, {'digest': 'sha256:'+'c'*64}, 'checksums disagree'),
+            (None, {'digest': 42}, 'checksums disagree'),
+            ({'target': 'x86_64-unknown-linux-gnu', 'sha256': ''}, {}, 'valid archive SHA256'),
+            ({'target': 'aarch64-unknown-linux-gnu'}, {}, 'Linux x86_64 agent')]:
+            opener, _ = self.release_response(manifest, **archive)
+            with patch.object(b.urllib.request, 'build_opener', return_value=opener):
+                with self.assertRaisesRegex(b.SetupError, message): b.release_artifact()
+        opener, _ = self.release_response({'target': 'x86_64-unknown-linux-gnu', 'sha256': 'a'*64})
+        with patch.object(b.urllib.request, 'build_opener', return_value=opener):
+            self.assertEqual(b.release_artifact(require_relay=False)['sha256'], 'a'*64)
+
+    def test_release_unavailable_does_not_claim_public_repository_is_private_or_leak_secret(self):
+        token = 'PRIVATE_TEST_TOKEN'
+        opener = types.SimpleNamespace(open=lambda *a, **kw: (_ for _ in ()).throw(RuntimeError(token)))
+        with patch.object(b.urllib.request, 'build_opener', return_value=opener):
+            with self.assertRaisesRegex(b.SetupError, 'Public releases need no token') as error:
+                b.release_artifact(download_token=token)
+        self.assertNotIn(token, str(error.exception))
+        opener = types.SimpleNamespace(open=lambda *a, **kw: io.BytesIO(b'[]'))
+        with patch.object(b.urllib.request, 'build_opener', return_value=opener):
+            with self.assertRaisesRegex(b.SetupError, 'tag alone'): b.release_artifact()
+
+    def test_local_tunnel_requires_relay_before_installing_agent(self):
+        path, digest = self.archive()
+        with patch.object(b.platform, 'system', return_value='Linux'), patch.object(b.platform, 'machine', return_value='x86_64'):
+            with self.assertRaisesRegex(b.SetupError, 'lacks mymovie-relay'):
+                b.install_artifact(str(path), digest, self.root / 'installed', require_relay=True)
+        self.assertFalse((self.root / 'installed' / digest).exists())
+
+    def test_generated_setup_resolves_blank_defaults_and_passes_digest_and_relay_requirement(self):
+        from unittest.mock import Mock
+        for host in ['colab', 'kaggle']:
+            notebook = json.loads((ROOT / f'deploy/{host}/MyMovie_ComfyUI.ipynb').read_text())
+            config = ''.join(notebook['cells'][3]['source'])
+            setup = ''.join(notebook['cells'][5]['source'])
+            resolve = Mock(return_value={'source': 'https://example.com/agent', 'sha256': 'a'*64, 'tag': 'v0.1.13'})
+            install = Mock(return_value=self.root / 'mymovie-agent')
+            runner = Mock(); runner.configuration.return_value = {}
+            namespace = {'secret': b.secret, 'release_artifact': resolve, 'install_artifact': install,
+                         'NotebookRunner': Mock(return_value=runner), 'SetupError': b.SetupError, 'json': json, 'print': Mock()}
+            exec(config, namespace)
+            exec(setup, namespace)
+            resolve.assert_called_once_with('gubnota/auteur', '', None, require_relay=True)
+            install.assert_called_once_with('https://example.com/agent', 'a'*64, namespace['WORK_DIR'] / 'artifacts', None, require_relay=True)
+            namespace.pop('runner')
+            namespace['ARTIFACT_SOURCE'] = '/uploaded/archive.tar.gz'
+            with self.assertRaisesRegex(b.SetupError, 'set both'): exec(setup, namespace)
     def test_secrets_and_missing_grants(self):
         value = "x" * 32
         google = types.ModuleType("google"); colab = types.ModuleType("google.colab")

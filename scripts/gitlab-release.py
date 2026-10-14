@@ -57,7 +57,7 @@ def publish(files, api, project, tag, token):
         if current != {(x['name'], x['url']) for x in links}: raise RuntimeError('Existing release has different assets')
         return
     payload = {'name': f'MyMovie Studio {tag}', 'tag_name': tag,
-               'description': 'macOS Apple Silicon/Intel, Windows x64 and Linux x86_64/ARM64 desktop builds, Linux ComfyUI agents and Colab/Kaggle notebooks. Verify SHA256SUMS.txt. macOS builds are ad-hoc signed and not notarized; Windows installers are unsigned. Live notebook acceptance remains pending.',
+               'description': 'macOS Apple Silicon, Windows x64 and Linux x86_64 desktop builds; macOS Apple Silicon and Linux x86_64 ComfyUI agents with matching relays; Colab/Kaggle notebooks. macOS Intel desktop/agent and Linux ARM64 agent builds are temporarily disabled; GitLab Linux ARM64 desktop is also disabled in its matrix. Verify SHA256SUMS.txt. macOS builds are ad-hoc signed and not notarized; Windows installers are unsigned. Live notebook acceptance remains pending.',
                'assets': {'links': links}}
     status, _ = request('POST', f'{base}/releases', json.dumps(payload).encode())
     if status != 201: raise RuntimeError(f'Unexpected release status: {status}')

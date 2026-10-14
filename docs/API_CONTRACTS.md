@@ -157,6 +157,7 @@
 - JobDraft.queuedJobIds defaults []; subset queue edits replace only these paused unsent attempts atomically. queuedRunId retains whole-idle-batch replacement.
 - control_job_tasks({jobIds,action:resume|cancel}) validates all selected attempts before atomic mutation; started/unknown/terminal tasks are excluded.
 - notebook_setup_script({host:colab|kaggle}) returns configuration/start code, excluding the notebook Stop cell.
+- Notebook release_artifact(repository,tag,download_token,require_relay=True) returns {source,sha256,tag}; published prereleases are eligible. Source URLs are constructed GitHub asset API endpoints. Metadata target/checksum and available GitHub digest must agree; local relay mode requires relayBinarySha256 and an actual relay in the verified archive. Blank source/hash selects discovery; custom source requires an explicit SHA256.
 - for_setup permits validated immutable pending editor sources for dependency review; for_target rejects unprepared execution. Agent returns needs-restart or needs-preparation before readiness/canary.
 - Settings migration converts the retired provider kind to retired, retaining IDs/names/vault references. No generation adapter handles retired destinations.
 - Schema v5 upgrade backs up existing package database and manifest before migration; older apps cannot edit v5.

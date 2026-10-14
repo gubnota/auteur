@@ -1,5 +1,12 @@
 # Task Log
 
+## 2026-10-15 — Notebook checksum setup and CI target reduction
+
+- Continued approved node setup/release scope on main. Both notebooks default to resolving a public GitHub release (including prereleases) and its metadata SHA256. Custom artifacts still require explicit source/checksum; downloads remain hash-verified before extraction. Metadata network failures omit secrets and distinguish public access from private authentication.
+- Local Cloudflare mode checks relay metadata and actual archive contents before installation. Anonymous live metadata lookup for v0.1.12 succeeded and correctly rejected that relay-less release. New relay-inclusive CI archive/public version is still required; no old tag/assets were replaced and no cloud generation was run.
+- Commented GitHub macOS Intel desktop/agent and Ubuntu ARM64 agent entries; equivalent GitLab targets stay commented. Preserved GitHub Linux ARM64 desktop and GitLab's already disabled entry. GitLab explicitly builds and packages matching relays on Linux/macOS. Release notes and EN/RU/FR documentation reflect active targets.
+- Validation: 42 Python tests passed, including executable generated setup cells, prerelease resolution, missing relay, checksum disagreement, token redaction, archive validation and existing runtime conflict regression. Deterministic notebook parity/cell syntax, all three CI YAML parses, active GitHub matrix assertions, source-version parity (0.1.12) and diff whitespace checks passed. No hosted build/release was run.
+
 ## 2026-10-15 — Shared node token defaults and notebook relay tunnel
 
 - Implemented the authorized token/setup scope on main. Settings → Node access and Connections → Colab / Kaggle expose masked editable MYMOVIE_AGENT_TOKEN / MYMOVIE_DESKTOP_TOKEN fields, populated from the user-selected public test pair. Copy notebook assignments and reset-to-default actions included; custom pairs save atomically in the OS vault.

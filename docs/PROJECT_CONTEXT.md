@@ -11,7 +11,7 @@
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
 - Native Generate/media setup implemented; live private cloud acceptance remains open.
 - Current source: 0.1.12; designer wrappers, platform families, portable collections and selective queued-task control. Installation evidence is in TASK_LOG.
-- Published download: v0.1.6; no new tag in this refinement. Evidence: TASK_LOG and CI_RELEASES.
+- Published v0.1.12 lacks the relay required by notebook local Cloudflare mode. Current setup resolves public prereleases/checksums automatically; publish a new relay-inclusive version or upload a current checksummed CI archive. Evidence: TASK_LOG and CI_RELEASES.
 - Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.
 - Real SQLite package persistence; browser preview is memory-only.
@@ -135,6 +135,7 @@
 - LTX prompt/image bindings and account deployment saved through native UI; live acceptance pending.
 - LTX image input requires an assigned frame image; AI App schema and RunPod choices remain open.
 - GitLab/GitHub CI configure native packages, Linux client and version-tag release artifacts.
+- Active agents: Linux x86_64 and macOS Apple Silicon, both with relay. macOS Intel desktop/agent and Ubuntu ARM64 agent entries are commented out; GitHub Linux ARM64 desktop remains active (GitLab entry was already disabled).
 - Published 0.1.6: macOS ARM/Intel, Windows x64, Linux x86_64/ARM64 desktops; four Mac/Linux agents and notebooks.
 - All nine native builds and automatic publication passed in hosted run 38557508498.
 - All 34 public assets anonymously downloaded and checksum/format/architecture verified; evidence: CI_RELEASES.md.
