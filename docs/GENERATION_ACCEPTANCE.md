@@ -1,6 +1,6 @@
 # Generation acceptance — current main
 
-Date: 2026-10-14. These checks concern the 0.1.6 implementation. Publication is recorded in CI_RELEASES. No paid cloud jobs ran.
+Date: 2026-10-14. Checks below distinguish published 0.1.6 from current 0.1.7. Publication is recorded in CI_RELEASES. No paid cloud jobs ran.
 
 ## Real local executions
 
@@ -82,3 +82,20 @@ portable activation commands, and first-session initialization. See
 - Native UI prepared 37 fields and two image loaders; newer V3 COMBO choices and active dotted dimensions were then fixed and regression-tested.
 - Browser acceptance verifies searchable catalogue selection, two media slots, dotted width/height ratio application, saved layout, reopen and second draft without a fresh upload. Screenshot: [workflow-catalogue.png](screenshots/workflow-catalogue.png).
 - Arbitrary third-party dynamic widgets, primitive/reroute/bypass/subgraph combinations are delegated to the real frontend but have not all received individual live fixtures. This is not a universal custom-plugin compatibility claim.
+
+## Studio refinement, real local and ARM64 acceptance (0.1.7)
+
+- Native production app opened a disposable movie, selected the saved editor mask and local node, then **Add to queue**. No job ran until explicit start. Welcome/reopen preserved the idle queued batch. **Run queued batch** completed and collected a 64 × 64 PNG (559 bytes).
+- Attempt `ee179dd7-0e15-4f23-968d-56861dcb1353`; run `1a71e76d-2917-43a9-8960-96156e84c6e7`; prompt `017face2-ec77-40c9-a4e5-24f41d7c2492`.
+- API SHA256 `ef8baa085837cadefba7fbbb635d01c722bf5ecfcb57e8d67e465bbd1cc31f6a`; result SHA256 `c1201a3162433d8c5df3d2dcbfb5a6bdc64ae4d1573a2c41180c64362cc4ab2f`.
+- Scoped registry `scope-v1:a95fdc2148b21ff5ede10e092737832ee30b88952848848405b79823297e32e3`.
+- Native screenshot: [native-queue-0.1.7.png](screenshots/native-queue-0.1.7.png). Later queue editing screenshot uses mocked provider fixtures: [jobs-queue-edit.png](screenshots/jobs-queue-edit.png).
+- Native Library imported a synthetic one-second video and generated a real bounded JPEG poster at `media/derived/posters/<source-sha>.jpg`; original remained unchanged.
+- Mac utility published the unchanged FaceSwap editor source into ComfyUI Userdata at `workflows/MyMovie/Flux2_Klein_FaceSwap-d4b5e41e606c42b0.json`, verified readback, and returned installed=true/loadedCanvas=false. Source SHA256 `d4b5e41e606c42b0944603e012e52c888f95b839b437157643463160bd3d683f`. This publication did not submit a new FaceSwap generation or replace the active canvas.
+- Actual published v0.1.6 Linux ARM64 artifact ran doctor in OrbStack Debian (aarch64, glibc 2.41) against local CPU ComfyUI. Current 0.1.7 ELF was separately built in the Rust 1.90 Bookworm image, then executed in the VM.
+- 0.1.7 VM utility published/reused `workflows/MyMovie/MyMovie_mask_canary-8032a4936f6b188a.json` with reused=true and compiled the three-node API using isolated Python/Chromium. Source SHA256 `8032a4936f6b188a9522a70288b1c07abcb18b7ac4c76cdaf817e5dab6214447`; API SHA256 `93850c796b13989e0029365bd1fd707fcea57b24a8f795637c75300a42533714`; frontend SHA256 `13f8f99e0b7a2ec0f9248e9f8935671a3bed11058793dc94d3167c10c8f26892`; compiler `frontend-export-v1`. CPU server: ComfyUI 0.3.76 / frontend 1.32.10.
+- Cloud GPU/relay/S3 roundtrip, paid RunningHub generation, foreign desktop launch and release signing remain pending. No cloud resources or large weights were downloaded for the VM test.
+
+### Native bottom queue cleanup — 0.1.7
+
+Installed the rebuilt app in /Applications; Clear finished removed seven completed mask attempts from the bottom queue. All seven receipts remained in Jobs history across three finished batches, and reopening the same disposable movie still showed zero bottom entries. No job records or render files were deleted. Screenshot: `screenshots/native-queue-cleared-0.1.7.png`. Mixed terminal/active/unknown behavior is covered by the browser fixture test.

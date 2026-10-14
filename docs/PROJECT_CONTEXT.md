@@ -10,11 +10,14 @@
 ## Current milestone
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
 - Native Generate/media setup implemented; live private cloud acceptance remains open.
-- Version 0.1.6: reusable catalogue and target-specific compiler/forms implemented; publication evidence is in TASK_LOG.
+- Current main/local install: 0.1.7; reusable forms, idle queue/edit, workflow publication and video posters implemented.
+- Published download: v0.1.6; no new tag in this refinement. Evidence: TASK_LOG and CI_RELEASES.
 - Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.
 - Real SQLite package persistence; browser preview is memory-only.
 - Native picker import, linked character reference and collection verified.
+- Scrollable/removable recents, Welcome navigation, filename ellipsis, posters and cast/asset usage links implemented.
+- Linux ARM64 utility ran in OrbStack Debian: immutable workflow publish/reuse and frontend API compilation passed against local CPU ComfyUI.
 - Weight-free local Docker ComfyUI HTTP/history/result canary passed.
 - Automated Finder file-drop acceptance remains unverified.
 - Full approval scope: docs/IMPLEMENTATION_PLAN.md.
@@ -30,7 +33,7 @@
 - Custom modal pickers, editable forms and keyboard reorder controls.
 - Shared domain DTOs live in studio-contracts; TS mirrors are manual.
 - Radix/Tailwind/Zustand/Query/Zod requested stack is not fully adopted.
-- FFmpeg/FFprobe discovery exists; derivative pipeline remains future work.
+- Bounded background FFmpeg video posters implemented; other derivatives remain future work.
 
 ## Package and media
 - Finder extension: .mymovie; macOS document association and package metadata.
@@ -72,6 +75,9 @@
 - Durable jobs/receipts/results; unknown submission blocks blind retry.
 - ComfyUI URL FIFO (one active); relay URL + node FIFO/capacity; RunningHub account capacity.
 - Saved independent batches, exact typed inputs and frozen run/item provenance.
+- Add to queue freezes idle work; explicit start required, including after reopening.
+- Queued edits replace only unstarted batches atomically; original receipts remain canceled.
+- Bottom Clear finished hides terminal rows persistently without deleting history/results.
 - v1/v2/v3→v4 requires explicit backup/upgrade; SQLite and manifest backups retained.
 - Reopening unsent work pauses it; unknown submissions keep their lane occupied.
 - Desktop polls providers; relay offers authenticated replayable SSE.

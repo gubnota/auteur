@@ -150,3 +150,13 @@ Context: Repeated JSON upload and guessed widgets prevented reliable custom work
 Decision: Import once into a local immutable catalogue and portable movie pin. Preserve editor JSON and export API through the selected ComfyUI frontend in an isolated read-only browser context. Describe literal inputs from its live registry; remember targets and editable layouts. Freeze target profile/output selection and recheck registry before dispatch. Publish compiler sidecars in native Linux/macOS agent artifacts.
 Consequences: Requires Python/Playwright/Chromium and a reachable compatible runtime for preparation. Unsupported custom controls and dynamic branch switching need explicit bindings/re-export. RunningHub uses authorized hosted maps. Global catalogue changes never mutate project pins or old receipts.
 Related files: docs/WORKFLOW_CATALOGUE_PLAN.md, crates/workflow-core/src/schema.rs, crates/integration-core/src/catalogue.rs, deploy/runner/mymovie_workflow_compiler.py, apps/desktop/src/components/WorkflowTarget.tsx.
+
+# ADR-0016: Explicit queue edits and verified workflow publication
+
+Date: 2026-10-14
+Status: Accepted
+
+Context: Creators need to stage work without executing, correct node selection, reuse forms and install editor graphs through the utility. Whole-registry hashes were invalidated by unrelated inventory changes.
+Decision: Freeze idle queued runs; atomically replace only unstarted runs, retaining canceled receipts. Restore edits from frozen snapshots. Dismiss terminal bottom rows through app-local settings. Publish immutable versioned editor JSON through typed ComfyUI Userdata and verify readback. Scope compatibility to used schemas; validate selected models live and retain frontend compilation provenance separately.
+Consequences: Reopening never starts queued work. Started jobs cannot be rewritten. Clearing the bottom panel preserves history/results. Legacy profiles require one explicit refresh. ARM64 CPU acceptance is distinct from cloud GPU acceptance.
+Related files: crates/job-core/src/runs.rs, crates/provider-comfyui/src/workflow.rs, crates/workflow-core/src/schema.rs, apps/desktop/src/lib/job-history.ts, apps/desktop/src/App.tsx.

@@ -58,14 +58,35 @@ python3 -m venv "$COMPILER_ENV"
   --python "$COMPILER_ENV/bin/python" > compilation-receipt.json
 ```
 
-The receipt contains `graph` plus source/API/registry/frontend hashes. The CLI
-also offers `workflow-inspect` and `workflow-install`; check their `--help` for
-required paths. Installation registers an immutable source in agent-owned
-storage. It does not replace the active ComfyUI canvas or write a user’s workflow
-folder. Compilation loads it into an isolated temporary browser context, exports
-through ComfyUI, then closes that context. Missing plugins, models and licenses
-remain reviewed initialization requirements; filenames do not identify trusted
-weight download URLs.
+The receipt contains `graph` plus source/API/registry/frontend hashes. Compilation
+loads the source into an isolated browser context, exports through ComfyUI, then
+closes that context. Missing plugins, models and licenses remain reviewed setup
+requirements; filenames do not identify trusted weight download URLs.
+
+To publish an ordinary editor workflow into the selected ComfyUI saved-workflow
+library, use **Workflow tools → Install in ComfyUI**, or run on the agent machine:
+
+```sh
+"$RUNNER_DIR/mymovie-agent" workflow-install \
+  --workflow-source /path/to/workflow_editor.json \
+  --workflow-name "MyMovie mask canary" --publish-to-comfyui \
+  --comfy-url http://127.0.0.1:8188 --data /path/to/agent-data
+```
+
+Without `--publish-to-comfyui`, install only registers the immutable source in
+agent-owned storage. Explicit publication uses `workflows/MyMovie/<name>-<hash>.json`,
+refuses conflicting content, verifies readback and returns installed/reused/path/hash.
+The active canvas stays untouched. Choose the same saved workflow/node and Prepare
+in the app to export API; no repeated API file upload is needed.
+
+If your Linux VM already has Chromium, add `--compiler-browser /usr/bin/chromium`
+to workflow-compile. The 0.1.7 ARM64 utility was executed in OrbStack Debian with
+this configuration against local CPU ComfyUI: publish/reuse and three-node API
+export passed. See [acceptance evidence](GENERATION_ACCEPTANCE.md).
+
+Older prepared profiles need one explicit **Prepare / refresh inputs**. New
+compatibility checks ignore unrelated nodes and changing media filename lists;
+selected models still need to exist on the chosen node before media staging.
 
 ## Portable paths and activation
 

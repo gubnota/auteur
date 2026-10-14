@@ -2,7 +2,13 @@
 
 [Télécharger les releases](https://github.com/gubnota/auteur/releases/tag/v0.1.6) — macOS Apple Silicon/Intel, Windows x64, Linux x86_64/ARM64 et agents ComfyUI. Les installateurs Windows ne sont pas signés ; la notarisation macOS reste à réaliser.
 
-La version **0.1.6** ajoute un catalogue commun de workflows, la préparation du JSON éditeur via le ComfyUI sélectionné, des formulaires issus des types réels et les agents macOS/Linux. Importez une fois puis réutilisez les versions et destinations dans Generate et Jobs.
+La branche main et l’installation macOS locale sont en **0.1.7** ; le téléchargement public ci-dessus reste **v0.1.6** jusqu’au prochain tag. **Add to queue** enregistre un lot sans lancement ; **Run queued batch / Run all queued** le démarre explicitement. Repliez l’éditeur Jobs, choisissez **Edit queued batch**, modifiez **Execution node**, puis **Save queue changes**. Le reçu original reste dans l’historique. Les tâches déjà démarrées proposent **Reuse as draft**. Chaque élément Generate peut être supprimé, y compris le dernier. **Clear finished** retire les entrées terminées du panneau inférieur et conserve historique et résultats.
+
+Les formulaires affichent d’abord médias et prompts ; les champs avancés se déplient. Les deux rôles image FaceSwap sont interchangeables. L’utilitaire installe le workflow éditeur dans la bibliothèque ComfyUI choisie, puis exporte l’API sans téléversement répété. Library propose vignettes vidéo, noms tronqués et liens d’utilisation ; Characters ouvre les images clés assignées. Welcome reste accessible avec une liste récente défilante et effaçable. L’agent Linux ARM64 a été testé dans Debian OrbStack. Voir [configuration](docs/WORKFLOW_SETUP.md) et [validation réelle](docs/GENERATION_ACCEPTANCE.md).
+
+![Modification de la file, interface de test](docs/screenshots/jobs-queue-edit.png)
+
+La version publiée **0.1.6** a ajouté un catalogue commun de workflows, la préparation du JSON éditeur via le ComfyUI sélectionné, des formulaires issus des types réels et les agents macOS/Linux. Importez une fois puis réutilisez les versions et destinations dans Generate et Jobs.
 
 Compilation release : `npm run tauri:build -- --bundles app` ; résultat : `target/release/bundle/macos/MyMovie Studio.app`. L’installation locale utilise une signature ad hoc ; la notarisation Apple reste à réaliser.
 

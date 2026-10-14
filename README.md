@@ -2,7 +2,13 @@
 
 [Download releases](https://github.com/gubnota/auteur/releases/tag/v0.1.6) — macOS Apple Silicon/Intel, Windows x64, Linux x86_64/ARM64 and headless ComfyUI agents. Windows installers are unsigned; macOS notarization remains pending.
 
-Version **0.1.6** adds a reusable workflow catalogue, automatic editor-to-API compilation against the selected ComfyUI frontend, generated input forms, real dimension controls and macOS/Linux agent utilities. Jobs preserve exact inputs, queue on one instance and run in parallel across different instances. RunPod ComfyUI is the main execution target; RunningHub tests saved hosted deployments. Older documents upgrade to schema v4 only after an explicit backed-up migration; older apps cannot open the upgraded package.
+Current main and the local macOS installation are **0.1.7**; the public download above remains **v0.1.6** until a new release tag. Use **Add to queue** to save an idle batch, then **Run queued batch** or **Run all queued**. Collapse the Jobs editor, select **Edit queued batch**, change **Execution node**, and **Save queue changes**. Started jobs offer **Reuse as draft**. Generate items can be removed, including the last one. **Clear finished** empties terminal entries from the bottom panel while preserving history and results.
+
+Input forms show essential media/prompts first; Advanced and hidden fields are expandable. Explicit two-image roles can be swapped. Normal editor workflows can be installed into the selected ComfyUI library through the utility, then prepared/exported without repeated API uploads. Library adds video posters, filename ellipsis and usage links; Characters link to assigned frames. Welcome is always reachable, with scrollable/removable recent movies. Linux ARM64 install/compile was tested in OrbStack Debian. See [setup](docs/WORKFLOW_SETUP.md) and [actual acceptance](docs/GENERATION_ACCEPTANCE.md).
+
+![Queue editing, fixture UI](docs/screenshots/jobs-queue-edit.png)
+
+Version **0.1.6** introduced a reusable workflow catalogue, automatic editor-to-API compilation against the selected ComfyUI frontend, generated input forms, real dimension controls and macOS/Linux agent utilities. Jobs preserve exact inputs, queue on one instance and run in parallel across different instances. RunPod ComfyUI is the main execution target; RunningHub tests saved hosted deployments. Older documents upgrade to schema v4 only after an explicit backed-up migration; older apps cannot open the upgraded package.
 
 Release build: `npm run tauri:build -- --bundles app`; output: `target/release/bundle/macos/MyMovie Studio.app`. Local installation uses an ad-hoc signature; Apple notarization remains pending.
 

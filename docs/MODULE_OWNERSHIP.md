@@ -52,3 +52,10 @@
 - Agent and desktop service coordinate compilation; Python helper delegates serialization to selected ComfyUI frontend, without generation.
 - WorkflowCatalogue/WorkflowTarget/WorkflowInputs own saved selection and forms; no frontend JSON-to-API conversion heuristics.
 - CI packages sidecars and architecture-verified agents; tests separate mock UI evidence from live execution.
+
+## Queue, publication and derived media
+- job-core owns transactional unstarted-run replacement. Native service validates and freezes replacement inputs under the project lock; canceled historical snapshots remain immutable.
+- job-history restores editable UI drafts from receipts; it never rewrites historical attempts. queuedRunId blocks ordinary dispatch until replacement or explicit separation.
+- Bottom queue dismissal belongs to app settings; jobs/results stay in package-owned storage. Nonterminal jobs cannot be hidden by dismissal.
+- provider-comfyui owns bounded typed Userdata publication/readback; desktop, relay and agent coordinate it without arbitrary remote shell commands.
+- Native thumbnails own optional derived cache/process concurrency; originals remain asset-core-owned. project-usage selectors label available cast references separately from actual render provenance.

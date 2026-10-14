@@ -1,5 +1,16 @@
 # Task Log
 
+## 2026-10-14 — Studio refinement, 0.1.7
+
+- User approved STUDIO_REFINEMENT_PLAN.md with `go`; implemented on main with later requested batch deletion, collapsible Jobs editor, execution-node editing and bottom queue cleanup.
+- Explicit two-image roles/swap, compact Advanced/hidden controls, saved target reuse, scoped used-node registry compatibility and live selected-model checks before staging.
+- Durable Add to queue stays idle across reopen; explicit start obeys endpoint lanes. Queued edits restore frozen exact inputs and atomically replace only unstarted batches; canceled original receipts remain immutable. Clear finished persistently hides only terminal bottom rows without deleting job history/results.
+- Agent/desktop/relay publish normal editor workflows through confined conflict-safe ComfyUI Userdata with verified readback. Default agent install remains registry-only; current canvas stays untouched.
+- Scrollable/removable recent movies and Welcome navigation; filename ellipsis, background video posters, asset usage and effective scene/frame character links/filtering.
+- Real native idle/reopen/start mask, persisted bottom queue cleanup with seven receipts retained, video poster, Mac FaceSwap editor publication and Linux ARM64 OrbStack utility install/reuse/API compilation passed. Exact receipts: GENERATION_ACCEPTANCE.md; native/fixture screenshots labeled separately.
+- Verification: 46 Rust tests plus doc tests, 17 frontend tests, 13 mocked browser tests, 28 Python tests; typecheck, formatting, version parity and ARM64 macOS production build. Local 0.1.7 installation uses an ad-hoc signature. Public release remains v0.1.6; no new tag created.
+- EN/RU/FR README, setup and compact memory updated. Paid RunningHub/cloud GPU/relay/S3 acceptance, foreign desktop launch and signing/notarization remain open. Drafts, private artifacts and unrelated cpu-canary.png excluded.
+
 ## 2026-10-14 — Catalogue, compiler and generated forms: 0.1.6
 
 - User approved WORKFLOW_CATALOGUE_PLAN.md with `go`; implementation on main. Import normal editor/API JSON once into immutable catalogue versions; portable v4 project pins, target profiles, layouts and saved target selection.

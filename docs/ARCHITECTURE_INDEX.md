@@ -78,3 +78,12 @@
 - examples/workflows/: CPU, text-to-image, masked-edit API/editor fixtures; native mask editor import/preparation/export passed.
 - playwright.config.ts / e2e/: mocked native Jobs exact-input/persistence and RunningHub mapping acceptance.
 - docs/CI_RELEASES.md: runner requirements, tag and notebook artifact usage.
+
+## Studio refinement modules (0.1.7)
+- lib/job-history.ts / job-history.test.ts: restore drafts from frozen run receipts, including exact values and media identities.
+- lib/project-usage.ts / project-usage.test.ts: direct placement, draft references and effective scene/frame cast usage.
+- src-tauri/src/service/thumbnails.rs: bounded background video posters and hash cache; media.rs serves confined poster routes.
+- crates/provider-comfyui/src/workflow.rs: content-versioned Userdata publication, conflict-safe readback and install receipts.
+- App.tsx: persistent bottom queue dismissal, responsive recents and save-before-Welcome navigation.
+- docs/STUDIO_REFINEMENT_PLAN.md: approved refinement scope and later queue-edit/removal fixes.
+- e2e/jobs.e2e.ts: idle/reopen/start, exact queue replacement, editor collapse and persistent bottom cleanup.
