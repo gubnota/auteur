@@ -2,9 +2,11 @@
 
 [Download releases](https://github.com/gubnota/auteur/releases/tag/v0.1.6) — macOS Apple Silicon/Intel, Windows x64, Linux x86_64/ARM64 and headless ComfyUI agents. Windows installers are unsigned; macOS notarization remains pending.
 
-Current main and the local macOS installation are **0.1.7**; the public download above remains **v0.1.6** until a new release tag. Use **Add to queue** to save an idle batch, then **Run queued batch** or **Run all queued**. Collapse the Jobs editor, select **Edit queued batch**, change **Execution node**, and **Save queue changes**. Started jobs offer **Reuse as draft**. Generate items can be removed, including the last one. **Clear finished** empties terminal entries from the bottom panel while preserving history and results.
+Current main and the installed macOS app are **0.1.8**; the public download remains **v0.1.6** until a new tag. **Generate** is the only job editor; **Jobs** holds queue/history. **Edit queued batch** opens Generate, where you can change **Execution node** and **Save queue changes**. Review offers separate **Add to queue** and **Run now** actions. Remove any batch item, reuse started work as a draft, and use **Clear finished** to hide terminal bottom rows while retaining receipts/results.
 
-Input forms show essential media/prompts first; Advanced and hidden fields are expandable. Explicit two-image roles can be swapped. Normal editor workflows can be installed into the selected ComfyUI library through the utility, then prepared/exported without repeated API uploads. Library adds video posters, filename ellipsis and usage links; Characters link to assigned frames. Welcome is always reachable, with scrollable/removable recent movies. Linux ARM64 install/compile was tested in OrbStack Debian. See [setup](docs/WORKFLOW_SETUP.md) and [actual acceptance](docs/GENERATION_ACCEPTANCE.md).
+Redux FaceSwap is configured once as RunningHub Workflow **2110376761482002434**: **19.image = Face identity reference**, **86.image = Base photograph**. Disconnected loader 88 stays inactive. New jobs reuse these slots; choose media from the gallery or drop files. The hosted mapping is user-confirmed; paid execution has not been tested.
+
+Configure exact fields once in **Workflows → Reusable inputs**: labels, image/video/audio roles, text/number/boolean/JSON, Advanced and Hidden. The field picker marks used inputs and blocks duplicates. Generate uses this saved form and a searched thumbnail gallery; reused media keeps its asset ID. **Library** and **Renders** share media with Render tags, usage/provenance and bulk **Trash / Restore**. Duplicate imports preserve an existing linked location until explicit Collect. Video posters, filename ellipsis, Welcome navigation and removable recents remain available. See [setup](docs/WORKFLOW_SETUP.md) and [acceptance](docs/GENERATION_ACCEPTANCE.md).
 
 ![Queue editing, fixture UI](docs/screenshots/jobs-queue-edit.png)
 
@@ -20,13 +22,13 @@ A local-first macOS film studio built with Rust, Tauri and React. Movies are Fin
 
 ## Current main: Generate and portable workflow setup
 
-**Generate** supports image/video creation and editing, start frames, multiple references, reference video and audio through explicit workflow bindings. Choose a node for each item, add it to a saved batch, then review and run all in **Jobs**. One ComfyUI instance queues work; different instances dispatch concurrently.
+**Generate** uses a single Custom workspace for image/video/audio workflows, standalone or storyboard jobs. Select a saved workflow/node, assign media and exact values, then review. **Add to queue** creates idle work; **Jobs → Run queued batch / Run all queued** starts it. One ComfyUI instance queues work; different instances dispatch concurrently.
 
 **Workflows → Compatibility & initialization** provides Unspecified, Universal, Apple Silicon, CUDA, ROCm and CPU flags, plus reviewed model/plugin/wheel sources, hashes, licenses and destinations. [Portable setup commands](docs/WORKFLOW_SETUP.md) explain instance Python, effective model folders, plugin installation, private storage, restart and first-session canary. [RunPod/Colab connection instructions](deploy/runpod/README.md) explain the HTTPS relay address.
 
 Documents use schema **v4**, with backed-up upgrades from v1/v2/v3. Local frontend compilation, safe MPS FaceSwap and the weight-free canary were tested; [acceptance evidence](docs/GENERATION_ACCEPTANCE.md) separates real execution, fixture UI checks and pending cloud tests.
 
-The installed macOS app completed Generate → Jobs → Renders using a saved editor workflow and local node, producing a 64 × 114 PNG at 9:16. The saved ratio also survived reopening the movie.
+The historical 0.1.6 macOS app completed Generate → Jobs → Renders using a saved editor workflow and local node, producing a 64 × 114 PNG at 9:16. The saved ratio also survived reopening the movie.
 
 ![Generate workspace](docs/screenshots/generate.png)
 
@@ -54,7 +56,7 @@ Native picker import and linked character reference collection were verified in 
 
 ## Workflows and connections
 
-Import a normal editor or API workflow once through **Browse workflow catalogue**. Select the saved workflow and execution node in Generate/Jobs, then **Prepare / refresh inputs**. Preparation derives controls from that instance’s real registry and exports through its installed frontend. Install the compiler prerequisites once using [setup instructions](docs/WORKFLOW_SETUP.md). Media slots, text, choices and numeric constraints appear automatically; customize labels, groups, Advanced visibility and collected outputs. Reuse this form and target for later jobs. Unsupported custom serializers/types remain explicit requirements. For API-specific semantic overrides, bind its prompt, image and other inputs. `characterReference1` through `characterReference4` can use reference images from the scene/frame cast. The app does not guess arbitrary node mappings.
+Import an editor or API workflow once through **Browse workflow catalogue**. Select a saved node and prepare editor workflows through that ComfyUI frontend; [compiler prerequisites](docs/WORKFLOW_SETUP.md) are required. In **Workflows → Reusable inputs**, expose exact literal fields and save their labels, media roles and Advanced/Hidden choices once. API-only fields remain unverified until compatible registry preparation. Old or changed ComfyUI profiles refresh before a new review/freeze; failed preparation retains the draft. Unsupported custom serializers and dynamic branch changes require correction/re-export. Character reference slots can use assigned cast. Original graphs and old attempts remain immutable.
 
 Connections support multiple ComfyUI, RunningHub and private-relay records. Google, DeepSeek and OpenRouter prompt assistance is optional. Enter secrets through secure app controls; credentials are stored in the macOS Keychain. fal/custom generation endpoints currently have configuration UI only.
 
@@ -62,9 +64,9 @@ Job receipts and results persist. Ambiguous submissions become unknown rather th
 
 ## Jobs: exact inputs and batches
 
-Open **Jobs** directly, or choose **Create generation job** from a workflow/keyframe. Save a named draft, select its target keyframe, then add, duplicate or reorder independent workflow items. Each item selects a connection and explicit bindings. Inputs support text, numbers, custom boolean toggles and parsed JSON. Prompts can use the composed project/scene/frame text or an exact override, including an empty string. Media selectors use movie assets and references from the assigned cast.
+Create or open a named batch in **Generate**; workflow/keyframe entry points open the same editor. Add, duplicate, remove and reorder independent workflow items. Each chooses a saved node and the workflow’s reusable inputs. Exact overrides preserve empty strings, zero, false and parsed JSON; absent prompt overrides use composed storyboard text. The gallery supports searchable tiles, selected/used markers and direct asset reuse. **Jobs** shows queued work/history and opens Edit/Reuse in Generate.
 
-**Review exact inputs** validates the entire batch before uploads or creating attempts. Preview media shows asset hashes and a pending provider filename; the final staged graph/payload is stored in the attempt receipt. **Validate & start** freezes the configured batch. Original imported graphs remain unchanged. There is no chained output dependency in this version.
+**Review exact inputs** validates the entire batch before uploads. Preview shows media hashes; final staged graph/payload is stored in the attempt receipt. **Add to queue** freezes idle work; **Run now** freezes and starts. Save queue changes atomically replaces only unstarted attempts, retaining canceled originals. There is no chained output dependency.
 
 Items sharing a normalized ComfyUI endpoint queue in FIFO order, including duplicate connection records. Different endpoints run concurrently. Private relay connections use the relay URL and worker node ID as their lane; use one connection per RunPod GPU worker. RunningHub uses each account’s configured concurrency. Different URL aliases for the same server cannot be automatically identified.
 
@@ -72,7 +74,7 @@ Pause affects waiting items; cancel also requests cancellation of active work. R
 
 The schema v4 upgrade creates SQLite/manifest backups under the package’s `backups/` directory. Keep a complete copy of the original package if you need to continue using an older app.
 
-![Jobs in the native macOS app](docs/screenshots/jobs-workspace.png)
+![Jobs queue/history, fixture UI](docs/screenshots/jobs-queue-edit.png)
 
 ## Private RunPod ComfyUI
 
@@ -82,8 +84,8 @@ Use the [RunPod agent guide](deploy/runpod/README.md) to deploy the CI-built Lin
 
 1. Add a RunningHub account in **Connections** and save its key with the secure credential control.
 2. Import the API workflow once in **Workflows**, then reuse it from the catalogue. In **RunningHub deployments**, select the account, API family (**Workflow** or **AI App**) and the hosted ID for that exact deployment. An imported JSON graph does not contain proof of a hosted deployment; do not substitute an unrelated AI App ID. An account default is optional.
-3. Configure **Job input bindings** with node IDs, field names and value types from that deployment’s API schema. Character reference slots use the assigned scene/frame cast.
-4. Choose **Target keyframe**, click **Create generation job**, then select the account, review the values and **Review exact inputs** → **Validate & start**. Missing setup is explained in the dialog.
+3. Configure **Reusable inputs** with node IDs, field names and value types from that deployment’s API schema. Character reference slots use the assigned scene/frame cast.
+4. Choose **Target keyframe**, click **Create generation job**, then select the account, review the values and **Review exact inputs** → **Add to queue / Run now**. Missing setup is explained in the dialog.
 
 Provider rejections are shown as failed jobs. For an uncertain submission, check RunningHub task history and use **Resolve submission** to attach the existing task ID or confirm that no task was created before retrying. Account/deployment destinations stay frozen in the job receipt.
 

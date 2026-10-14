@@ -160,3 +160,13 @@ Context: Creators need to stage work without executing, correct node selection, 
 Decision: Freeze idle queued runs; atomically replace only unstarted runs, retaining canceled receipts. Restore edits from frozen snapshots. Dismiss terminal bottom rows through app-local settings. Publish immutable versioned editor JSON through typed ComfyUI Userdata and verify readback. Scope compatibility to used schemas; validate selected models live and retain frontend compilation provenance separately.
 Consequences: Reopening never starts queued work. Started jobs cannot be rewritten. Clearing the bottom panel preserves history/results. Legacy profiles require one explicit refresh. ARM64 CPU acceptance is distinct from cloud GPU acceptance.
 Related files: crates/job-core/src/runs.rs, crates/provider-comfyui/src/workflow.rs, crates/workflow-core/src/schema.rs, apps/desktop/src/lib/job-history.ts, apps/desktop/src/App.tsx.
+
+# ADR-0017: One composer, reusable forms and recoverable media identity
+
+Date: 2026-10-14
+Status: Accepted
+
+Context: Repeated job-level binding setup, two editors, duplicate media copies and separate render cards obscured the normal workflow.
+Decision: Configure exact literal bindings/layout once in Workflows; Generate edits all drafts, Jobs owns queue/history. Use asset-ID tile selection and exact-ID native import. Library/Renders share original asset rows and receipt-derived provenance; Trash is reversible metadata. Verify duplicate content before copy and preserve linked policy. Refresh legacy/changed profiles before new review/freeze, retaining layouts, values and final guards.
+Consequences: Supersedes ADR-0016's explicit legacy refresh requirement for new attempts. No schema-version bump; archivedAt defaults absent. Historical references/receipts remain valid; new jobs reject trashed selections. Provider mappings remain explicit per account and unsupported serializers require correction.
+Related files: apps/desktop/src/components/WorkflowForm.tsx, MediaPicker.tsx, features/Generate.tsx, Jobs.tsx, Library.tsx; crates/asset-core/src/lib.rs, workflow-core/src/schema.rs; docs/MEDIA_WORKFLOW_SIMPLIFICATION_PLAN.md.

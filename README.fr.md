@@ -2,9 +2,11 @@
 
 [Télécharger les releases](https://github.com/gubnota/auteur/releases/tag/v0.1.6) — macOS Apple Silicon/Intel, Windows x64, Linux x86_64/ARM64 et agents ComfyUI. Les installateurs Windows ne sont pas signés ; la notarisation macOS reste à réaliser.
 
-La branche main et l’installation macOS locale sont en **0.1.7** ; le téléchargement public ci-dessus reste **v0.1.6** jusqu’au prochain tag. **Add to queue** enregistre un lot sans lancement ; **Run queued batch / Run all queued** le démarre explicitement. Repliez l’éditeur Jobs, choisissez **Edit queued batch**, modifiez **Execution node**, puis **Save queue changes**. Le reçu original reste dans l’historique. Les tâches déjà démarrées proposent **Reuse as draft**. Chaque élément Generate peut être supprimé, y compris le dernier. **Clear finished** retire les entrées terminées du panneau inférieur et conserve historique et résultats.
+La branche main et l’application macOS installée sont en **0.1.8** ; le téléchargement public reste **v0.1.6** jusqu’au prochain tag. **Generate** est l’unique éditeur ; **Jobs** contient file et historique. **Edit queued batch** ouvre Generate : modifiez **Execution node**, puis **Save queue changes**. La vérification distingue **Add to queue** et **Run now**. Supprimez les éléments du lot, réutilisez les tâches démarrées comme brouillons et effacez les lignes terminées avec **Clear finished**, en conservant reçus et résultats.
 
-Les formulaires affichent d’abord médias et prompts ; les champs avancés se déplient. Les deux rôles image FaceSwap sont interchangeables. L’utilitaire installe le workflow éditeur dans la bibliothèque ComfyUI choisie, puis exporte l’API sans téléversement répété. Library propose vignettes vidéo, noms tronqués et liens d’utilisation ; Characters ouvre les images clés assignées. Welcome reste accessible avec une liste récente défilante et effaçable. L’agent Linux ARM64 a été testé dans Debian OrbStack. Voir [configuration](docs/WORKFLOW_SETUP.md) et [validation réelle](docs/GENERATION_ACCEPTANCE.md).
+Redux FaceSwap est configuré comme RunningHub Workflow **2110376761482002434** : **19.image = Face identity reference**, **86.image = Base photograph**. Le chargeur déconnecté 88 reste inactif. Les nouveaux jobs réutilisent ces champs ; choisissez les médias dans la galerie ou déposez des fichiers. La correspondance hébergée est confirmée par l’utilisateur ; aucune exécution payante n’a été testée.
+
+Configurez une fois les champs exacts dans **Workflows → Reusable inputs** : libellés, rôles image/vidéo/audio, texte, nombres, boolean, JSON, Advanced et Hidden. Les champs utilisés sont signalés et les doublons bloqués. Generate réutilise ce formulaire et une galerie de vignettes avec recherche. **Library** et **Renders** partagent les mêmes médias, tags Render, utilisation et provenance ; **Trash / Restore** fonctionne aussi par sélection multiple. Un import identique conserve son ID et son lien externe jusqu’à Collect. Vignettes vidéo, noms tronqués, Welcome et suppression des récents restent disponibles. Voir [configuration](docs/WORKFLOW_SETUP.md) et [validation](docs/GENERATION_ACCEPTANCE.md).
 
 ![Modification de la file, interface de test](docs/screenshots/jobs-queue-edit.png)
 
@@ -20,13 +22,13 @@ Un studio de cinéma local pour macOS, construit avec Rust, Tauri et React. Les 
 
 ## Main actuelle : Generate et configuration portable
 
-**Generate** propose création et modification d’images et vidéos, image de départ, références multiples, vidéo et audio via des entrées explicitement liées au workflow. Choisissez un nœud pour chaque tâche, ajoutez-la au lot enregistré, puis vérifiez et lancez le lot dans **Jobs**. Une instance ComfyUI utilise une file ; des instances distinctes travaillent en parallèle.
+**Generate** utilise un espace Custom pour les workflows image/vidéo/audio, autonomes ou liés au storyboard. Choisissez workflow et nœud enregistrés, médias et valeurs, puis vérifiez le lot. **Add to queue** enregistre sans lancer ; **Jobs → Run queued batch / Run all queued** démarre le travail. Une instance ComfyUI utilise une file ; les instances distinctes travaillent en parallèle.
 
 **Workflows → Compatibility & initialization** propose les indicateurs Unspecified, Universal, Apple Silicon, CUDA, ROCm et CPU ainsi que les sources, empreintes, licences et destinations des modèles, plugins et wheels Python. Les [commandes portables](docs/WORKFLOW_SETUP.md) expliquent Python de l’instance, dossiers réels, installation, stockage privé, redémarrage et test de session. Le [guide RunPod/Colab](deploy/runpod/README.md) explique comment obtenir l’adresse HTTPS du relais.
 
 Schéma **v4** : la mise à niveau depuis v1/v2/v3 exige confirmation et sauvegarde. Les anciennes applications ne peuvent pas ouvrir le paquet mis à niveau.
 
-L’application macOS installée a exécuté Generate → Jobs → Renders avec un workflow éditeur enregistré et le nœud local : PNG de 64 × 114 au format 9:16. Le format a été conservé après réouverture du film. Voir les [résultats de validation](docs/GENERATION_ACCEPTANCE.md).
+L’application macOS 0.1.6 a précédemment exécuté Generate → Jobs → Renders avec un workflow éditeur enregistré et le nœud local : PNG de 64 × 114 au format 9:16. Le format a été conservé après réouverture du film. Voir les [résultats de validation](docs/GENERATION_ACCEPTANCE.md).
 
 ![Espace Generate](docs/screenshots/generate.png)
 
@@ -54,11 +56,11 @@ L’importation par dialogue natif et le regroupement d’une référence de per
 
 ## Workflows et connexions
 
-Importez un JSON éditeur standard ou API une seule fois. Dans **Generate**, choisissez **Browse workflow catalogue**, une destination puis **Prepare / refresh inputs**. Le graphe original est conservé ; le frontend du ComfyUI sélectionné produit l’API. Images, vidéos, audio, textes, nombres et choix ont leurs propres contrôles. Deux LoadImage produisent deux références indépendantes pour FaceSwap ; les liens du graphe restent des liens.
+Importez un workflow éditeur ou API une seule fois via **Browse workflow catalogue**. Préparez le workflow éditeur sur le ComfyUI choisi avec les [prérequis du compilateur](docs/WORKFLOW_SETUP.md). Dans **Workflows → Reusable inputs**, enregistrez champs littéraux, libellés, rôles et visibilité une fois. Les champs API sans registre restent non vérifiés. Les profils ComfyUI anciens ou modifiés sont actualisés avant une nouvelle vérification/figeage ; un échec conserve le brouillon. Les sérialiseurs non pris en charge et changements de branche dynamique demandent correction/export. Graphes originaux et anciennes tentatives restent immuables.
 
 **Customize input form** enregistre les libellés, groupes, ordre et résultats sélectionnés. Le ratio modifie uniquement les dimensions width/height liées ; choisissez la paire si plusieurs existent. Changer de branche dynamique exige une nouvelle préparation. **Export API** utilise le profil préparé de la destination. Installation Python, Playwright et Chromium : [WORKFLOW_SETUP](docs/WORKFLOW_SETUP.md). RunningHub réutilise un déploiement autorisé enregistré ; les graphes arbitraires ne sont pas publiés automatiquement.
 
-Importez un workflow au format API et associez explicitement ses entrées : prompts, images et autres paramètres. Les entrées `characterReference1` à `characterReference4` peuvent utiliser les images de référence des personnages de la scène/image. L’application ne devine pas les identifiants des nœuds.
+Pour un workflow API, configurez les champs exacts dans **Workflows → Reusable inputs**, puis réutilisez le formulaire. Les entrées `characterReference1` à `characterReference4` utilisent les personnages assignés ; les identifiants des nœuds ne sont pas devinés.
 
 Plusieurs connexions ComfyUI, RunningHub et relay privé sont possibles. L’aide aux prompts via Google, DeepSeek et OpenRouter est facultative. Saisissez les secrets dans les contrôles sécurisés de l’application ; ils restent dans le Trousseau macOS. Les endpoints fal/personnalisés disposent actuellement d’une interface de configuration uniquement.
 
@@ -66,9 +68,9 @@ Les reçus des tâches et leurs résultats persistent. Une soumission ambiguë d
 
 ## Jobs : entrées exactes et lots
 
-Ouvrez **Jobs**, ou utilisez **Create generation job** depuis un workflow/image clé. Nommez un brouillon, choisissez l’image cible, puis ajoutez, dupliquez et ordonnez les workflows indépendants. Chaque élément choisit une connexion et des associations d’entrées explicites. Texte, nombres, contrôles boolean personnalisés et JSON analysé sont disponibles. Les prompts utilisent le texte composé du projet/scène/image ou une valeur exacte, y compris une chaîne vide. Les médias proviennent du film et des références des personnages assignés.
+Créez ou ouvrez un lot dans **Generate** ; les commandes workflow/image clé ouvrent le même éditeur. Ajoutez, supprimez, dupliquez et ordonnez les éléments indépendants. Chacun utilise un nœud enregistré et le formulaire du workflow. Les valeurs exactes conservent chaîne vide, zéro, false et JSON. La galerie affiche recherche, vignettes et médias utilisés, en réutilisant les IDs sans copie. **Jobs** contient file/historique et ouvre Edit/Reuse dans Generate.
 
-**Review exact inputs** valide tout le lot avant téléchargement ou création de tentatives. L’aperçu montre les empreintes des médias ; le nom de fichier fournisseur reste en attente jusqu’au staging. **Validate & start** fige le lot. Les graphes importés restent inchangés. Cette version ne chaîne pas les résultats entre workflows.
+**Review exact inputs** valide le lot avant tout téléversement. L’aperçu montre les empreintes des médias ; graphe et payload finaux sont conservés dans le reçu. **Add to queue** fige sans lancer ; **Run now** démarre. Save queue changes remplace atomiquement les tentatives non démarrées, en conservant les originaux annulés. Aucune dépendance chaînée entre workflows n’est disponible.
 
 Les éléments partageant un endpoint ComfyUI normalisé suivent une FIFO, même via des connexions dupliquées. Les endpoints distincts fonctionnent en parallèle. Pour le relay, la file dépend de son URL et du node ID ; utilisez une connexion par worker GPU RunPod. RunningHub respecte la capacité de chaque compte. Les alias d’URL distincts d’un même serveur ne sont pas identifiés automatiquement.
 
@@ -76,7 +78,7 @@ Pause arrête les éléments en attente ; Cancel demande aussi l’annulation du
 
 La migration sauvegarde SQLite et le manifest dans `backups/` du paquet. Conservez une copie complète du projet original pour continuer avec une ancienne version.
 
-![Jobs dans l’application macOS](docs/screenshots/jobs-workspace.png)
+![Jobs dans l’application macOS](docs/screenshots/jobs-queue-edit.png)
 
 ## ComfyUI privé sur RunPod
 
@@ -86,8 +88,8 @@ Le [guide de l’agent RunPod](deploy/runpod/README.md) explique le déploiement
 
 1. Ajoutez un compte RunningHub dans **Connections** et enregistrez sa clé avec le contrôle sécurisé des identifiants.
 2. Importez le workflow API dans **Workflows**. Dans **RunningHub deployments**, sélectionnez le compte, la famille API (**Workflow** ou **AI App**) et l’ID de ce déploiement précis. Un graphe JSON ne prouve pas l’existence d’un déploiement hébergé ; ne remplacez pas son ID par celui d’une autre AI App. L’ID par défaut du compte est facultatif.
-3. Configurez **Job input bindings** avec les nœuds, champs et types du schéma API de ce déploiement. Les références de personnages proviennent de la scène/image sélectionnée.
-4. Sélectionnez **Target keyframe**, cliquez sur **Create generation job**, choisissez le compte, vérifiez les valeurs puis **Review exact inputs** → **Validate & start**. Le dialogue explique les paramètres manquants.
+3. Configurez **Reusable inputs** avec les nœuds, champs et types du schéma API de ce déploiement. Les références de personnages proviennent de la scène/image sélectionnée.
+4. Sélectionnez **Target keyframe**, cliquez sur **Create generation job**, choisissez le compte, vérifiez les valeurs puis **Review exact inputs** → **Add to queue / Run now**. Le dialogue explique les paramètres manquants.
 
 Un refus du fournisseur produit une tâche failed. Pour une soumission incertaine, consultez l’historique RunningHub puis **Resolve submission** : rattachez l’ID de la tâche existante ou confirmez qu’aucune tâche n’a été créée avant de relancer. Le compte et le déploiement restent figés dans le reçu.
 

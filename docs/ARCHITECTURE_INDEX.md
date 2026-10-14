@@ -11,8 +11,11 @@
 ## Desktop frontend
 - apps/desktop/src/features/Board.tsx: ordered storyboard and frame inspector.
 - features/Library.tsx: characters/reference imports, media, workflows and renders.
-- features/Jobs.tsx: saved batch drafts, exact input editor, review and run controls.
-- features/Generate.tsx: standalone image/video/edit/multi-reference drafts.
+- features/Jobs.tsx: queue/history controls; Edit/Reuse routes to Generate.
+- features/Generate.tsx: single Custom composer, saved workflows/nodes, compact batches and review.
+- components/WorkflowForm.tsx: reusable exact literal bindings, labels, media roles and visibility.
+- components/Media.tsx / MediaPicker.tsx: shared previews and searchable asset-ID tile selection.
+- components/JobReview.tsx / lib/job-drafts.ts: review, explicit queue/start and draft/queued-edit helpers.
 - components/WorkflowInputs.tsx / WorkflowSetup.tsx: shared media slots, hardware flags and pinned dependency editor.
 - lib/job-inputs.ts / job-inputs.test.ts: typed input resolution/readiness.
 - features/Connections.tsx: endpoint types, credentials, runtime/storage settings.
@@ -86,4 +89,12 @@
 - crates/provider-comfyui/src/workflow.rs: content-versioned Userdata publication, conflict-safe readback and install receipts.
 - App.tsx: persistent bottom queue dismissal, responsive recents and save-before-Welcome navigation.
 - docs/STUDIO_REFINEMENT_PLAN.md: approved refinement scope and later queue-edit/removal fixes.
-- e2e/jobs.e2e.ts: idle/reopen/start, exact queue replacement, editor collapse and persistent bottom cleanup.
+- e2e/jobs.e2e.ts: idle/reopen/start, exact queue replacement through Generate and persistent bottom cleanup.
+
+## Media/workflow simplification (0.1.8)
+- service/catalogue.rs: validate/save reusable forms on base graph and selected profile.
+- service/jobs.rs: refresh legacy/changed profiles before freeze, preserving session/revision guards.
+- asset-core: pre-copy content deduplication and linked-policy preservation.
+- Asset.archivedAt: recoverable shared Library/Renders visibility; original identity remains project-core-owned.
+- e2e/library.e2e.ts / workflow-catalogue.e2e.ts: shared result Trash/Restore, exact gallery IDs and reusable API-only media form.
+- docs/MEDIA_WORKFLOW_SIMPLIFICATION_PLAN.md: approved 0.1.8 scope and acceptance.

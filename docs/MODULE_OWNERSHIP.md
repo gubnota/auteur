@@ -1,5 +1,10 @@
 # Module Ownership
 
+- WorkflowForm owns reusable presentation/bindings; workflow-core validates literal fields, types, media roles and uniqueness. Providers never guess semantic roles.
+- Generate owns input editing/review; Jobs owns queue/history and restores frozen drafts into Generate.
+- MediaPicker assigns existing asset IDs; native job-slot import returns exact IDs atomically. Feature modules do not resolve imports by basename.
+- Library/Renders share project assets and receipt-derived provenance. Trash changes only archive metadata; asset-core owns byte identity/deduplication and Collect.
+
 | Module | Responsibility |
 | --- | --- |
 | studio-contracts | Domain DTOs and serialized field names |

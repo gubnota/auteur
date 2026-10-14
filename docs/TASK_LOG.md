@@ -212,3 +212,13 @@
 - Saved that Workflow-family deployment for the selected account through the installed 0.1.2 app; added string bindings for positivePrompt/121.text, negativePrompt/110.text and image/167.image.
 - Read-only persistence check verified the mapping and three bindings; no generation jobs were created. Review opens with the hosted destination, but the selected frame needs an image before submission. The native command rejects a missing frame image; the current review does not disable submit for that case.
 - Native configuration screenshot: ignored artifacts/acceptance/ltx-runninghub-ready.png. Personal movie data and account settings remain outside Git. No provider acceptance or paid generation claimed.
+
+## 2026-10-14 — Reusable workflow/media simplification, 0.1.8
+
+- Approved MEDIA_WORKFLOW_SIMPLIFICATION_PLAN implemented on main: one Generate composer, Jobs queue/history Edit/Reuse, separate idle Add to queue / Run now, removable batch entries and reusable exact workflow slots with Advanced/Hidden overrides.
+- Shared searched tile gallery and Library/Renders identities; recoverable bulk Trash/Restore retains references and receipts. Hash-verified import dedup runs before copy and preserves linked policy; exact slot imports return asset IDs atomically.
+- Native personal configuration (backup first): Redux Workflow/2110376761482002434, 19.image face reference, 86.image base photograph; disconnected 88 inactive. Reopening retained slots/drafts; review verified both inputs without paid submission. LTX retained.
+- Local Klein profile refreshed successfully against live MPS ComfyUI, 37 inputs and scope-v1 hash. Fixed a preparation panic for model inventory schemas without optional metadata; added regression coverage. Clear finished removed the historical failure from the bottom queue, preserving Jobs history.
+- Native disposable package: three-media bulk Trash/Restore and duplicate video import passed. Screenshot docs/screenshots/media-workflow-0.1.8.png. Final spacing fix adds rem gaps to Library filters/actions/drop zone.
+- Checks: frontend 20 unit tests, 15 mocked browser tests, Rust workspace 49 tests and doc tests, production TypeScript/Vite, native ARM64 release and strict ad-hoc signature passed. EN/RU/FR README and six compact context docs updated.
+- Installed /Applications/MyMovie Studio.app 0.1.8; previous app /private/tmp/MyMovie Studio-0.1.7-before-0.1.8.app and movie /private/tmp/123-before-0.1.8.mymovie preserved. No paid/cloud jobs, credentials, private media, drafts, cpu-canary.png or release tags included.

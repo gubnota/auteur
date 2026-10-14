@@ -17,7 +17,7 @@ but cannot attest or install their filesystem dependencies.
 ## Import once, prepare for a saved target
 
 In **Workflows**, import ordinary ComfyUI editor JSON or API JSON once. It is
-pinned inside this movie and added to the local catalogue. In **Generate/Jobs**,
+pinned inside this movie and added to the local catalogue. In **Generate**,
 choose **Browse workflow catalogue**, select a saved connection, then
 **Prepare / refresh inputs**. Preparation reads the live node registry and uses
 that instance’s frontend exporter for editor graphs. It does not submit a job.
@@ -84,9 +84,18 @@ to workflow-compile. The 0.1.7 ARM64 utility was executed in OrbStack Debian wit
 this configuration against local CPU ComfyUI: publish/reuse and three-node API
 export passed. See [acceptance evidence](GENERATION_ACCEPTANCE.md).
 
-Older prepared profiles need one explicit **Prepare / refresh inputs**. New
-compatibility checks ignore unrelated nodes and changing media filename lists;
-selected models still need to exist on the chosen node before media staging.
+Before a new review/freeze, legacy or changed ComfyUI profiles refresh automatically.
+Preparation errors retain the draft; correct the runtime and retry, or choose another
+node. Existing attempts keep their frozen profile and final dispatch guard. Checks
+ignore unrelated nodes and changing media lists; selected models must still exist.
+
+Configure API-only jobs once in **Workflows → Reusable inputs**, then select that
+workflow/node and assign media in Generate. RunningHub additionally needs the
+matching hosted Workflow/AI App URL for each account; importing JSON does not
+create a deployment. The user-confirmed Redux Workflow is `2110376761482002434`:
+`19.image` is the face reference and `86.image` is the base photograph. Save both
+string/image bindings with explicit roles. The disconnected `88.image` is inactive.
+Use Review → Add to queue for idle work, or Run now for immediate execution.
 
 ## Portable paths and activation
 

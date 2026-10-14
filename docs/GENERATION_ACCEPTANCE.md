@@ -1,6 +1,15 @@
 # Generation acceptance — current main
 
-Date: 2026-10-14. Checks below distinguish published 0.1.6 from current 0.1.7. Publication is recorded in CI_RELEASES. No paid cloud jobs ran.
+Date: 2026-10-14. Checks below distinguish published 0.1.6 from current 0.1.8. Publication is recorded in CI_RELEASES. No paid cloud jobs ran.
+
+## 0.1.8 installed acceptance
+
+- Installed ARM64 release, version and strict ad-hoc signature verified; previous 0.1.7 app preserved in `/private/tmp/MyMovie Studio-0.1.7-before-0.1.8.app`.
+- Backed up personal movie, then configured Redux through native controls: Workflow family/2110376761482002434, 19.image face reference, 86.image base photograph. LTX mapping unchanged. Gallery assignments and drafts persisted after reopening; review displayed both exact inputs and separate Add to queue / Run now controls. No job submitted.
+- Refreshed local Klein against ComfyUI 0.40.0/MPS: persisted 37 inputs and scope-v1 registry hash. Fixed preparation panic on one-element model inventory schemas; regression test passes. Old failed-job errors remain historical; Clear finished removed the old row without deleting history.
+- Disposable movie: bulk Trash/Restore of three materials passed; repeated video import reused its asset identity. Renders and Library display the same render assets. Native screenshot: [media-workflow-0.1.8.png](screenshots/media-workflow-0.1.8.png).
+- Frontend: 20 unit tests and 15 mocked browser acceptance tests passed; TypeScript/Vite and native release builds passed. Rust workspace: all 49 tests and doc tests passed, including the inventory regression.
+- Public artifacts remain v0.1.6 until a separately authorized tag/release. Paid RunningHub and cloud GPU acceptance remain open.
 
 ## Real local executions
 

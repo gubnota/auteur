@@ -10,7 +10,7 @@
 ## Current milestone
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
 - Native Generate/media setup implemented; live private cloud acceptance remains open.
-- Current main/local install: 0.1.7; reusable forms, idle queue/edit, workflow publication and video posters implemented.
+- Current main/local install: 0.1.8; reusable workflow inputs, one Generate composer, queue/history Jobs and shared Library/Renders implemented.
 - Published download: v0.1.6; no new tag in this refinement. Evidence: TASK_LOG and CI_RELEASES.
 - Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.
@@ -40,6 +40,8 @@
 - SQLite is authoritative; JSON projections are recoverable, revisioned exports.
 - Stable UUID entity identity; imported originals and workflow graphs immutable.
 - Default imports copy into media/originals/<SHA-256>.<extension>.
+- Verified duplicates reuse their UUID before copying and preserve link policy; Collect alone consolidates existing links.
+- Library/Renders share assets, Render provenance and recoverable Trash/Restore; originals and receipts remain intact.
 - Explicit Keep original location records an absolute external sourcePath.
 - Internal asset IDs and reserved relative paths remain stable for linked assets.
 - Library shows linked paths and availability, with Check files and Relink.
@@ -86,7 +88,10 @@
 - Notifications and Logs histories have clear controls.
 
 ## Generate and setup
-- Standalone modes: image/video creation/editing, text/image/audio-to-video, multi-reference.
+- Generate is the single Custom input editor for standalone/storyboard jobs; Jobs owns queue/history and opens edits/reuse in Generate.
+- Workflows → Reusable inputs saves exact literal bindings, labels/media roles and advanced/hidden choices once; prepared profiles override by node/input identity.
+- Searchable thumbnail gallery assigns asset IDs; external job-slot imports return exact IDs atomically.
+- Legacy/changed ComfyUI forms refresh before a new preview/freeze; historical snapshots and the final dispatch guard remain intact.
 - Explicit media slots accept arbitrary image/video/audio roles and order; frame/cast contexts remain available.
 - Saved batches reuse Jobs endpoint lanes; compatibility is declared, not inferred.
 - Flags: unspecified, universal, Apple Silicon, CUDA, ROCm, CPU; providers validate live hardware where available.

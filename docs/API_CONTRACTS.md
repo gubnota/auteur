@@ -16,7 +16,10 @@
 - import_media_drop(paths, frameId?, shotId?, episodeId?, sceneId?, newScene?, characterId?, linked?): Project.
 - Batch 1..64; images for storyboard/cast; one image on an existing frame.
 - Target membership validated; character+board or newScene+existing target ambiguity rejected.
-- Asset fields: id, name, kind, path, sha256, size, sourcePath?.
+- Asset fields: id, name, kind, path, sha256, size, sourcePath?, archivedAt? (RFC3339, absent by default).
+- import_job_media({draftId,itemId,semantic,paths,linked?}): {project,assetIds}; import and assign exact IDs atomically.
+- Verified duplicate size/hash/kind and available content reuse UUID before copy; existing link policy persists. Reimport restores an archived duplicate.
+- Trash/Restore changes archivedAt only; frozen references/original bytes/receipts remain valid. New freezes reject archived selections.
 - Linked sourcePath is absolute/canonical; id/path/hash/size/kind stay immutable.
 - Native saves own sourcePath changes; ordinary frontend save cannot alter them.
 - collect_media(): Project; verify all links, copy into reserved path, clear sourcePath.
@@ -128,8 +131,16 @@
 - replace_queued_job_run({draftId,runId}) -> Job[]: only queued/paused runs whose attempts are paused without remote IDs; atomic insert replacement/cancel original, or rollback. Original snapshots remain unchanged.
 - JobDraft.queuedRunId optional/null persists pending edits; ordinary enqueue/start rejects associated drafts until replaced or explicitly separated.
 - Workflow layout input.mediaRole optional binds semantics to the exact node/input; swap changes labels/roles, never graph identity.
-- registryHash `scope-v1:<SHA256>` covers only used node schemas, static choices and Python module identity. Known dynamic model/media choices are excluded; selected models validate live before staging. Legacy profiles require explicit refresh; frontendHash remains separate compilation provenance.
+- registryHash `scope-v1:<SHA256>` covers only used node schemas, static choices and Python module identity. Known dynamic model/media choices are excluded; selected models validate live before staging. New preview/freeze refreshes legacy/changed profiles; frontendHash remains separate compilation provenance. Historical attempts keep their final dispatch guard.
 - install_workflow({workflowId,connectionId}) and agent workflow-install --publish-to-comfyui publish only normal editor sources to workflows/MyMovie/<slug>-<hash16>.json. Bounded Userdata GET/POST(overwrite=false)/readback; receipt installed/reused/libraryPath/sourceHash/loadedCanvas=false. Default agent install remains registry-only.
 - remove_recent_project({path}), clear_recent_projects(): history only; close_project flushes the frontend save queue before Welcome.
 - video_thumbnail({assetId}) generates optional bounded hash-identified JPEG; native poster protocol resolves registered asset IDs and confined derived paths.
 - AppSettings.dismissedQueueJobIds defaults []; Clear finished records only completed/failed/canceled IDs. Other states remain visible regardless of IDs. Stored outside movies; job history/results are untouched.
+
+## Reusable forms (0.1.8)
+- save_workflow_form({workflowId,connectionId?,bindings,layout}) -> Project: validated base form and selected-profile layout, exact node/input identity; graph/source hash immutable.
+- Explicit bindings replace generated descriptors for the same literal field; duplicate field/semantic assignments, graph links and incompatible media/type pairs fail.
+- Hidden/Advanced values remain submitted; unreachable loader media is inactive and its imported literal is retained.
+- Preparation preserves saved layouts/values and uses session/revision checks around outside-lock registry/compiler I/O. Structural errors retain the draft for correction.
+- Generate uses Custom for new standalone drafts; older mode/context values remain readable. Jobs Edit/Reuse restores exact values/media into Generate.
+- Render tags/provenance derive from job.results asset IDs; Renders contains unique shared assets and links all producing attempts.
