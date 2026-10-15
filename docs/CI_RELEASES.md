@@ -5,7 +5,8 @@ The configured remote is currently GitHub. A GitLab pipeline requires importing/
 
 ## GitLab
 
-Branches and merge requests run checks before packaging:
+Only version-tag pushes (`vX.Y.Z`) create a pipeline. Branch commits, merge requests
+and manual runs do not start builds. Tag pipelines run these checks before packaging:
 
 - Rust formatting and workspace tests; frontend types, tests and production build.
 - Mocked workflow-wrapper, optional-input, queue-selection and ComfyUI interaction acceptance; provider HTTP contract tests.
@@ -19,13 +20,15 @@ Linux jobs use Ubuntu 22.04 on `saas-linux-small-amd64`; ARM64 entries remain co
 
 The Windows job requires a prepared x64 PowerShell shell runner tagged `WINDOWS_RUNNER_TAG` (default `windows-x64`) with Node 22.14.0, rustup and Visual Studio C++ build tools. It builds unsigned MSI/NSIS EXE installers; no Windows runner is provisioned by this repository.
 
-Create/protect release tags in the GitLab project settings. Enable the Package Registry. Publication uses the built-in `CI_JOB_TOKEN`; no personal access token is stored in this repository. Tag pipelines use the same source checks as branch pipelines. Failed checks/builds prevent publication.
+Create/protect release tags in the GitLab project settings. Enable the Package Registry. Publication uses the built-in `CI_JOB_TOKEN`; no personal access token is stored in this repository. Every tag pipeline runs the source checks before building. Failed checks/builds prevent publication.
 
 macOS artifacts are ad-hoc signed and are not Apple-notarized. Distribution signing/notarization is a separate unfinished release step. All five desktop builds and all four native Linux/macOS agent smoke tests passed on GitHub for 0.1.6. GitLab execution remains unverified; foreign desktop binaries were not launched on this Mac.
 
 ## GitHub
 
-`checks.yml` runs source acceptance and a native desktop matrix: macOS Apple Silicon, Windows x64, and Linux x86_64/ARM64. Agents are built and smoke-tested natively for Linux x86_64 and macOS Apple Silicon, with matching relays. macOS Intel desktop/agent and Ubuntu ARM64 agent entries are commented out at the user's request; Linux ARM64 desktop remains active on GitHub. `release.yml` validates a `vX.Y.Z` tag, calls that matrix, stages every artifact and checksum in a draft, then **publishes the complete prerelease automatically**. Failed checks/builds prevent publication. Reruns refuse to overwrite an already published release. Nothing creates a tag automatically.
+`checks.yml` is reusable (`workflow_call`) only; normal commits and pull requests
+do not run it. `release.yml` is triggered only by `v*` tag pushes and rejects tags
+that do not match the source version. It calls source acceptance and a native desktop matrix: macOS Apple Silicon, Windows x64, and Linux x86_64/ARM64. Agents are built and smoke-tested natively for Linux x86_64 and macOS Apple Silicon, with matching relays. macOS Intel desktop/agent and Ubuntu ARM64 agent entries are commented out at the user's request; Linux ARM64 desktop remains active on GitHub. `release.yml` validates a `vX.Y.Z` tag, calls that matrix, stages every artifact and checksum in a draft, then **publishes the complete prerelease automatically**. Failed checks/builds prevent publication. Reruns refuse to overwrite an already published release. Nothing creates a tag automatically.
 
 [Published 0.1.5 downloads](https://github.com/gubnota/auteur/releases/tag/v0.1.5) contain 19 assets: macOS ARM/Intel DMGs, Windows x64 MSI/EXE, Linux x86_64/ARM64 DEB/AppImage, both Linux agents, notebooks, guide and checksums. Exact source: `c5955734dea43963e98ade98e0fca457773b4324`. [Hosted run 38512704998](https://github.com/gubnota/auteur/actions/runs/38512704998) passed source checks, all five desktop builds and both native agent smoke tests. Its final publication step failed because an upload glob included empty bundle directories. Publication was recovered from the seven digest-verified artifact archives without rebuilding or changing the tag. All 19 public downloads were then independently verified against asset/global SHA-256, container formats, Linux architecture headers and agent source/bootstrap metadata. Screenshot: [release-0.1.5.jpg](screenshots/release-0.1.5.jpg).
 
@@ -39,11 +42,11 @@ Local source acceptance: 38 Rust tests, 10 frontend tests, seven mocked browser 
 
 ## RunPod agent (primary target)
 
-Branch builds expose **comfyui-agent-linux-x86_64** and **comfyui-agent-macos-aarch64**, independent of the desktop matrix after shared checks pass. GitLab adds a branch suffix. Linux ARM64 and macOS Intel agent entries are commented out; the packager still supports those targets. Each archive includes matching metadata/checksums and the [RunPod setup guide](../deploy/runpod/README.md). Packaging rejects wrong ELF/Mach-O architecture headers. Both CI systems explicitly build/package the agent, matching relay binary, guide, runtime helper and workflow compiler. RunPod connects outbound over authenticated HTTPS, without a public ComfyUI port. No live pod or relay is provisioned by CI.
+Version-tag builds expose **comfyui-agent-linux-x86_64** and **comfyui-agent-macos-aarch64**, independent of the desktop matrix after shared checks pass. Linux ARM64 and macOS Intel agent entries are commented out; the packager still supports those targets. Each archive includes matching metadata/checksums and the [RunPod setup guide](../deploy/runpod/README.md). Packaging rejects wrong ELF/Mach-O architecture headers. Both CI systems explicitly build/package the agent, matching relay binary, guide, runtime helper and workflow compiler. RunPod connects outbound over authenticated HTTPS, without a public ComfyUI port. No live pod or relay is provisioned by CI.
 
 Workflow compilation additionally requires Python, the pinned `workflow-compiler-requirements.txt` dependencies and Playwright Chromium; the browser is not embedded in the archive. See [workflow setup](WORKFLOW_SETUP.md) for installation and inspect/install/compile commands. Direct local/remote compilation uses the selected ComfyUI frontend exporter without opening its interface or changing a live canvas.
 
-Hosted agent acceptance: Linux and macOS, each on x86_64 and ARM64, built and passed native help/version smoke tests in [run 38557508498](https://github.com/gubnota/auteur/actions/runs/38557508498). Durable Linux downloads: [x86_64 archive](https://github.com/gubnota/auteur/releases/download/v0.1.6/mymovie-agent-linux-x86_64.tar.gz), [ARM64 archive](https://github.com/gubnota/auteur/releases/download/v0.1.6/mymovie-agent-linux-aarch64.tar.gz). macOS utilities are available from the same release. Use the corresponding release metadata/checksums to verify the archive and bootstrap. Branch artifacts expire after 14 days; version-tag releases provide durable distribution links. Cloud GPU execution is a separate acceptance step.
+Hosted agent acceptance: Linux and macOS, each on x86_64 and ARM64, built and passed native help/version smoke tests in [run 38557508498](https://github.com/gubnota/auteur/actions/runs/38557508498). Durable Linux downloads: [x86_64 archive](https://github.com/gubnota/auteur/releases/download/v0.1.6/mymovie-agent-linux-x86_64.tar.gz), [ARM64 archive](https://github.com/gubnota/auteur/releases/download/v0.1.6/mymovie-agent-linux-aarch64.tar.gz). macOS utilities are available from the same release. Use the corresponding release metadata/checksums to verify the archive and bootstrap. CI job artifacts expire after 14 days; version-tag releases provide durable distribution links. Cloud GPU execution is a separate acceptance step.
 
 ## Colab/Kaggle deployment
 
