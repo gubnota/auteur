@@ -18,12 +18,19 @@ pub async fn start_initialization(
         let setup = workflow_core::for_setup(&w, &connection_id).map_err(err)?;
         (connection(&i, &connection_id).map_err(err)?, w, p.id, setup)
     };
-    relay(&c).map_err(err)?.command("initialize",json!({"workflows":[setup],"sourceWorkflow":w,"projectId":pid,"connectionId":connection_id,"reviewId":review_id,"guided":true,"apply":true})).await.map_err(err)
+    relay(&c).map_err(err)?.command("initialize",json!({"workflows":[setup],"sourceWorkflow":w,"workspaceId":pid,"connectionId":connection_id,"reviewId":review_id,"guided":true,"apply":true})).await.map_err(err)
 }
 #[tauri::command]
-pub async fn list_initializations(state: S<'_>, connection_id: String) -> Reply<Value> {
+pub async fn list_initializations(
+    state: S<'_>,
+    connection_id: String,
+    passive: Option<bool>,
+) -> Reply<Value> {
     let c = connection(&*state.inner.lock().await, &connection_id).map_err(err)?;
-    relay(&c)
+    if passive.unwrap_or(false) && credential_for(&c, true).is_err() {
+        return Ok(json!([]));
+    }
+    relay_for(&c, passive.unwrap_or(false))
         .map_err(err)?
         .get(&format!(
             "/v1/nodes/{}/operations",
@@ -96,13 +103,14 @@ pub async fn apply_initialization(
     {
         return Err("Connection changed".into());
     }
-    let Some(s) = i.project.as_mut() else {
-        return Ok(None);
-    };
+    let s = &mut i.workspace;
     let mut p = s.read().map_err(err)?;
-    if p.id != status["payload"]["projectId"] {
+    if status["payload"]["workspaceId"]
+        .as_str()
+        .is_some_and(|id| id != p.id)
+    {
         return Ok(None);
-    };
+    }
     let Some(w) = p
         .workflows
         .iter_mut()
@@ -168,35 +176,33 @@ pub async fn console_request(
 #[tauri::command]
 pub async fn clear_workflow_trash(state: S<'_>) -> Reply<Project> {
     let mut i = state.inner.lock().await;
-    i.project
-        .as_mut()
-        .ok_or("Movie closed")?
-        .clear_workflow_trash()
-        .map_err(err)
+    i.workspace.clear_workflow_trash().map_err(err)
 }
 #[tauri::command]
 pub async fn archive_workflow(state: S<'_>, workflow_id: String, archived: bool) -> Reply<Project> {
     // Trash preserves the exact workflow and any operation receipts. An offline node
     // must not prevent removing a movie copy; results remain traceable by ID.
     let mut i = state.inner.lock().await;
-    let s = i.project.as_mut().ok_or("Movie closed")?;
+    let s = &mut i.workspace;
     let mut p = s.read().map_err(err)?;
-    let w = p
+    let family = p
         .workflows
-        .iter_mut()
+        .iter()
         .find(|w| w.id == workflow_id)
-        .ok_or("Workflow missing")?;
-    w.wrapper.archived_at = if archived {
-        Some(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_err(err)?
-                .as_secs()
-                .to_string(),
-        )
-    } else {
-        None
-    };
+        .ok_or("Workflow missing")?
+        .wrapper
+        .family_id
+        .clone();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(err)?
+        .as_secs()
+        .to_string();
+    for w in &mut p.workflows {
+        if w.id == workflow_id || (!family.is_empty() && w.wrapper.family_id == family) {
+            w.wrapper.archived_at = archived.then(|| timestamp.clone());
+        }
+    }
     let rev = p.revision;
     s.save(p, rev).map_err(err)
 }

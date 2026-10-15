@@ -88,14 +88,14 @@ async fn prepare_draft(state: &Studio, draft: &JobDraft) -> Reply<()> {
             true
         };
         if state.inner.lock().await.session != epoch {
-            return Err("Movie changed during preparation; review again".into());
+            return Err("Studio changed during preparation; review again".into());
         }
         if refresh {
             catalogue::prepare_target(state, w, c.id).await?;
         }
     }
     if state.inner.lock().await.session != epoch {
-        return Err("Movie changed during preparation; review again".into());
+        return Err("Studio changed during preparation; review again".into());
     }
     Ok(())
 }
@@ -110,10 +110,7 @@ pub async fn preview_job_draft(state: S<'_>, draft: JobDraft) -> Reply<Value> {
 #[tauri::command]
 pub async fn list_job_runs(state: S<'_>) -> Reply<Vec<JobRun>> {
     let i = state.inner.lock().await;
-    match &i.project {
-        Some(s) => runs::list(s).map_err(err),
-        None => Ok(vec![]),
-    }
+    runs::list(&i.workspace).map_err(err)
 }
 #[tauri::command]
 pub async fn start_job_draft(
@@ -254,8 +251,8 @@ pub async fn control_job_run(state: S<'_>, run_id: String, action: String) -> Re
 }
 
 fn session(i: &Inner, epoch: u64) -> Result<()> {
-    if i.session != epoch || i.project.is_none() {
-        return Err("Project session changed; response retained only by remote provider".into());
+    if i.session != epoch {
+        return Err("Studio session changed; response retained by remote provider".into());
     }
     Ok(())
 }
@@ -410,7 +407,7 @@ async fn poll(
             j.error = Some(error);
             job_core::transition(&mut j, "collecting")?;
         } else {
-            let s = i.project.as_mut().unwrap();
+            let s = &mut i.workspace;
             let mut p = s.read()?;
             for (name, bytes) in outputs {
                 let dir = tempfile::tempdir()?;
@@ -450,20 +447,20 @@ async fn poll(
             .title("MyMovie Studio")
             .body(format!("Render {}", j.state))
             .show();
-        let _ = app.emit("project-changed", store(&i)?.read()?);
+        let _ = app.emit("workspace-changed", store(&i)?.read()?);
     }
     Ok(())
 }
 pub async fn drive(studio: &Arc<Studio>, app: &tauri::AppHandle) -> Result<Vec<Job>> {
     let i = studio.inner.lock().await;
-    if i.project.is_none() {
-        return Ok(vec![]);
-    }
     let epoch = i.session;
     let attempts = job_core::list(store(&i)?)?;
     let eligible = runs::eligible(&attempts, &i.settings.read()?.connections)?;
     for mut j in attempts {
         if job_core::terminal(&j.state) {
+            continue;
+        }
+        if !eligible.contains(&j.id) && j.remote_id.is_none() {
             continue;
         }
         if studio
@@ -476,7 +473,7 @@ pub async fn drive(studio: &Arc<Studio>, app: &tauri::AppHandle) -> Result<Vec<J
         }
         let b = match connection(&i, &j.connection_id)
             .and_then(|c| workflow_core::frozen_connection(&j, &c))
-            .and_then(|c| backend(&c))
+            .and_then(|c| backend_for(&c, true))
         {
             Ok(b) => b,
             Err(e) => {
@@ -517,9 +514,6 @@ pub async fn drive(studio: &Arc<Studio>, app: &tauri::AppHandle) -> Result<Vec<J
     }
     drop(i);
     let i = studio.inner.lock().await;
-    if i.project.is_none() {
-        return Ok(vec![]);
-    }
     let all = job_core::list(store(&i)?)?;
     super::dock(
         app,
@@ -631,7 +625,7 @@ mod tests {
         }
     }
     #[tokio::test]
-    async fn independent_submissions_overlap_and_switched_session_cannot_receive_response() {
+    async fn independent_submissions_survive_movie_open_close_and_switch() {
         let dir = tempfile::tempdir().unwrap();
         let old_path = dir.path().join("old.mymovie");
         let studio = Arc::new(Studio::new(dir.path(), Arc::new(Mutex::new(vec![]))).unwrap());
@@ -702,24 +696,26 @@ mod tests {
         {
             let mut i = studio.inner.lock().await;
             i.project = None;
-            i.session += 1;
             i.project =
                 Some(ProjectStore::create(dir.path().join("new.mymovie"), "New", false).unwrap());
         }
         release_a.notify_one();
-        assert!(first.await.unwrap().is_err());
+        first.await.unwrap().unwrap();
         {
             let i = studio.inner.lock().await;
-            assert!(job_core::list(store(&i).unwrap()).unwrap().is_empty());
+            let jobs = job_core::list(store(&i).unwrap()).unwrap();
+            assert_eq!(jobs.len(), 2);
+            assert_eq!(
+                jobs.iter()
+                    .find(|j| j.id == a.id)
+                    .unwrap()
+                    .remote_id
+                    .as_deref(),
+                Some("task-a")
+            );
         }
         let old = ProjectStore::open(old_path).unwrap();
-        let frozen = job_core::list(&old)
-            .unwrap()
-            .into_iter()
-            .find(|j| j.id == a.id)
-            .unwrap();
-        assert_eq!(frozen.state, "unknown");
-        assert!(frozen.remote_id.is_none());
+        assert!(job_core::list(&old).unwrap().is_empty());
     }
     #[tokio::test]
     async fn canceled_staging_never_submits() {
@@ -773,4 +769,48 @@ pub async fn control_job_tasks(
         });
     }
     Ok(jobs)
+}
+
+/// Stop dispatch for this endpoint before cancelling owned attempts. Aliases share
+/// the same lane; unknown submissions require reconciliation, never blind retry.
+#[tauri::command]
+pub async fn abort_node_queue(state: S<'_>, connection_id: String) -> Reply<Vec<Job>> {
+    let ids = {
+        let i = state.inner.lock().await;
+        let lane = runs::lane(&connection(&i, &connection_id).map_err(err)?).map_err(err)?;
+        let connections = i.settings.read().map_err(err)?.connections;
+        let mut ids = vec![];
+        for mut j in job_core::list(&i.workspace).map_err(err)? {
+            let matches = connections
+                .iter()
+                .find(|c| c.id == j.connection_id)
+                .and_then(|c| workflow_core::frozen_connection(&j, c).ok())
+                .and_then(|c| runs::lane(&c).ok())
+                .is_some_and(|l| l == lane);
+            if !matches || job_core::terminal(&j.state) {
+                continue;
+            }
+            if matches!(j.state.as_str(), "waiting" | "paused" | "staging") && j.remote_id.is_none()
+            {
+                job_core::transition(&mut j, "canceled").map_err(err)?;
+                job_core::persist(&i.workspace, &j).map_err(err)?;
+            } else {
+                ids.push(j.id);
+            }
+        }
+        ids
+    };
+    let mut errors = vec![];
+    for id in ids {
+        if let Err(e) = super::cancel_job(state.clone(), id).await {
+            errors.push(e);
+        }
+    }
+    if !errors.is_empty() {
+        return Err(format!(
+            "Unsent tasks stopped; some attempts need attention: {}",
+            errors.join("; ")
+        ));
+    }
+    super::list_jobs(state).await
 }

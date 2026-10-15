@@ -11,6 +11,9 @@ pub struct RunnerTokens {
 }
 
 impl RunnerTokens {
+    pub(super) fn desktop_token(&self) -> &str {
+        &self.desktop
+    }
     fn validate(&self) -> Reply<()> {
         if [&self.agent, &self.desktop]
             .iter()
@@ -25,13 +28,24 @@ impl RunnerTokens {
     }
 }
 
+pub(super) fn defaults() -> RunnerTokens {
+    serde_json::from_str(include_str!(
+        "../../../../../deploy/node-auth.defaults.json"
+    ))
+    .expect("bundled node test defaults")
+}
+
 fn entry() -> Reply<keyring::Entry> {
     keyring::Entry::new("net.fenki.mymovie-studio", "runner-token-pair")
         .map_err(|_| "Unable to access the system token vault".into())
 }
 
 #[tauri::command]
-pub fn get_runner_tokens() -> Reply<RunnerTokens> {
+pub fn get_runner_tokens(saved: Option<bool>) -> Reply<RunnerTokens> {
+    // Public test defaults need no vault access. Reading private saved values is explicit.
+    if !saved.unwrap_or(false) {
+        return Ok(defaults());
+    }
     let raw = match entry()?.get_password() {
         Ok(raw) => raw,
         Err(keyring::Error::NoEntry) => {
@@ -48,6 +62,10 @@ pub fn get_runner_tokens() -> Reply<RunnerTokens> {
 #[tauri::command]
 pub fn save_runner_tokens(tokens: RunnerTokens) -> Reply<()> {
     tokens.validate()?;
+    let predefined = defaults();
+    if tokens.agent == predefined.agent && tokens.desktop == predefined.desktop {
+        return Ok(());
+    }
     // One vault record keeps the pair atomic; no token goes into settings/project JSON.
     let raw = serde_json::to_string(&tokens).map_err(|_| "Unable to encode node tokens")?;
     entry()?

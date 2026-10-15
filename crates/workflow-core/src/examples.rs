@@ -1,4 +1,4 @@
-//! Shipped, immutable examples. Pinned movie copies remain ordinary editable wrappers.
+//! Shipped, immutable examples. Examples remain immutable; editable copies receive a new identity.
 use project_core::Result;
 use serde_json::{Value, json};
 use studio_contracts::{InstallArtifact, Workflow};
@@ -10,7 +10,7 @@ pub fn rembg_artifact() -> Result<InstallArtifact> {
     ))?)
 }
 pub fn catalogue() -> Result<Vec<Workflow>> {
-    let common = "## Connect once\n1. Run all cells in the bundled Colab or Kaggle notebook on a GPU runtime. The notebook installs the base runtime and agent, without workflow weights.\n2. Connections → Connect notebook GPUs: copy the printed relay URL and node ID. Enable Temporary Cloudflare tunnel for a trycloudflare.com address. Keep the notebook running.\n3. Select Run and install on in this workflow window and check its address/node ID. Open Setup → Initialize on your instance. Review dependency destinations, download sizes and licenses.\n4. Install & prepare on your instance. The agent downloads verified models/plugins/wheels, restarts its managed idle ComfyUI if necessary, prepares the original graph, publishes it in this instance’s library and verifies a weight-free canary with collected bytes. No extra Jupyter commands are needed.\n5. Create a job, choose media and destination, Add to queue, then Run selected in Jobs. Results appear as render-tagged Library media.\n## Sessions and custom dependencies\nChecksummed files already present are reused. Readiness belongs to this runtime/session and workflow version; a fresh Colab/Kaggle runtime needs checking again. Kaggle uses independent GPU workers sharing model storage. Never restart while either worker has jobs.\nFor custom LoRAs/models, add exact source, SHA256, byte size, license and category in Setup. For plugins, add an immutable archive and commit; declare exact Python package pins. The agent resolves compatible binary wheels during review. Unsupported wheels or incomplete pins block initialization with a reason. External unmanaged ComfyUI remains read-only.\n## Illustration\nThe preview is an original illustration of this example, not a claimed generation result.";
+    let common = "## Connect once\n1. Run all cells in the bundled Colab or Kaggle notebook on a CPU or GPU runtime (the SD 1.5 demo requires CUDA). The notebook installs the base runtime and agent, without workflow weights.\n2. Connections → Connect notebook GPUs: copy the printed relay URL and node ID. Enable Temporary Cloudflare tunnel for a trycloudflare.com address. Keep the notebook running.\n3. Select Run and install on in this workflow window and check its address/node ID. Open Setup → Initialize on your instance. Review dependency destinations, download sizes and licenses.\n4. Install & prepare on your instance. The agent downloads verified models/plugins/wheels, restarts its managed idle ComfyUI if necessary, prepares the original graph, publishes it in this instance’s library and verifies a weight-free canary with collected bytes. No extra Jupyter commands are needed.\n5. Create a job, choose media and destination, Add to queue, then Run selected in Jobs. Results appear as render-tagged Library media.\n## Sessions and custom dependencies\nChecksummed files already present are reused. Readiness belongs to this runtime/session and workflow version; a fresh Colab/Kaggle runtime needs checking again. Kaggle uses independent GPU workers sharing model storage. Never restart while either worker has jobs.\nFor custom LoRAs/models, add exact source, SHA256, byte size, license and category in Setup. For plugins, add an immutable archive and commit; declare exact Python package pins. The agent resolves compatible binary wheels during review. Unsupported wheels or incomplete pins block initialization with a reason. External unmanaged ComfyUI remains read-only.\n## Illustration\nThe preview is an original illustration of this example, not a claimed generation result.";
     let definitions = [
         (
             "00000000-0000-4000-8000-000000000101",
@@ -89,16 +89,54 @@ pub fn catalogue() -> Result<Vec<Workflow>> {
         }
         result.push(w);
     }
+    result.extend(flux3()?);
     Ok(result)
 }
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
+    fn flux_families_roundtrip_all_variants_and_references_without_profiles() {
+        let all = catalogue().unwrap();
+        for family in [
+            "00000000-0000-4000-8000-000000000200",
+            "00000000-0000-4000-8000-000000000210",
+        ] {
+            let variants: Vec<_> = all
+                .iter()
+                .filter(|w| w.wrapper.family_id == family)
+                .cloned()
+                .collect();
+            assert_eq!(variants.len(), 3);
+            let temp = tempfile::tempdir().unwrap();
+            let path = temp.path().join("family.mymovie-workflow");
+            crate::bundle::write_file(&path, &variants).unwrap();
+            let restored = crate::bundle::read_file(&path).unwrap();
+            assert_eq!(restored.len(), 3);
+            for (a, b) in variants.iter().zip(restored) {
+                assert_eq!(a.editor_graph, b.editor_graph);
+                assert_eq!(a.version, b.version);
+                assert_eq!(
+                    a.wrapper.sample_media.len(),
+                    if family.ends_with("210") { 2 } else { 0 }
+                );
+                assert!(b.profiles.is_empty());
+                for sample in &b.wrapper.sample_media {
+                    assert!(sample.bytes().unwrap().len() > 100);
+                }
+            }
+            if family.ends_with("210") {
+                let mut bad = variants[0].clone();
+                bad.wrapper.sample_media[0].sha256 = "0".repeat(64);
+                assert!(crate::bundle::export(&[bad]).is_err());
+            }
+        }
+    }
+    #[test]
     fn examples_are_portable_and_have_stable_identity() {
         let a = catalogue().unwrap();
         let b = catalogue().unwrap();
-        assert_eq!(a.len(), 3);
+        assert_eq!(a.len(), 9);
         for (a, b) in a.iter().zip(b) {
             assert_eq!(a.id, b.id);
             assert_eq!(a.version, b.version);
@@ -123,4 +161,58 @@ mod tests {
             rembg_artifact().unwrap().sha256
         );
     }
+}
+
+fn flux3() -> Result<Vec<Workflow>> {
+    let entries: Vec<Value> =
+        serde_json::from_str(include_str!("../../../examples/flux3/catalogue.json"))?;
+    let mut result = vec![];
+    for e in entries {
+        let source = match e["source"].as_str().unwrap_or("") {
+            "t2i-t4.json" => include_str!("../../../examples/flux3/t2i-t4.json"),
+            "t2i-rtx.json" => include_str!("../../../examples/flux3/t2i-rtx.json"),
+            "t2i-mps.json" => include_str!("../../../examples/flux3/t2i-mps.json"),
+            "i2i-t4.json" => include_str!("../../../examples/flux3/i2i-t4.json"),
+            "i2i-rtx.json" => include_str!("../../../examples/flux3/i2i-rtx.json"),
+            "i2i-mps.json" => include_str!("../../../examples/flux3/i2i-mps.json"),
+            _ => return Err("Unknown FLUX example".into()),
+        };
+        let mut w =
+            crate::import_source(e["name"].as_str().unwrap(), serde_json::from_str(source)?)?;
+        w.id = e["id"].as_str().unwrap().into();
+        w.media_kind = "image".into();
+        w.wrapper = serde_json::from_value(e["wrapper"].clone())?;
+        w.requirements.compatibility = e["compatibility"].as_str().unwrap().into();
+        w.requirements.artifacts = serde_json::from_value(e["artifacts"].clone())?;
+        for (semantic, node, input, label, advanced) in [
+            ("positivePrompt", "4", "text", "Prompt", false),
+            ("width", "6", "width", "Width", false),
+            ("height", "6", "height", "Height", false),
+            ("seed", "7", "seed", "Seed", true),
+            ("steps", "7", "steps", "Sampling steps", true),
+            ("cfg", "7", "cfg", "Guidance", true),
+            ("batchSize", "6", "batch_size", "Image count", true),
+        ] {
+            w.bindings.push(serde_json::from_value(json!({"semantic":semantic,"nodeId":node,"input":input,"valueType":if input=="text"{"string"}else{"number"}}))?);
+            w.layout.inputs.push(serde_json::from_value(json!({"nodeId":node,"input":input,"label":label,"group":if advanced{"Advanced"}else{"Generation"},"hidden":false,"advanced":advanced}))?);
+        }
+        if e["i2i"] == true {
+            for (order, node, label) in [
+                (0, "10", "Subject / identity reference"),
+                (1, "14", "Style / palette reference"),
+            ] {
+                w.bindings.push(serde_json::from_value(json!({"semantic":format!("reference{order}"),"nodeId":node,"input":"image","valueType":"string","media":{"kind":"image","role":"referenceImage","order":order}}))?);
+                w.layout.inputs.push(serde_json::from_value(json!({"nodeId":node,"input":"image","label":label,"group":"References","hidden":false,"advanced":false,"mediaRole":"referenceImage"}))?);
+            }
+        }
+        w.layout.outputs = serde_json::from_value(
+            json!([{"nodeId":"9","label":"Generated image","selected":true}]),
+        )?;
+        w.wrapper.validate()?;
+        for a in &w.requirements.artifacts {
+            a.validate()?;
+        }
+        result.push(w);
+    }
+    Ok(result)
 }

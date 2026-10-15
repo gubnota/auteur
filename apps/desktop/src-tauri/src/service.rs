@@ -1,3 +1,5 @@
+mod workspace;
+pub use workspace::*;
 mod catalogue;
 mod initialization;
 pub use initialization::*;
@@ -26,6 +28,7 @@ pub struct Studio {
 }
 pub struct Inner {
     pub project: Option<ProjectStore>,
+    pub workspace: ProjectStore,
     pub settings: SettingsStore,
     pub session: u64,
 }
@@ -34,6 +37,7 @@ impl Studio {
         Ok(Self {
             inner: tokio::sync::Mutex::new(Inner {
                 project: None,
+                workspace: workspace::open(dir)?,
                 session: 0,
                 settings: SettingsStore::open(&dir.join("app.sqlite"))?,
             }),
@@ -48,32 +52,63 @@ fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 fn store(i: &Inner) -> Result<&ProjectStore> {
+    Ok(&i.workspace)
+}
+fn movie_store(i: &Inner) -> Result<&ProjectStore> {
     i.project
         .as_ref()
-        .ok_or_else(|| "Open a movie first".into())
+        .ok_or_else(|| "Open a Movie to use this workspace".into())
 }
 fn credential(c: &Connection) -> Result<String> {
+    credential_for(c, false)
+}
+fn credential_cache() -> &'static Mutex<std::collections::HashMap<String, String>> {
+    static CACHE: std::sync::OnceLock<Mutex<std::collections::HashMap<String, String>>> =
+        std::sync::OnceLock::new();
+    CACHE.get_or_init(Default::default)
+}
+fn credential_for(c: &Connection, passive: bool) -> Result<String> {
     let reference = c
         .credential_ref
         .as_ref()
         .ok_or("Enter credential in connection settings")?;
     let expected = format!("connection:{}", c.id);
+    if c.kind == "relay" && reference == &format!("{expected}:test-default") {
+        return Ok(runner_tokens::defaults().desktop_token().into());
+    }
     if reference != &expected {
         return Err("Credential identity mismatch".into());
     }
-    Ok(keyring::Entry::new("net.fenki.mymovie-studio", reference)?.get_password()?)
+    if let Some(value) = credential_cache().lock().unwrap().get(reference).cloned() {
+        return Ok(value);
+    }
+    if passive {
+        return Err("Check this connection to unlock monitoring for this session".into());
+    }
+    let value = keyring::Entry::new("net.fenki.mymovie-studio", reference)?.get_password()?;
+    credential_cache()
+        .lock()
+        .unwrap()
+        .insert(reference.clone(), value.clone());
+    Ok(value)
 }
 fn backend(c: &Connection) -> Result<Box<dyn ExecutionBackend>> {
+    backend_for(c, false)
+}
+fn backend_for(c: &Connection, passive: bool) -> Result<Box<dyn ExecutionBackend>> {
     Ok(match c.kind.as_str() {
         "comfyui" => Box::new(provider_comfyui::ComfyUi::new(&c.url)?),
-        "relay" => Box::new(relay(c)?),
+        "relay" => Box::new(relay_for(c, passive)?),
         _ => return Err("Unknown backend".into()),
     })
 }
 fn relay(c: &Connection) -> Result<provider_relay::Relay> {
+    relay_for(c, false)
+}
+fn relay_for(c: &Connection, passive: bool) -> Result<provider_relay::Relay> {
     provider_relay::Relay::new(
         &c.url,
-        credential(c)?,
+        credential_for(c, passive)?,
         c.deployment_id
             .as_deref()
             .ok_or("Runner node ID required")?,
@@ -89,11 +124,40 @@ fn connection(i: &Inner, id: &str) -> Result<Connection> {
 }
 fn select(_app: &tauri::AppHandle, i: &mut Inner, new: ProjectStore) -> Result<Project> {
     let p = new.read()?;
-    job_core::recover(&new)?;
+    workspace::migrate(&mut i.workspace, &new)?;
     i.settings.recent(&new.path().to_string_lossy(), &p.name)?;
-    i.session += 1;
     i.project = Some(new);
     Ok(p)
+}
+#[tauri::command]
+pub fn local_agent_instructions() -> String {
+    include_str!("../../../../docs/LOCAL_COMFYUI_TEST.md").into()
+}
+#[tauri::command]
+pub fn open_external_url(url: String) -> Reply<()> {
+    let parsed = reqwest::Url::parse(&url).map_err(|_| "Invalid source URL")?;
+    if parsed.scheme() != "https"
+        || parsed.host_str().is_none()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        return Err("Use a public HTTPS source without embedded credentials".into());
+    }
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("open");
+    #[cfg(target_os = "linux")]
+    let mut command = std::process::Command::new("xdg-open");
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut c = std::process::Command::new("rundll32");
+        c.arg("url.dll,FileProtocolHandler");
+        c
+    };
+    command
+        .arg(parsed.as_str())
+        .spawn()
+        .map_err(|_| "Unable to open your browser")?;
+    Ok(())
 }
 #[tauri::command]
 pub async fn create_project(
@@ -132,13 +196,12 @@ pub async fn open_project(
 #[tauri::command]
 pub async fn close_project(state: S<'_>) -> Reply<()> {
     let mut i = state.inner.lock().await;
-    i.session += 1;
     i.project.take();
     Ok(())
 }
 #[tauri::command]
 pub async fn get_project(state: S<'_>) -> Reply<Project> {
-    store(&*state.inner.lock().await)
+    movie_store(&*state.inner.lock().await)
         .and_then(ProjectStore::read)
         .map_err(err)
 }
@@ -149,7 +212,7 @@ pub async fn save_project(
     expected_revision: u64,
 ) -> Reply<Project> {
     let mut i = state.inner.lock().await;
-    let s = i.project.as_mut().ok_or("No movie open")?;
+    let s = i.project.as_mut().ok_or("Open a Movie first")?;
     let old = s.read().map_err(err)?;
     if project.assets.len() != old.assets.len()
         || project.workflows.len() != old.workflows.len()
@@ -167,7 +230,7 @@ pub async fn save_project(
 #[tauri::command]
 pub async fn import_asset(state: S<'_>, path: String, linked: Option<bool>) -> Reply<Project> {
     let mut i = state.inner.lock().await;
-    let s = i.project.as_mut().ok_or("No movie open")?;
+    let s = &mut i.workspace;
     let p = s.read().map_err(err)?;
     let next = asset_core::import_target(
         s.path(),
@@ -190,7 +253,7 @@ pub async fn import_character_references(
     linked: Option<bool>,
 ) -> Reply<Project> {
     let mut i = state.inner.lock().await;
-    let s = i.project.as_mut().ok_or("No movie open")?;
+    let s = i.project.as_mut().ok_or("Open a Movie first")?;
     let p = s.read().map_err(err)?;
     let next = asset_core::import_target(
         s.path(),
@@ -204,31 +267,23 @@ pub async fn import_character_references(
     )
     .map_err(err)?;
     let revision = next.revision;
-    s.save(next, revision).map_err(err)
+    let saved = s.save(next, revision).map_err(err)?;
+    let Inner {
+        workspace, project, ..
+    } = &mut *i;
+    workspace::migrate(workspace, project.as_ref().unwrap()).map_err(err)?;
+    Ok(saved)
 }
 #[tauri::command]
 pub async fn import_workflow(state: S<'_>, path: String) -> Reply<Project> {
     let mut i = state.inner.lock().await;
     let file = Path::new(&path);
-    if std::fs::metadata(file).map_err(err)?.len() > 16 * 1024 * 1024 {
-        return Err("Workflow exceeds 16 MiB limit".into());
-    }
-    let graph = serde_json::from_slice(&std::fs::read(file).map_err(err)?).map_err(err)?;
-    let bundled = workflow_core::bundle::is_bundle(&graph);
-    let mut workflows = if bundled {
-        workflow_core::bundle::import(graph).map_err(err)?
-    } else {
-        vec![
-            workflow_core::import_source(
-                file.file_stem()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .as_ref(),
-                graph,
-            )
-            .map_err(err)?,
-        ]
-    };
+    let bundled = file.extension().and_then(|x| x.to_str()) == Some("mymovie-workflow")
+        || std::fs::read(file)
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+            .is_some_and(|v| workflow_core::bundle::is_bundle(&v));
+    let mut workflows = workflow_core::bundle::read_file(file).map_err(err)?;
     let catalogue = i.settings.catalogue().map_err(err)?;
     for w in &mut workflows {
         if !bundled
@@ -249,8 +304,9 @@ pub async fn import_workflow(state: S<'_>, path: String) -> Reply<Project> {
             w.last_target = old.last_target.clone();
         }
     }
-    let s = i.project.as_mut().ok_or("No movie open")?;
+    let s = &mut i.workspace;
     let mut p = s.read().map_err(err)?;
+    catalogue::materialize_samples(s.path(), &mut p, &workflows).map_err(err)?;
     for w in &mut workflows {
         if !bundled
             && let Some(old) = p
@@ -316,10 +372,17 @@ pub fn save_credential(connection_id: String, secret: String) -> Reply<String> {
         return Err("Credential is empty".into());
     }
     let reference = format!("connection:{connection_id}");
+    if secret == runner_tokens::defaults().desktop_token() {
+        return Ok(format!("{reference}:test-default"));
+    }
     keyring::Entry::new("net.fenki.mymovie-studio", &reference)
         .map_err(err)?
         .set_password(&secret)
         .map_err(err)?;
+    credential_cache()
+        .lock()
+        .unwrap()
+        .insert(reference.clone(), secret);
     Ok(reference)
 }
 #[tauri::command]
@@ -345,7 +408,7 @@ pub async fn clear_recent_projects(state: S<'_>) -> Reply<Value> {
 #[tauri::command]
 pub async fn project_history(state: S<'_>) -> Reply<Value> {
     let i = state.inner.lock().await;
-    let s = store(&i).map_err(err)?;
+    let s = movie_store(&i).map_err(err)?;
     let mut st = s
         .connection()
         .prepare("SELECT revision,json FROM history ORDER BY revision DESC LIMIT 50")
@@ -359,14 +422,22 @@ pub async fn project_history(state: S<'_>) -> Reply<Value> {
 #[tauri::command]
 pub async fn list_jobs(state: S<'_>) -> Reply<Vec<Job>> {
     let i = state.inner.lock().await;
-    match &i.project {
-        Some(s) => job_core::list(s).map_err(err),
-        None => Ok(vec![]),
-    }
+    job_core::list(&i.workspace).map_err(err)
 }
 #[tauri::command]
-pub async fn connection_health(state: S<'_>, connection_id: String) -> Reply<Value> {
+pub async fn connection_health(
+    state: S<'_>,
+    connection_id: String,
+    passive: Option<bool>,
+) -> Reply<Value> {
     let c = connection(&*state.inner.lock().await, &connection_id).map_err(err)?;
+    if c.kind == "relay" && passive.unwrap_or(false) {
+        return relay_for(&c, true)
+            .map_err(err)?
+            .health()
+            .await
+            .map_err(err);
+    }
     backend(&c)
         .map_err(err)?
         .health()
@@ -404,7 +475,7 @@ pub async fn submit_job(
             api_family: None,
         }],
     };
-    let s = i.project.as_mut().ok_or("No movie open")?;
+    let s = &mut i.workspace;
     let mut p = s.read().map_err(err)?;
     p.job_drafts.push(draft);
     let rev = p.revision;
@@ -608,7 +679,7 @@ pub async fn plan_deployment(
         (c, workflows, i.settings.read().map_err(err)?)
     };
     if workflows.is_empty() {
-        return Err("Select at least one workflow from this movie".into());
+        return Err("Select at least one workflow".into());
     }
     relay(&c).map_err(err)?.command("provision",json!({"workflows":workflows,"runtimeLock":settings.storage["runtimeLock"],"profile":if guided==Some(true){Value::Null}else{settings.storage["provisionProfile"].clone()},"apply":apply.unwrap_or(false),"guided":guided.unwrap_or(false),"reviewId":review_id})).await.map_err(err)
 }
@@ -656,7 +727,7 @@ pub async fn sync_storage(state: S<'_>, direction: String, asset_ids: Vec<String
     let objects = storage_s3::manifest(&url)
         .await
         .map_err(|_| "Transfer manifest unavailable or expired")?;
-    let s = i.project.as_mut().ok_or("Open a movie first")?;
+    let s = &mut i.workspace;
     let mut p = s.read().map_err(err)?;
     let mut count = 0;
     for o in objects {
@@ -757,7 +828,17 @@ pub async fn import_media_drop(
         return Err("Drop between one and 64 files".into());
     }
     let mut i = state.inner.lock().await;
-    let s = i.project.as_mut().ok_or("No movie open")?;
+    let movie_target = frame_id.is_some()
+        || shot_id.is_some()
+        || episode_id.is_some()
+        || scene_id.is_some()
+        || new_scene.unwrap_or(false)
+        || character_id.is_some();
+    let s = if movie_target {
+        i.project.as_mut().ok_or("Open a Movie first")?
+    } else {
+        &mut i.workspace
+    };
     let p = s.read().map_err(err)?;
     let next = asset_core::import_target(
         s.path(),
@@ -775,13 +856,23 @@ pub async fn import_media_drop(
     )
     .map_err(err)?;
     let revision = next.revision;
-    s.save(next, revision).map_err(err)
+    let saved = s.save(next, revision).map_err(err)?;
+    if movie_target {
+        let Inner {
+            workspace, project, ..
+        } = &mut *i;
+        workspace::migrate(workspace, project.as_ref().unwrap()).map_err(err)?;
+    }
+    Ok(saved)
 }
 
 #[tauri::command]
 pub async fn collect_media(state: S<'_>) -> Reply<Project> {
     let mut i = state.inner.lock().await;
-    let s = i.project.as_mut().ok_or("No movie open")?;
+    let Inner {
+        project, workspace, ..
+    } = &mut *i;
+    let s = project.as_mut().unwrap_or(workspace);
     let p = s.read().map_err(err)?;
     let next = asset_core::collect(s.path(), p).map_err(err)?;
     let revision = next.revision;
@@ -791,7 +882,7 @@ pub async fn collect_media(state: S<'_>) -> Reply<Project> {
 pub async fn asset_availability(state: S<'_>, verify: Option<bool>) -> Reply<Value> {
     let (root, p) = {
         let i = state.inner.lock().await;
-        let s = i.project.as_ref().ok_or("No movie open")?;
+        let s = &i.workspace;
         (s.path().to_path_buf(), s.read().map_err(err)?)
     };
     tauri::async_runtime::spawn_blocking(move || {
@@ -812,7 +903,7 @@ pub async fn asset_availability(state: S<'_>, verify: Option<bool>) -> Reply<Val
 #[tauri::command]
 pub async fn relink_asset(state: S<'_>, asset_id: String, path: String) -> Reply<Project> {
     let mut i = state.inner.lock().await;
-    let s = i.project.as_mut().ok_or("No movie open")?;
+    let s = &mut i.workspace;
     let mut p = s.read().map_err(err)?;
     let a = p
         .assets
@@ -837,12 +928,7 @@ pub async fn export_workflow_setup(
     connection_id: Option<String>,
 ) -> Reply<()> {
     let inner = state.inner.lock().await;
-    let project = inner
-        .project
-        .as_ref()
-        .ok_or("Open a project first")?
-        .read()
-        .map_err(err)?;
+    let project = inner.workspace.read().map_err(err)?;
     let mut workflow = project
         .workflows
         .iter()
@@ -886,7 +972,7 @@ pub async fn import_job_media(
     linked: Option<bool>,
 ) -> Reply<ImportResult> {
     let mut i = state.inner.lock().await;
-    let s = i.project.as_mut().ok_or("No movie open")?;
+    let s = &mut i.workspace;
     let mut p = s.read().map_err(err)?;
     let item = p
         .job_drafts
@@ -997,6 +1083,30 @@ pub fn notebook_setup_script(host: String) -> Reply<String> {
 
 #[cfg(test)]
 mod notebook_script_tests {
+    #[test]
+    fn defaults_and_passive_monitoring_never_need_the_vault() {
+        use super::*;
+        let id = uuid::Uuid::new_v4().to_string();
+        let token = runner_tokens::defaults().desktop_token().to_owned();
+        let reference = save_credential(id.clone(), token.clone()).unwrap();
+        let mut c: Connection = serde_json::from_value(json!({"id":id,"name":"test","kind":"relay","url":"http://127.0.0.1:8789","credentialRef":reference,"deploymentId":"test","concurrency":1})).unwrap();
+        assert!(credential_for(&c, true).is_ok_and(|v| v == token));
+        c.credential_ref = Some(format!("connection:{}", c.id));
+        assert!(credential_for(&c, true).is_err());
+        assert!(get_runner_tokens(None).is_ok());
+        assert!(save_runner_tokens(runner_tokens::defaults()).is_ok());
+    }
+    #[test]
+    fn external_sources_reject_non_https_and_embedded_credentials() {
+        for url in [
+            "file:///tmp/source",
+            "javascript:alert(1)",
+            "https://user:secret@example.com/model",
+            "http://example.com",
+        ] {
+            assert!(super::open_external_url(url.into()).is_err());
+        }
+    }
     #[test]
     fn copyable_notebook_starts_without_including_the_stop_cell() {
         for host in ["colab", "kaggle"] {

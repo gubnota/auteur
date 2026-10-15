@@ -61,9 +61,8 @@ fn hash(v: &Value) -> Result<String> {
 fn catalogue_versions(i: &Inner) -> Result<Vec<Workflow>> {
     let mut saved = i.settings.catalogue()?;
     for example in workflow_core::examples::catalogue()? {
-        if !saved.iter().any(|w| w.id == example.id) {
-            saved.push(example);
-        }
+        saved.retain(|w| w.id != example.id);
+        saved.push(example);
     }
     Ok(saved)
 }
@@ -74,17 +73,29 @@ pub async fn list_workflows(state: S<'_>) -> Reply<Vec<Workflow>> {
 #[tauri::command]
 pub async fn pin_workflow(state: S<'_>, workflow_id: String) -> Reply<Project> {
     let mut i = state.inner.lock().await;
-    let w = catalogue_versions(&i)
-        .map_err(err)?
-        .into_iter()
+    let all = catalogue_versions(&i).map_err(err)?;
+    let selected = all
+        .iter()
         .find(|w| w.id == workflow_id)
         .ok_or("Catalogue version missing")?;
-    let s = i.project.as_mut().ok_or("Open a movie first")?;
+    let family = selected.wrapper.family_id.clone();
+    let variants: Vec<_> = all
+        .into_iter()
+        .filter(|w| w.id == workflow_id || (!family.is_empty() && w.wrapper.family_id == family))
+        .collect();
+    let s = &mut i.workspace;
     let mut p = s.read().map_err(err)?;
-    if let Some(existing) = p.workflows.iter_mut().find(|old| old.id == w.id) {
-        existing.wrapper.archived_at = None;
-    } else {
-        p.workflows.push(w);
+    materialize_samples(s.path(), &mut p, &variants).map_err(err)?;
+    for w in variants {
+        if let Some(existing) = p.workflows.iter_mut().find(|old| old.id == w.id) {
+            let profiles = existing.profiles.clone();
+            let target = existing.last_target.clone();
+            *existing = w;
+            existing.profiles = profiles;
+            existing.last_target = target;
+        } else {
+            p.workflows.push(w);
+        }
     }
     let revision = p.revision;
     s.save(p, revision).map_err(err)
@@ -138,13 +149,16 @@ pub async fn save_workflow_layout(
         );
     }
     let mut i = state.inner.lock().await;
-    let s = i.project.as_mut().ok_or("Movie closed")?;
+    let s = &mut i.workspace;
     let mut p = s.read().map_err(err)?;
     let w = p
         .workflows
         .iter_mut()
         .find(|w| w.id == workflow_id)
         .ok_or("Workflow missing")?;
+    if w.wrapper.example_id.is_some() {
+        return Err("Examples are immutable. Create an editable copy first.".into());
+    }
     w.layout = layout;
     let catalogued = w.clone();
     let revision = p.revision;
@@ -295,7 +309,7 @@ pub(super) async fn prepare_target(
             "Movie or connection changed during preparation; result was not applied".into(),
         );
     }
-    let s = i.project.as_mut().ok_or("Movie closed")?;
+    let s = &mut i.workspace;
     let mut p = s.read().map_err(err)?;
     let current = p
         .workflows
@@ -349,13 +363,16 @@ pub async fn save_workflow_form(
     layout: studio_contracts::WorkflowLayout,
 ) -> Reply<Project> {
     let mut i = state.inner.lock().await;
-    let s = i.project.as_mut().ok_or("Movie closed")?;
+    let s = &mut i.workspace;
     let mut p = s.read().map_err(err)?;
     let w = p
         .workflows
         .iter_mut()
         .find(|w| w.id == workflow_id)
         .ok_or("Workflow missing")?;
+    if w.wrapper.example_id.is_some() {
+        return Err("Create an editable copy to change an example".into());
+    }
     let graph = w
         .profiles
         .iter()
@@ -364,6 +381,9 @@ pub async fn save_workflow_form(
         .unwrap_or(&w.graph);
     workflow_core::schema::validate_form(graph, &bindings, &layout).map_err(err)?;
     w.bindings = bindings;
+    if w.wrapper.example_id.is_some() {
+        return Err("Examples are immutable. Create an editable copy first.".into());
+    }
     w.layout = layout;
     let catalogued = w.clone();
     let revision = p.revision;
@@ -408,6 +428,82 @@ pub async fn export_workflow_bundle(
         })
         .cloned()
         .collect();
-    let bundle = workflow_core::bundle::export(&workflows).map_err(err)?;
-    project_core::atomic_json(Path::new(&path), &bundle).map_err(err)
+    workflow_core::bundle::write_file(Path::new(&path), &workflows).map_err(err)
+}
+
+#[tauri::command]
+pub async fn duplicate_workflow(state: S<'_>, workflow_id: String) -> Reply<Project> {
+    let mut i = state.inner.lock().await;
+    let mut p = i.workspace.read().map_err(err)?;
+    let mut copy = p
+        .workflows
+        .iter()
+        .find(|w| w.id == workflow_id)
+        .ok_or("Workflow missing")?
+        .clone();
+    copy.id = project_core::id();
+    copy.name = format!("{} copy", copy.name);
+    copy.wrapper.example_id = None;
+    copy.wrapper.family_id = copy.id.clone();
+    copy.wrapper.archived_at = None;
+    copy.profiles.clear();
+    copy.last_target = None;
+    p.workflows.push(copy);
+    let revision = p.revision;
+    let saved = i.workspace.save(p, revision).map_err(err)?;
+    for w in &saved.workflows {
+        i.settings.put_workflow(w).map_err(err)?;
+    }
+    Ok(saved)
+}
+
+/// Embedded media enters the global library once, independently of movie ownership.
+pub(super) fn materialize_samples(
+    root: &Path,
+    p: &mut Project,
+    workflows: &[Workflow],
+) -> Result<()> {
+    let temp = root.join(".sample-import").join(project_core::id());
+    std::fs::create_dir_all(&temp)?;
+    let result = (|| -> Result<()> {
+        for w in workflows {
+            for sample in &w.wrapper.sample_media {
+                let bytes = sample.bytes()?;
+                let path = temp.join(&sample.name);
+                std::fs::write(&path, bytes)?;
+                asset_core::import_reusing(root, &mut p.assets, &path, false)?;
+            }
+        }
+        Ok(())
+    })();
+    let _ = std::fs::remove_dir_all(temp);
+    result
+}
+
+#[cfg(test)]
+mod sample_tests {
+    use super::*;
+    #[test]
+    fn all_three_i2i_variants_reuse_two_global_reference_assets() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = ProjectStore::open_workspace(dir.path().join("workspace")).unwrap();
+        let mut p = store.read().unwrap();
+        let variants: Vec<_> = workflow_core::examples::catalogue()
+            .unwrap()
+            .into_iter()
+            .filter(|w| {
+                w.wrapper
+                    .example_id
+                    .as_deref()
+                    .is_some_and(|id| id.starts_with("flux3-i2i"))
+            })
+            .collect();
+        assert_eq!(variants.len(), 3);
+        materialize_samples(store.path(), &mut p, &variants).unwrap();
+        materialize_samples(store.path(), &mut p, &variants).unwrap();
+        assert_eq!(p.assets.len(), 2);
+        for a in &p.assets {
+            asset_core::source(store.path(), a, true).unwrap();
+        }
+    }
 }

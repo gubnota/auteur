@@ -506,6 +506,21 @@ pub fn resolve_item(
         )
         .into());
     }
+    // Drafts retain their Movie context while all execution resources remain global.
+    let contextual;
+    let p = if let Some(context) = &draft.context.storyboard {
+        contextual = {
+            let mut copy = p.clone();
+            copy.episodes = context.episodes.clone();
+            copy.characters = context.characters.clone();
+            copy.positive_prompt = context.positive_prompt.clone();
+            copy.negative_prompt = context.negative_prompt.clone();
+            copy
+        };
+        &contextual
+    } else {
+        p
+    };
     let target = p
         .episodes
         .iter()
@@ -779,6 +794,23 @@ mod jobs_tests {
             serde_json::json!(["2", 0])
         );
         assert_eq!(p.workflows[0].graph, graph);
+        let mut detached = p.clone();
+        detached.episodes.clear();
+        detached.characters.clear();
+        let mut frozen = d.clone();
+        frozen.context.storyboard = Some(studio_contracts::StoryboardContext {
+            movie_id: p.id.clone(),
+            movie_name: p.name.clone(),
+            positive_prompt: p.positive_prompt.clone(),
+            negative_prompt: p.negative_prompt.clone(),
+            episodes: p.episodes.clone(),
+            characters: p.characters.clone(),
+        });
+        assert_eq!(
+            resolve_item(&detached, &frozen, &item).unwrap()["graph"],
+            preview["graph"]
+        );
+
         let mut invalid = item.clone();
         invalid
             .input_errors

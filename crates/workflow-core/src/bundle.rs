@@ -161,6 +161,8 @@ mod tests {
         w.wrapper.initialization = vec![studio_contracts::InitializationStep {
             name: "Check".into(),
             script: "test -d models".into(),
+            check_script: None,
+            verify_script: None,
             directory: String::new(),
             timeout_seconds: 30,
             policy: "recipe".into(),
@@ -191,5 +193,145 @@ mod tests {
             media: None,
         });
         assert!(import(export(&[w]).unwrap()).is_err());
+    }
+}
+
+/// Portable ZIP containers are bounded and validated in memory; nothing is
+/// extracted into an arbitrary filesystem path. Legacy JSON remains readable.
+pub fn read_file(path: &std::path::Path) -> Result<Vec<Workflow>> {
+    use std::io::Read;
+    if std::fs::metadata(path)?.len() > 20 * 1024 * 1024 {
+        return Err("Workflow package exceeds 20 MiB".into());
+    }
+    let bytes = std::fs::read(path)?;
+    if bytes.len() > 20 * 1024 * 1024 {
+        return Err("Workflow package exceeds 20 MiB".into());
+    }
+    if bytes.starts_with(b"PK\x03\x04") {
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))?;
+        if zip.len() != 2 {
+            return Err("Expected manifest.json and collection.json".into());
+        }
+        let mut entries = std::collections::HashMap::new();
+        for index in 0..zip.len() {
+            let mut entry = zip.by_index(index)?;
+            let name = entry.name().to_string();
+            if !["manifest.json", "collection.json"].contains(&name.as_str())
+                || entry.size() > 16 * 1024 * 1024
+                || entries.contains_key(&name)
+                || entry
+                    .unix_mode()
+                    .is_some_and(|mode| mode & 0o170000 == 0o120000)
+            {
+                return Err("Unsafe workflow package entry".into());
+            }
+            let mut data = vec![];
+            entry
+                .by_ref()
+                .take(16 * 1024 * 1024 + 1)
+                .read_to_end(&mut data)?;
+            if data.len() > 16 * 1024 * 1024 {
+                return Err("Expanded package entry too large".into());
+            }
+            entries.insert(name, data);
+        }
+        let manifest: Value =
+            serde_json::from_slice(entries.get("manifest.json").ok_or("Missing manifest")?)?;
+        let collection = entries.get("collection.json").ok_or("Missing collection")?;
+        if manifest["format"] != "mymovie.workflow-package"
+            || manifest["schemaVersion"] != 1
+            || manifest["sha256"] != format!("{:x}", Sha256::digest(collection))
+        {
+            return Err("Invalid package manifest or hash".into());
+        }
+        import(serde_json::from_slice(collection)?)
+    } else {
+        let value: Value = serde_json::from_slice(&bytes)?;
+        if is_bundle(&value) {
+            import(value)
+        } else {
+            Ok(vec![super::import_source(
+                path.file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("Imported workflow"),
+                value,
+            )?])
+        }
+    }
+}
+pub fn write_file(path: &std::path::Path, workflows: &[Workflow]) -> Result<()> {
+    use std::io::Write;
+    let collection = serde_json::to_vec(&export(workflows)?)?;
+    if path.extension().and_then(|e| e.to_str()) != Some("mymovie-workflow") {
+        atomic_write(path, &collection)?;
+        return Ok(());
+    }
+    let manifest = json!({"format":"mymovie.workflow-package","schemaVersion":1,"sha256":format!("{:x}",Sha256::digest(&collection))});
+    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    zip.start_file("manifest.json", options)?;
+    zip.write_all(&serde_json::to_vec(&manifest)?)?;
+    zip.start_file("collection.json", options)?;
+    zip.write_all(&collection)?;
+    let data = zip.finish()?.into_inner();
+    atomic_write(path, &data)?;
+    Ok(())
+}
+
+fn atomic_write(path: &std::path::Path, data: &[u8]) -> Result<()> {
+    use std::io::Write;
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."));
+    let temporary = parent.join(format!(".{}.partial", project_core::id()));
+    let result = (|| -> Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(data)?;
+        file.sync_all()?;
+        std::fs::rename(&temporary, path)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
+}
+
+#[cfg(test)]
+mod archive_tests {
+    use super::*;
+    #[test]
+    fn zip_and_legacy_roundtrip_with_integrity_rejection() {
+        let temp = tempfile::tempdir().unwrap();
+        let workflow = crate::import(
+            "Portable",
+            json!({"1":{"class_type":"SaveImage","inputs":{}}}),
+        )
+        .unwrap();
+        let path = temp.path().join("portable.mymovie-workflow");
+        write_file(&path, &[workflow.clone()]).unwrap();
+        assert!(std::fs::read(&path).unwrap().starts_with(b"PK"));
+        assert_eq!(read_file(&path).unwrap()[0].graph, workflow.graph);
+        let legacy = temp.path().join("legacy.json");
+        write_file(&legacy, &[workflow.clone()]).unwrap();
+        assert_eq!(read_file(&legacy).unwrap()[0].id, workflow.id);
+        use std::io::Write;
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        let options = zip::write::SimpleFileOptions::default();
+        zip.start_file("manifest.json", options).unwrap();
+        zip.write_all(
+            br#"{"format":"mymovie.workflow-package","schemaVersion":1,"sha256":"wrong"}"#,
+        )
+        .unwrap();
+        zip.start_file("collection.json", options).unwrap();
+        zip.write_all(&serde_json::to_vec(&export(&[workflow]).unwrap()).unwrap())
+            .unwrap();
+        zip.finish().unwrap();
+        assert!(read_file(&path).unwrap_err().to_string().contains("hash"));
     }
 }

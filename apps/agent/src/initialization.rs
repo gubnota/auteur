@@ -82,6 +82,8 @@ pub fn clean_command(args: &Args) -> tokio::process::Command {
         "TMPDIR",
         "CUDA_VISIBLE_DEVICES",
         "LD_LIBRARY_PATH",
+        "TERM",
+        "COLORTERM",
     ] {
         if let Ok(v) = std::env::var(k) {
             c.env(k, v);
@@ -125,6 +127,50 @@ fn same_reviewed_dependencies(old: &Value, fresh: &Value) -> bool {
         .iter()
         .all(|key| old["profile"][key] == fresh["profile"][key])
 }
+async fn execute_script(
+    args: &Args,
+    script: &str,
+    cwd: &std::path::Path,
+    root: &std::path::Path,
+    cache: &std::path::Path,
+    timeout: u64,
+    stage: &str,
+    name: &str,
+) -> Result<bool> {
+    let mut command = clean_command(args);
+    command
+        .arg("-u")
+        .arg("-c")
+        .arg(include_str!("../../../deploy/runner/mymovie_script.py"))
+        .arg(script)
+        .env("COMFYUI_DIR", root)
+        .env("COMFYUI_PYTHON", &args.python)
+        .env("MODELS_DIR", root.join("models"))
+        .env("CUSTOM_NODES_DIR", root.join("custom_nodes"))
+        .env("WORKFLOW_DIR", root.join("user/default/workflows/MyMovie"))
+        .env("CACHE_DIR", cache)
+        .current_dir(cwd)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    let mut child = command.spawn()?;
+    let _watchdog = child.stdin.take().ok_or("Script watchdog unavailable")?;
+    use tokio::io::AsyncBufReadExt;
+    let mut lines =
+        tokio::io::BufReader::new(child.stdout.take().ok_or("Script output unavailable")?).lines();
+    tokio::time::timeout(Duration::from_secs(timeout), async {
+        while let Some(line) = lines.next_line().await? {
+            progress(
+                stage,
+                format!("{name} · {}", line.chars().take(800).collect::<String>()),
+                None,
+            );
+        }
+        Ok::<_, Box<dyn std::error::Error + Send + Sync>>(child.wait().await?.success())
+    })
+    .await
+    .map_err(|_| "Initialization step timed out")?
+}
 async fn recipes(args: &Args, w: &studio_contracts::Workflow) -> Result<bool> {
     if w.wrapper.initialization.is_empty() {
         return Ok(false);
@@ -151,67 +197,84 @@ async fn recipes(args: &Args, w: &studio_contracts::Workflow) -> Result<bool> {
         // Receipt includes all steps, workflow version and runtime identity, never just a generic marker.
         let key = recipe_key(w, index, &root, &inventory, &args.session_id)?;
         let receipt = cache.join(format!("recipe-{key}.json"));
-        if std::fs::read(&receipt)
-            .ok()
-            .and_then(|v| serde_json::from_slice::<Value>(&v).ok())
-            .is_some_and(|v| v["verified"] == true && v["key"] == key)
-        {
-            progress(
-                "reuse",
-                format!("{} · verified recipe receipt reused", step.name),
-                None,
-            );
-            continue;
-        }
         let cwd = root.join(&step.directory).canonicalize()?;
         if !cwd.starts_with(&root) {
             return Err("Recipe working folder escapes ComfyUI root".into());
         }
-        progress("script", &step.name, None);
-        atomic_json(
-            &cache.join("restart-required.json"),
-            &json!({"required":true}),
-        )?;
-        let mut command = clean_command(args);
-        command
-            .arg("-u")
-            .arg("-c")
-            .arg(include_str!("../../../deploy/runner/mymovie_script.py"))
-            .arg(&step.script)
-            .current_dir(cwd)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null());
-        let mut child = command.spawn()?;
-        let _watchdog = child.stdin.take().ok_or("Script watchdog unavailable")?;
-        use tokio::io::AsyncBufReadExt;
-        let mut lines =
-            tokio::io::BufReader::new(child.stdout.take().ok_or("Script output unavailable")?)
-                .lines();
-        tokio::time::timeout(Duration::from_secs(step.timeout_seconds), async {
-            while let Some(line) = lines.next_line().await? {
-                progress(
-                    "script",
-                    format!(
-                        "{} · {}",
-                        step.name,
-                        line.chars().take(800).collect::<String>()
-                    ),
-                    None,
-                );
+        // Checks run even when an exact receipt exists: deleted files and changed
+        // environments cannot be hidden by a marker from a previous session.
+        let checked = if let Some(check) = step
+            .check_script
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            execute_script(
+                args,
+                check,
+                &cwd,
+                &root,
+                &cache,
+                step.timeout_seconds,
+                "check",
+                &step.name,
+            )
+            .await?
+        } else {
+            std::fs::read(&receipt)
+                .ok()
+                .and_then(|v| serde_json::from_slice::<Value>(&v).ok())
+                .is_some_and(|v| v["verified"] == true && v["key"] == key)
+        };
+        if !checked {
+            progress("install", &step.name, None);
+            atomic_json(
+                &cache.join("restart-required.json"),
+                &json!({"required":true}),
+            )?;
+            if !execute_script(
+                args,
+                &step.script,
+                &cwd,
+                &root,
+                &cache,
+                step.timeout_seconds,
+                "install",
+                &step.name,
+            )
+            .await?
+            {
+                return Err("Initialization install failed; inspect Activity".into());
             }
-            if !child.wait().await?.success() {
-                return Err("Initialization script failed; inspect Activity".into());
+            changed = true;
+        }
+        if let Some(verify) = step
+            .verify_script
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            if !execute_script(
+                args,
+                verify,
+                &cwd,
+                &root,
+                &cache,
+                step.timeout_seconds,
+                "verify",
+                &step.name,
+            )
+            .await?
+            {
+                let _ = std::fs::remove_file(&receipt);
+                return Err("Initialization verification failed; inspect Activity".into());
             }
-            Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
-        })
-        .await
-        .map_err(|_| "Initialization step timed out")??;
+        }
+        if checked {
+            progress("reuse", format!("{} · checks passed", step.name), None);
+        }
         atomic_json(
             &receipt,
             &json!({"verified":true,"key":key,"completedAt":timestamp()}),
         )?;
-        changed = true;
     }
     Ok(changed)
 }

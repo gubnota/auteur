@@ -229,8 +229,18 @@ pub fn readiness(
         && runtime_matches
         && unresolved.is_empty()
         && incompatible.is_empty();
+    let mut stable_inventory = inventory.clone();
+    if let Some(devices) = stable_inventory["devices"].as_array_mut() {
+        for device in devices {
+            if let Some(fields) = device.as_object_mut() {
+                // Allocation changes on every job; only hardware identity invalidates setup.
+                fields.remove("vram_free");
+                fields.remove("torch_vram_free");
+            }
+        }
+    }
     let fingerprint = digest(
-        &json!({"inventory":inventory,"nodeTypes":registry.as_object().map(|r|r.keys().collect::<Vec<_>>()),"workflows":workflows.iter().map(|w|(&w.id,&w.version,&w.requirements,&w.bindings)).collect::<Vec<_>>()}),
+        &json!({"inventory":stable_inventory,"nodeTypes":registry.as_object().map(|r|r.keys().collect::<Vec<_>>()),"workflows":workflows.iter().map(|w|(&w.id,&w.version,&w.requirements,&w.bindings)).collect::<Vec<_>>()}),
     )?;
     let cached = complete
         && attestation.is_some_and(|a| {
@@ -334,6 +344,26 @@ mod tests {
         assert_eq!(incompatible["ready"], false);
         assert_eq!(incompatible["incompatibleWorkflows"][0], ws[0].id);
         ws[0].requirements.compatibility = "apple-silicon".into();
+        assert_eq!(
+            readiness(&p, &i, &r, &ws, "session", Some(&a)).unwrap()["ready"],
+            false
+        );
+    }
+    #[test]
+    fn changing_free_memory_does_not_invalidate_initialized_hardware() {
+        let (p, mut i, r, ws) = fixture();
+        i["devices"][0]["vram_total"] = json!(1024);
+        i["devices"][0]["vram_free"] = json!(900);
+        i["devices"][0]["torch_vram_free"] = json!(800);
+        let mut a = readiness(&p, &i, &r, &ws, "session", None).unwrap();
+        a["state"] = json!("ready");
+        i["devices"][0]["vram_free"] = json!(300);
+        i["devices"][0]["torch_vram_free"] = json!(200);
+        assert_eq!(
+            readiness(&p, &i, &r, &ws, "session", Some(&a)).unwrap()["ready"],
+            true
+        );
+        i["devices"][0]["vram_total"] = json!(2048);
         assert_eq!(
             readiness(&p, &i, &r, &ws, "session", Some(&a)).unwrap()["ready"],
             false

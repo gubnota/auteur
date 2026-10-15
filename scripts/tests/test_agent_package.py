@@ -49,7 +49,7 @@ class AgentPackageTests(unittest.TestCase):
                 for name in ['sd15-t4_editor.json', 'sd15-t4_api.json',
                              'sd15-model.json', 'rembg-plugin.json', 'WORKFLOW_EXAMPLES.md']:
                     self.assertIn(name, tar.getnames())
-                self.assertEqual(len(tar.getnames()), 20)
+                self.assertEqual(len(tar.getnames()), 21)
                 self.assertEqual(tar.extractfile("mymovie-agent").read(), binary.read_bytes())
                 self.assertTrue(tar.getmember("mymovie-agent").mode & 0o111)
             metadata = json.loads((dest / "mymovie-agent-linux-x86_64.json").read_text())

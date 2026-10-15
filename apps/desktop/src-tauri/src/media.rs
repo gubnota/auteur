@@ -10,15 +10,17 @@ pub async fn respond(state: &Arc<Studio>, request: Request<Vec<u8>>) -> Response
     };
     let path = {
         let inner = state.inner.lock().await;
-        inner.project.as_ref().and_then(|s| {
-            let p = s.read().ok()?;
-            let a = p.assets.iter().find(|a| a.id == id)?;
-            if poster {
-                asset_core::poster_path(s.path(), a).ok()
-            } else {
-                asset_core::source(s.path(), a, false).ok()
-            }
-        })
+        std::iter::once(&inner.workspace)
+            .chain(inner.project.as_ref())
+            .find_map(|s| {
+                let p = s.read().ok()?;
+                let a = p.assets.iter().find(|a| a.id == id)?;
+                if poster {
+                    asset_core::poster_path(s.path(), a).ok()
+                } else {
+                    asset_core::source(s.path(), a, false).ok()
+                }
+            })
     };
     let Some(path) = path else {
         return Response::builder().status(404).body(vec![]).unwrap();

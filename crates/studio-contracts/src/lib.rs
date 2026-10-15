@@ -350,7 +350,19 @@ pub struct JobDraft {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct StoryboardContext {
+    pub movie_id: String,
+    pub movie_name: String,
+    pub positive_prompt: String,
+    pub negative_prompt: String,
+    pub episodes: Vec<Episode>,
+    pub characters: Vec<Character>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DraftContext {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storyboard: Option<StoryboardContext>,
     pub kind: String,
     #[serde(default)]
     pub mode: String,
@@ -360,6 +372,7 @@ pub struct DraftContext {
 impl Default for DraftContext {
     fn default() -> Self {
         Self {
+            storyboard: None,
             kind: "storyboard".into(),
             mode: "custom".into(),
             character_ids: vec![],
@@ -427,6 +440,8 @@ pub struct AppSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkflowWrapper {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sample_media: Vec<WorkflowSampleMedia>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<String>,
     #[serde(default)]
@@ -455,11 +470,56 @@ pub struct WorkflowWrapper {
     #[serde(default)]
     pub precision: String,
 }
+/// Embedded reference media is portable; library identities are resolved by content hash.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowSampleMedia {
+    pub node_id: String,
+    pub input: String,
+    pub name: String,
+    pub label: String,
+    pub sha256: String,
+    pub image: String,
+}
+impl WorkflowSampleMedia {
+    pub fn bytes(&self) -> Result<Vec<u8>, String> {
+        use base64::Engine;
+        use sha2::{Digest, Sha256};
+        if self.name.is_empty()
+            || self.name.len() > 200
+            || self.name.contains(['/', '\\', ':'])
+            || !self.name.ends_with(".png")
+            || self.label.len() > 200
+            || self.node_id.is_empty()
+            || self.input.is_empty()
+            || self.image.len() > 4 * 1024 * 1024
+        {
+            return Err("Invalid embedded reference image".into());
+        }
+        let data = self
+            .image
+            .strip_prefix("data:image/png;base64,")
+            .ok_or("Reference must be embedded PNG")?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(data)
+            .map_err(|_| "Invalid reference encoding")?;
+        if !bytes.starts_with(b"\x89PNG\r\n\x1a\n")
+            || format!("{:x}", Sha256::digest(&bytes)) != self.sha256
+        {
+            return Err("Reference image integrity mismatch".into());
+        }
+        Ok(bytes)
+    }
+}
 /// Custom post-install steps. Typed artifacts remain the verified dependency manifest.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitializationStep {
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub check_script: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify_script: Option<String>,
     pub script: String,
     #[serde(default)]
     pub directory: String,
@@ -469,11 +529,21 @@ pub struct InitializationStep {
 }
 impl WorkflowWrapper {
     pub fn validate(&self) -> Result<(), String> {
+        if self.sample_media.len() > 8 {
+            return Err("At most eight sample references per variant".into());
+        }
+        for sample in &self.sample_media {
+            sample.bytes()?;
+        }
         if self.initialization.len() > 32
             || self.initialization.iter().any(|s| {
                 s.name.trim().is_empty()
                     || s.name.len() > 200
                     || s.script.len() > 64 * 1024
+                    || s.check_script.as_ref().is_some_and(|s| s.len() > 64 * 1024)
+                    || s.verify_script
+                        .as_ref()
+                        .is_some_and(|s| s.len() > 64 * 1024)
                     || s.script.trim().is_empty()
                     || s.timeout_seconds == 0
                     || s.timeout_seconds > 3600

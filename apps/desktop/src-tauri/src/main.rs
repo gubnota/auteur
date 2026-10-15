@@ -36,6 +36,10 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_workspace,
+            save_workspace,
+            attach_global_asset,
+            abort_node_queue,
             create_project,
             open_project,
             get_project,
@@ -51,6 +55,7 @@ fn main() {
             import_workflow,
             list_workflows,
             pin_workflow,
+            duplicate_workflow,
             catalogue_workflow,
             save_workflow_layout,
             save_workflow_form,
@@ -64,6 +69,8 @@ fn main() {
             get_settings,
             save_settings,
             save_credential,
+            local_agent_instructions,
+            open_external_url,
             get_runner_tokens,
             save_runner_tokens,
             list_jobs,

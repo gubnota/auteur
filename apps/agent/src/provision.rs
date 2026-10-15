@@ -407,7 +407,34 @@ pub async fn control(
         };
         // download() re-verifies resumed bytes; helper re-verifies an existing cache entry.
         if !dest.exists() {
-            storage_s3::download_with_progress(&storage_s3::Object{name:a.target.clone(),sha256:a.sha256.clone(),size:a.size,url,architecture:Some(a.architecture.clone()),license:Some(a.license.clone())},&dest, |done,total| crate::initialization::progress("download",format!("{} → {}/{}",a.target,a.category,a.target),Some((done,total)))).await.map_err(|_|"Dependency transfer failed or integrity mismatch; inspect the source and retry")?;
+            storage_s3::download_authenticated(
+                &storage_s3::Object {
+                    name: a.target.clone(),
+                    sha256: a.sha256.clone(),
+                    size: a.size,
+                    url,
+                    architecture: Some(a.architecture.clone()),
+                    license: Some(a.license.clone()),
+                },
+                &dest,
+                huggingface_token().as_deref(),
+                |done, total| {
+                    crate::initialization::progress(
+                        "download",
+                        format!("{} → {}/{}", a.target, a.category, a.target),
+                        Some((done, total)),
+                    )
+                },
+            )
+            .await
+            .map_err(|e| {
+                if e.to_string().starts_with("Model access denied:") {
+                    e.to_string()
+                } else {
+                    "Dependency transfer failed or integrity mismatch; inspect the source and retry"
+                        .into()
+                }
+            })?;
         }
         // Persist before mutation, including partially failed installs.
         if a.kind == "plugin" || a.kind == "wheel" {
@@ -688,4 +715,26 @@ async fn restart(args: &Args) -> Result<Value> {
     }
     let _ = std::fs::remove_file(&request);
     Err("Notebook supervisor did not acknowledge restart; check the running notebook cell".into())
+}
+
+/// Credentials stay on this node and are used only for the HF origin by storage-s3.
+fn huggingface_token() -> Option<String> {
+    let valid = |v: &str| !v.is_empty() && v.len() < 1024 && !v.chars().any(char::is_whitespace);
+    if let Ok(v) = std::env::var("HF_TOKEN")
+        && valid(&v)
+    {
+        return Some(v);
+    }
+    let path = std::env::var_os("HF_TOKEN_PATH")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HF_HOME").map(|p| std::path::PathBuf::from(p).join("token")))
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(|p| std::path::PathBuf::from(p).join(".cache/huggingface/token"))
+        })?;
+    if std::fs::metadata(&path).ok()?.len() > 1024 {
+        return None;
+    }
+    let v = std::fs::read_to_string(path).ok()?.trim().to_string();
+    valid(&v).then_some(v)
 }

@@ -13,6 +13,7 @@ pub struct ProjectStore {
     root: PathBuf,
     db: Connection,
     _lock: File,
+    global: bool,
 }
 pub fn id() -> String {
     Uuid::new_v4().to_string()
@@ -138,7 +139,45 @@ impl ProjectStore {
         store.project(&project)?;
         Ok(store)
     }
+    /// App-owned resource storage. This is not a Movie document: it has no
+    /// manifest, episodes, required Movie path or dependency on a selected Movie.
+    /// The existing resource snapshot schema is shared with portable documents.
+    pub fn open_workspace(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        fs::create_dir_all(path)?;
+        let store = Self::open_storage(path, true)?;
+        let exists: bool =
+            store
+                .db
+                .query_row("SELECT EXISTS(SELECT 1 FROM project WHERE id=1)", [], |r| {
+                    r.get(0)
+                })?;
+        if !exists {
+            let resources = Project {
+                id: id(),
+                name: "Studio".into(),
+                revision: 0,
+                ratio: "16:9".into(),
+                positive_prompt: String::new(),
+                negative_prompt: String::new(),
+                episodes: vec![],
+                characters: vec![],
+                assets: vec![],
+                workflows: vec![],
+                job_drafts: vec![],
+            };
+            store.db.execute(
+                "INSERT INTO project VALUES(1,0,?1)",
+                [serde_json::to_string(&resources)?],
+            )?;
+        }
+        store.db.execute_batch("CREATE TABLE IF NOT EXISTS movie_migrations (movie_id TEXT PRIMARY KEY, revision INTEGER NOT NULL, json TEXT NOT NULL);")?;
+        Ok(store)
+    }
     fn open_inner(path: &Path) -> Result<Self> {
+        Self::open_storage(path, false)
+    }
+    fn open_storage(path: &Path, global: bool) -> Result<Self> {
         if fs::symlink_metadata(path)?.file_type().is_symlink() {
             return Err("Document package cannot be a symlink".into());
         }
@@ -147,6 +186,9 @@ impl ProjectStore {
             "project.sqlite",
             "project.sqlite-wal",
             "project.sqlite-shm",
+            "workspace.sqlite",
+            "workspace.sqlite-wal",
+            "workspace.sqlite-shm",
             ".lock",
         ] {
             if fs::symlink_metadata(root.join(f)).is_ok_and(|m| m.file_type().is_symlink()) {
@@ -165,13 +207,20 @@ impl ProjectStore {
             "project.sqlite",
             "project.sqlite-wal",
             "project.sqlite-shm",
+            "workspace.sqlite",
+            "workspace.sqlite-wal",
+            "workspace.sqlite-shm",
             ".lock",
         ] {
             if fs::symlink_metadata(root.join(f)).is_ok_and(|m| m.file_type().is_symlink()) {
                 return Err("Unsafe document path".into());
             }
         }
-        let db = Connection::open(root.join("project.sqlite"))?;
+        let db = Connection::open(root.join(if global {
+            "workspace.sqlite"
+        } else {
+            "project.sqlite"
+        }))?;
         db.pragma_update(None, "journal_mode", "WAL")?;
         let version: i64 = db.pragma_query_value(None, "user_version", |r| r.get(0))?;
         if version > 5 {
@@ -180,7 +229,7 @@ impl ProjectStore {
         if version == 0 {
             db.execute_batch(include_str!("../migrations/0001_initial.sql"))?;
         }
-        if (1..5).contains(&version) {
+        if !global && (1..5).contains(&version) {
             // SQLite creates a consistent backup including WAL data before migration.
             let backup = confined(
                 &root,
@@ -211,6 +260,7 @@ impl ProjectStore {
             root,
             db,
             _lock: lock,
+            global,
         })
     }
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
@@ -334,6 +384,12 @@ impl ProjectStore {
         Ok(project)
     }
     fn project(&self, p: &Project) -> Result<()> {
+        if self.global {
+            // SQLite owns global state; no Movie manifest or episode projections.
+            self.db
+                .execute("INSERT OR REPLACE INTO projections VALUES(1,0)", [])?;
+            return Ok(());
+        }
         // Journal remains pending on failure; opening repairs from authoritative SQLite.
         atomic_json(
             &confined(&self.root, "manifest.json")?,

@@ -8,5 +8,6 @@ studio-contracts.workspace = true
 project-core.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+zip = { version = "2", default-features = false, features = ["deflate"] }
 [dev-dependencies]
 tempfile.workspace = true

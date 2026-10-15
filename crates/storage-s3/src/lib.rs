@@ -46,6 +46,15 @@ pub async fn download(o: &Object, dest: &Path) -> Result<()> {
 pub async fn download_with_progress(
     o: &Object,
     dest: &Path,
+    progress: impl FnMut(u64, u64),
+) -> Result<()> {
+    download_authenticated(o, dest, None, progress).await
+}
+/// Optional node-local Hugging Face credentials never follow a cross-origin redirect.
+pub async fn download_authenticated(
+    o: &Object,
+    dest: &Path,
+    bearer: Option<&str>,
     mut progress: impl FnMut(u64, u64),
 ) -> Result<()> {
     if o.sha256.len() != 64
@@ -69,12 +78,41 @@ pub async fn download_with_progress(
     }
     progress(offset, o.size);
     if offset < o.size {
-        let mut res = client()?
-            .get(validate_url(&o.url)?)
-            .header("Range", format!("bytes={offset}-"))
-            .send()
-            .await?
-            .error_for_status()?;
+        let client = client()?;
+        let original = validate_url(&o.url)?;
+        let mut url = original.clone();
+        let mut redirects = 0;
+        let mut res = loop {
+            let mut request = client
+                .get(url.clone())
+                .header("Range", format!("bytes={offset}-"));
+            if credentials_allowed(&original, &url)
+                && let Some(token) = bearer
+            {
+                request = request.bearer_auth(token);
+            }
+            let response = request.send().await?;
+            if response.status().is_redirection() {
+                if redirects >= 5 {
+                    return Err("Too many download redirects".into());
+                }
+                let location = response
+                    .headers()
+                    .get(reqwest::header::LOCATION)
+                    .ok_or("Missing redirect destination")?
+                    .to_str()?;
+                url = redirect_destination(&url, location)?;
+                redirects += 1;
+                continue;
+            }
+            if matches!(response.status().as_u16(), 401 | 403) {
+                return Err("Model access denied: accept the upstream model terms and sign in with hf auth login on this node".into());
+            }
+            if !response.status().is_success() {
+                return Err(format!("Model download HTTP {}", response.status().as_u16()).into());
+            }
+            break response;
+        };
         if res.status() == reqwest::StatusCode::PARTIAL_CONTENT {
             let expected = format!("bytes {offset}-");
             if !res
@@ -152,4 +190,39 @@ pub async fn upload(o: &Object, path: &Path) -> Result<()> {
         .await?
         .error_for_status()?;
     Ok(())
+}
+
+fn credentials_allowed(original: &reqwest::Url, current: &reqwest::Url) -> bool {
+    original.scheme() == "https"
+        && original.host_str() == Some("huggingface.co")
+        && original.origin() == current.origin()
+}
+fn redirect_destination(current: &reqwest::Url, location: &str) -> Result<reqwest::Url> {
+    let next = validate_url(current.join(location)?.as_str())?;
+    if current.scheme() == "https" && next.scheme() != "https" {
+        return Err("Download redirect cannot downgrade HTTPS".into());
+    }
+    Ok(next)
+}
+#[cfg(test)]
+mod redirect_tests {
+    use super::*;
+    #[test]
+    fn credentials_only_go_to_original_huggingface_origin() {
+        let source = validate_url("https://huggingface.co/model/resolve/pinned/model").unwrap();
+        assert!(credentials_allowed(
+            &source,
+            &redirect_destination(&source, "/other").unwrap()
+        ));
+        assert!(!credentials_allowed(
+            &source,
+            &redirect_destination(&source, "https://cdn.example/model").unwrap()
+        ));
+        assert!(!credentials_allowed(
+            &source,
+            &redirect_destination(&source, "https://huggingface.co:8443/model").unwrap()
+        ));
+        assert!(redirect_destination(&source, "http://127.0.0.1/model").is_err());
+        assert!(redirect_destination(&source, "https://token@cdn.example/model").is_err());
+    }
 }

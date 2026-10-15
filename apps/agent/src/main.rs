@@ -1,5 +1,6 @@
 mod console;
 mod initialization;
+mod metrics;
 mod provision;
 mod workflow;
 use clap::Parser;
@@ -169,9 +170,10 @@ async fn main() -> Result<()> {
             provider_comfyui::ComfyUi::new(&heartbeat_args.comfy_url).expect("validated URL");
         loop {
             let health = comfy.health().await.ok();
+            let metrics = metrics::sample(&heartbeat_args).await;
             let private = initialization::private_execution(&heartbeat_args).is_ok();
             let _ = post(&heartbeat_client, &format!("{heartbeat_relay}/v1/agent/heartbeat"), &heartbeat_token,
-                json!({"nodeId":heartbeat_args.node_id,"connected":health.is_some(),"transport":"outbound HTTPS","comfy":health,"capabilities":{"initialization":true,"console":private,"customScripts":private}})).await;
+                json!({"nodeId":heartbeat_args.node_id,"connected":health.is_some(),"transport":"outbound HTTPS","comfy":health,"metrics":metrics,"capabilities":{"initialization":true,"console":private,"customScripts":private}})).await;
             tokio::time::sleep(std::time::Duration::from_secs(15)).await;
         }
     });
