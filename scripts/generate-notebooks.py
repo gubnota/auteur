@@ -20,7 +20,7 @@ for host, root, count in [("colab", "/content", 1), ("kaggle", "/kaggle/working"
 
 The notebook installs pinned ComfyUI {RUNTIME['comfyRelease']} in its own session folder, reuses the runtime's CUDA PyTorch in an isolated Python environment, installs the workflow-import browser and checksum-verified cloudflared, and downloads a verified released Linux x86_64 agent + relay. **No model weights or workflow plugins are downloaded.** Install those later through Studio's workflow initialization.
 
-The predefined public test keys match Studio → Settings → Node access. Optional environment/Secrets overrides are commented out. Use a private pair in both places for private deployments. Public agent releases require no GitHub token; optional custom release/archive settings are below.
+The predefined public test keys match Studio → Settings → Node access. Optional environment/Secrets overrides are commented out. Use a private pair in both places for private deployments. Public agent releases require no GitHub token; optional custom release/archive settings are below. Run all cells from the top; do not skip the bootstrap helper cell (it is visible so Kaggle executes it).
 
 At the end copy the **public relay URL** and **node ID** into Studio → Connections → Colab / Kaggle; enable **Temporary Cloudflare tunnel · polling only**. ComfyUI stays on loopback. Quick Tunnels use polling, not SSE; their addresses change after a restart. Select Inventory, pin its native runtime fingerprint in Settings → App Runner, then Review initialization and Initialize your workflow. Collect results into `.mymovie` before ending the session.
 
@@ -65,6 +65,11 @@ print("Default configuration loaded. No key or configuration edits are required.
 '''
     setup = '''import platform
 
+_required_bootstrap = ("SetupError", "gpu_indices", "release_artifact", "install_artifact", "prepare_runtime", "NotebookRunner", "secret")
+_missing_bootstrap = [name for name in _required_bootstrap if name not in globals()]
+if _missing_bootstrap:
+    raise RuntimeError("Run all notebook cells from the top. The bootstrap helper cell was skipped.")
+
 if "runner" in globals() and runner.status()["state"] == "running":
     print("Healthy session already running; reusing its workers and connection address.")
 else:
@@ -101,7 +106,9 @@ else:
     if not START_LOCAL_RELAY:
         print("External relay: add these node IDs to MYMOVIE_NODE_IDS before Start:", runner.configuration()["relayAllowlist"])
 '''
-    start = '''if runner.status()["state"] != "running":
+    start = '''if "runner" not in globals():
+    raise RuntimeError("Run all notebook cells from the top before starting the node.")
+if runner.status()["state"] != "running":
     print("Starting ComfyUI, agent and relay; waiting for readiness and public address…", flush=True)
     runner.start(MYMOVIE_AGENT_TOKEN, comfy_root=COMFY_ROOT, expected_revision=COMFY_REVISION,
                  attach=ATTACH_EXISTING, model_paths=MODEL_PATHS_YAML, python=COMFY_PYTHON, timeout=300,
@@ -116,7 +123,7 @@ print("Enable Temporary Cloudflare tunnel · polling only. Settings → Node acc
 print("Next: Inventory → Review initialization → Initialize workflow. The node stays running until you stop it or the runtime ends.")
 '''
     cells = [
-        cell("markdown", intro), cell("code", HELPER, True),
+        cell("markdown", intro), cell("code", HELPER),
         cell("markdown", "## 1. Default configuration\nReady to run unchanged. Advanced overrides are optional.\n"), cell("code", config),
         cell("markdown", "## 2. Automatic installation\nThis takes several minutes on a fresh runtime. Stages appear below; detailed output stays in `mymovie-session/installation.log`. No model weights are downloaded.\n"), cell("code", setup),
         cell("markdown", "## 3. Start ComfyUI and connect the agent\nThe final output gives the public relay URL and node IDs for Studio.\n"), cell("code", start),

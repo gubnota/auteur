@@ -344,3 +344,7 @@
 ## 2026-10-15 — Notebook setup import fix
 
 - Kaggle setup referenced `platform` from a hidden bootstrap cell. The setup cell now imports it directly; regenerated Colab and Kaggle notebooks from the shared generator. Added a regression assertion for the generated setup cell.
+
+## 2026-10-15 — Notebook helper execution fix
+
+- Notebook startup imports and runner creation depended on a hidden helper cell that Kaggle could skip. The helper cell is now visible and documented as required; setup and start fail with a clear Run all instruction if their prerequisites are absent.

@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import sys
 import tempfile
 import types
 import unittest
@@ -83,11 +84,23 @@ class RuntimePreparationTests(unittest.TestCase):
         install = Mock(); resolve = Mock()
         namespace = {'platform': types.SimpleNamespace(system=lambda: 'Linux', machine=lambda: 'x86_64'),
                      'gpu_indices': lambda: [], 'install_artifact': install, 'release_artifact': resolve,
-                     'SetupError': b.SetupError, 'print': Mock()}
+                     'SetupError': b.SetupError, 'prepare_runtime': Mock(), 'NotebookRunner': Mock(),
+                     'secret': Mock(), 'print': Mock()}
         exec(''.join(notebook['cells'][3]['source']), namespace)
-        with self.assertRaisesRegex(b.SetupError, 'Enable the requested GPU'):
-            exec(''.join(notebook['cells'][5]['source']), namespace)
+        runtime_platform = types.ModuleType('platform')
+        runtime_platform.system = lambda: 'Linux'
+        runtime_platform.machine = lambda: 'x86_64'
+        with patch.dict(sys.modules, {'platform': runtime_platform}):
+            with self.assertRaisesRegex(b.SetupError, 'Enable the requested GPU'):
+                exec(''.join(notebook['cells'][5]['source']), namespace)
         install.assert_not_called(); resolve.assert_not_called()
+
+    def test_setup_reports_skipped_bootstrap_without_name_error(self):
+        notebook = json.loads((ROOT / 'deploy/kaggle/MyMovie_ComfyUI.ipynb').read_text())
+        namespace = {}
+        exec(''.join(notebook['cells'][3]['source']), namespace)
+        with self.assertRaisesRegex(RuntimeError, 'Run all notebook cells from the top'):
+            exec(''.join(notebook['cells'][5]['source']), namespace)
 
     def test_failed_install_can_retry_without_a_false_marker_or_partial_checkout(self):
         with self.fixture(), patch.object(b.subprocess, 'run', side_effect=RuntimeError('private-test-secret')):
@@ -114,13 +127,17 @@ class RuntimePreparationTests(unittest.TestCase):
             prepare = Mock(return_value={'python': '/fixture/env/bin/python', 'cloudflared': '/fixture/cloudflared'})
             resolve = Mock(return_value={'source': 'https://example.com/archive', 'sha256': 'a'*64, 'tag': 'v0.1.15'})
             secrets = Mock(side_effect=AssertionError('No Secrets needed for defaults'))
+            runtime_platform = types.ModuleType('platform')
+            runtime_platform.system = lambda: 'Linux'
+            runtime_platform.machine = lambda: 'x86_64'
             namespace = {'platform': types.SimpleNamespace(system=lambda: 'Linux', machine=lambda: 'x86_64'),
                          'gpu_indices': lambda: list(range(count)), 'prepare_runtime': prepare, 'release_artifact': resolve,
                          'install_artifact': Mock(return_value=self.binary), 'NotebookRunner': Mock(return_value=runner),
                          'SetupError': b.SetupError, 'json': json, 'print': Mock(), 'secret': secrets}
             for repeat in range(2):
-                for cell in notebook['cells'][2:]:
-                    if cell['cell_type'] == 'code': exec(''.join(cell['source']), namespace)
+                with patch.dict(sys.modules, {'platform': runtime_platform}):
+                    for cell in notebook['cells'][2:]:
+                        if cell['cell_type'] == 'code': exec(''.join(cell['source']), namespace)
                 self.assertEqual(status['state'], 'running')
                 runner.stop.assert_not_called()
                 runner.run_for.assert_not_called()

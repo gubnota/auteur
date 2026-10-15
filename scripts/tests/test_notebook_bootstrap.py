@@ -115,6 +115,7 @@ class BootstrapTests(unittest.TestCase):
         from unittest.mock import Mock
         for host in ['colab', 'kaggle']:
             notebook = json.loads((ROOT / f'deploy/{host}/MyMovie_ComfyUI.ipynb').read_text())
+            self.assertNotIn('source_hidden', notebook['cells'][1]['metadata'].get('jupyter', {}))
             config = ''.join(notebook['cells'][3]['source'])
             setup = ''.join(notebook['cells'][5]['source'])
             self.assertTrue(setup.startswith('import platform\n'))
