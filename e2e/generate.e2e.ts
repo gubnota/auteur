@@ -81,8 +81,7 @@ test("standalone multi-media draft persists and reviews a batch on two nodes", a
       ),
     )
     .toBe(2);
-  await page.getByRole("button", { name: "Welcome", exact: true }).click();
-  await page.getByRole("button", { name: /Open a movie/ }).click();
+  await page.getByRole("button", { name: "Close movie", exact: true }).click();
   await page.getByRole("button", { name: "Generate", exact: true }).click();
   const saved = await page.evaluate(() => (window as any).fixture.saved);
   expect(saved.jobDrafts[0].context.kind).toBe("standalone");

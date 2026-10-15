@@ -3,6 +3,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Project, AppSettings, Job } from "./types";
 export const native = isTauri();
 let previewProject: Project | null = null;
+let previewWorkspace:Project={id:"studio-preview",name:"Studio",revision:0,ratio:"16:9",positivePrompt:"",negativePrompt:"",episodes:[],characters:[],assets:[],workflows:[],jobDrafts:[]};
 let settings: AppSettings = {
   connections: [],
   theme: "light",
@@ -16,6 +17,11 @@ export async function call<T>(
   args: Record<string, unknown> = {},
 ): Promise<T> {
   if (native) return invoke<T>(command, args);
+  if(command === "get_workspace")return previewWorkspace as T;
+  if(command === "get_project")return previewProject as T;
+  if(command === "save_workspace"){previewWorkspace={...(args.project as Project),revision:(args.expectedRevision as number)+1};return previewWorkspace as T;}
+  if(command === "close_project"){previewProject=null;return undefined as T;}
+  if(command === "list_workflows")return [] as T;
   if (command === "list_initializations") return [] as T;
   if (command === "get_settings") return settings as T;
   if (command === "save_settings") {
@@ -55,7 +61,7 @@ export async function pickFile(
         ? [
             {
               name: "ComfyUI workflow or wrapped collection",
-              extensions: ["json"],
+              extensions: ["json", "mymovie-workflow"],
             },
           ]
         : undefined,

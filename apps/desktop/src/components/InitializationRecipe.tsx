@@ -1,3 +1,4 @@
+import { ArrowUp, ArrowDown } from "lucide-react";
 import { useState } from "react";
 import type { InitializationStep } from "../lib/types";
 import { Field, Modal, Picker } from "./Controls";
@@ -64,7 +65,7 @@ export function InitializationRecipe({
                     change(next);
                   }}
                 >
-                  ↑
+                  <ArrowUp size={16}/>
                 </button>
                 <button
                   disabled={i === steps.length - 1}
@@ -75,7 +76,7 @@ export function InitializationRecipe({
                     change(next);
                   }}
                 >
-                  ↓
+                  <ArrowDown size={16}/>
                 </button>
                 <button onClick={() => edit(i)}>Edit</button>
                 <button onClick={() => change(steps.filter((_, n) => n !== i))}>
@@ -90,7 +91,7 @@ export function InitializationRecipe({
         Add script step
       </button>
       {editing !== null && (
-        <Modal title="Initialization step" onClose={() => setEditing(null)}>
+        <Modal fullScreen title="Initialization step" onClose={() => setEditing(null)}>
           <Field
             label="Step name"
             value={draft.name}
@@ -101,12 +102,15 @@ export function InitializationRecipe({
             value={draft.directory}
             onChange={(directory) => setDraft({ ...draft, directory })}
           />
+          <p>Predefined paths: COMFYUI_DIR, COMFYUI_PYTHON, MODELS_DIR, CUSTOM_NODES_DIR, WORKFLOW_DIR, CACHE_DIR. Quote paths in your scripts. Checks run each time; exit 0 means installed, any other exit requests installation.</p>
+          <Field label="Check script (optional)" multiline value={draft.checkScript ?? ""} onChange={checkScript=>setDraft({...draft,checkScript:checkScript||null})}/>
           <Field
-            label="Shell script"
+            label="Install script"
             multiline
             value={draft.script}
             onChange={(script) => setDraft({ ...draft, script })}
           />
+          <Field label="Verify script (optional, runs after install or reuse)" multiline value={draft.verifyScript ?? ""} onChange={verifyScript=>setDraft({...draft,verifyScript:verifyScript||null})}/>
           <Field
             label="Timeout in seconds (1–3600)"
             value={String(draft.timeoutSeconds)}

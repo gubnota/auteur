@@ -17,7 +17,7 @@ import {
   type JobItem,
   type Project,
 } from "../lib/types";
-import { newJobDraft } from "../lib/job-drafts";
+import { sampleAssets, newJobDraft } from "../lib/job-drafts";
 import { JobReview } from "../components/JobReview";
 import { WorkflowInputs } from "../components/WorkflowInputs";
 import { Field, Picker, Toggle } from "../components/Controls";
@@ -71,6 +71,7 @@ export function Generate({
   const [itemId, setItemId] = useState("");
 
   const item = draft?.items.find((i) => i.id === itemId) ?? draft?.items[0];
+  const characters = draft?.context?.storyboard?.characters ?? p.characters;
   const sourceWorkflow = p.workflows.find((w) => w.id === item?.workflowId);
   const workflow = workflowForTarget(sourceWorkflow, item?.connectionId ?? "");
   const editDraft = (fn: (d: JobDraft) => void) => {
@@ -178,7 +179,7 @@ export function Generate({
                   value={draft.frameId}
                   options={[
                     { id: "", label: "Custom media · no frame" },
-                    ...p.episodes.flatMap((e) =>
+                    ...(draft.context?.storyboard?.episodes ?? p.episodes).flatMap((e) =>
                       e.scenes.flatMap((s) =>
                         s.shots.flatMap((sh) =>
                           sh.frames.map((f) => ({
@@ -285,7 +286,7 @@ export function Generate({
                       editItem((i) => {
                         i.workflowId = workflowId;
                         i.values = {};
-                        i.assets = {};
+                        i.assets = sampleAssets(p, p.workflows.find(w => w.id === workflowId));
                         i.bindings = null;
                         i.inputText = {};
                         i.inputErrors = {};
@@ -323,10 +324,10 @@ export function Generate({
                       })
                     }
                   />
-                  {!!p.characters.length && (
+                  {!!characters.length && (
                     <details>
                       <summary>Character references</summary>
-                      {p.characters.map((c) => (
+                      {characters.map((c) => (
                         <Toggle
                           key={c.id}
                           label={c.name}

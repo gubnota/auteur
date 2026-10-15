@@ -178,8 +178,8 @@ test("saved catalogue prepares a two-image form, maps ratio and reuses its layou
     path: "docs/screenshots/workflow-catalogue.png",
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Welcome", exact: true }).click();
-  await page.getByRole("button", { name: /Open a movie/ }).click();
+  await page.locator(".jobs-item-strip button").first().click();
+  await page.getByRole("button", { name: "Close movie", exact: true }).click();
   await page.getByRole("button", { name: "Generate", exact: true }).click();
   await expect(
     page.getByText("Source photograph", { exact: true }),
@@ -279,8 +279,8 @@ test("configure API media slots once, mark used fields, reuse searched gallery I
     page.getByText("Base photograph", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Face identity", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Welcome", exact: true }).click();
-  await page.getByRole("button", { name: /Open a movie/ }).click();
+  await page.locator(".jobs-item-strip button").first().click();
+  await page.getByRole("button", { name: "Close movie", exact: true }).click();
   const saved = await page.evaluate(() => (window as any).fixture.saved);
   expect(saved.workflows[0].bindings.map((b: any) => b.nodeId)).toEqual([
     "19",
@@ -361,6 +361,70 @@ test("wrapper guide, optional input and output selection persist independently o
   ]);
   await page.screenshot({
     path: "docs/screenshots/workflow-wrapper-guide.png",
+    fullPage: true,
+  });
+});
+
+test("dependency sources open and relative destinations can be edited in the wrapper", async ({
+  page,
+}) => {
+  const workspace = structuredClone(project);
+  workspace.workflows[0].requirements = {
+    compatibility: "universal",
+    artifacts: [
+      {
+        kind: "model",
+        category: "loras",
+        target: "demo.safetensors",
+        source: "https://example.org/demo.safetensors",
+        sha256: "a".repeat(64),
+        size: 128,
+        license: "MIT",
+        architecture: "any",
+      },
+    ],
+  };
+  await openFixture(page, workspace, settings);
+  await page.getByRole("tab", { name: "Guide", exact: true }).click();
+  await page.getByRole("button", { name: "Open source", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).fixture.openedSources)).toEqual(["https://example.org/demo.safetensors"]);
+  await page
+    .getByRole("button", { name: "Edit dependencies", exact: true })
+    .click();
+  await page
+    .locator(".setup-dependency")
+    .getByRole("button", { name: "Edit", exact: true })
+    .click();
+  const dependency = page.getByRole("dialog", {
+    name: "Pinned dependency",
+    exact: true,
+  });
+  await dependency
+    .getByLabel("Relative destination / filename", { exact: true })
+    .fill("portraits/demo.safetensors");
+  await dependency
+    .getByLabel("Public HTTPS download URL · no secrets", { exact: true })
+    .fill("https://example.org/revised.safetensors");
+  await expect(
+    dependency.getByText("$MODELS_DIR/loras/portraits/demo.safetensors", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await dependency.getByRole("button", { name: /Save dependency/ }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).fixture.saved.workflows[0].requirements.artifacts[0]
+            .target,
+      ),
+    )
+    .toBe("portraits/demo.safetensors");
+  await expect(page.locator(".setup-dependency")).toContainText(
+    "https://example.org/revised.safetensors",
+  );
+  await page.screenshot({
+    path: "docs/screenshots/workflow-dependencies-0.1.20.png",
     fullPage: true,
   });
 });

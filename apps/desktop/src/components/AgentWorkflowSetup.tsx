@@ -2,6 +2,8 @@ import { openActivity } from "./BackgroundActivity";
 import { useEffect, useRef, useState } from "react";
 import type { Connection, InstallArtifact, Workflow } from "../lib/types";
 import { call } from "../lib/bridge";
+import { Modal } from "./Controls";
+import { SourceLink } from "./SourceLink";
 
 type SetupReport = {
   state?: string;
@@ -38,6 +40,8 @@ export function AgentWorkflowSetup({
     [busy, setBusy] = useState(""),
     [error, setError] = useState(""),
     [steps, setSteps] = useState<string[]>([]);
+  const [instructions, setInstructions] = useState<string | null>(null);
+  const [liveLog, setLiveLog] = useState<string[]>([]);
   const identity = JSON.stringify([
     connection,
     workflow.id,
@@ -64,6 +68,7 @@ export function AgentWorkflowSetup({
     setReview(null);
     setError("");
     setSteps([]);
+    setLiveLog([]);
   }, [identity]);
   const act = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -88,10 +93,20 @@ export function AgentWorkflowSetup({
         state: string;
         report: SetupReport;
         error?: string;
+        progress?: {
+          stage?: string;
+          detail?: string;
+          log?: { detail: string }[];
+        };
       }>("runner_operation", {
         connectionId: connection!.id,
         operationId: receipt.id,
       });
+      if (status.progress)
+        setLiveLog([
+          status.progress.detail ?? status.progress.stage ?? status.state,
+          ...(status.progress.log ?? []).slice(-3).map((line) => line.detail),
+        ]);
       if (!mounted.current || current.current !== stamp)
         throw new Error(
           "Selection changed. Review setup again for the current selection.",
@@ -185,13 +200,51 @@ export function AgentWorkflowSetup({
             })
           }
         >
-          {busy || `Initialize on ${connection.name}`}
+          {busy || `Prepare workflow on ${connection.name}`}
         </button>
+        {busy && (
+          <div
+            className="initialization-progress"
+            role="progressbar"
+            aria-label={busy}
+          >
+            <span />
+          </div>
+        )}
         <small>
-          Missing models or plugins require an agent connection for
-          installation. This direct connection does not install dependencies or
-          restart your ComfyUI.
+          Direct ComfyUI connection: prepares inputs and publishes the graph. To
+          download weights, install plugins and view installation logs, connect
+          this Mac through the local agent, then select that agent instance
+          above.
         </small>
+        <button
+          onClick={() =>
+            void call<string>("local_agent_instructions")
+              .then(setInstructions)
+              .catch((e) => setError(String(e)))
+          }
+        >
+          Set up local agent
+        </button>
+        {instructions !== null && (
+          <Modal
+            fullScreen
+            title="Local agent setup"
+            onClose={() => setInstructions(null)}
+          >
+            <p>
+              ComfyUI uses port 8191; the local relay uses port 8789. The agent
+              makes outbound connections and needs no additional listening port.
+              Follow the managed setup for installation and restart controls.
+            </p>
+            <button
+              onClick={() => void navigator.clipboard.writeText(instructions)}
+            >
+              Copy instructions
+            </button>
+            <pre className="copyable">{instructions}</pre>
+          </Modal>
+        )}
         {!!steps.length && (
           <ol>
             {steps.map((step, i) => (
@@ -259,7 +312,21 @@ export function AgentWorkflowSetup({
           </ol>
         </details>
       )}
-      {busy && <p role="status">{busy} Keep the notebook cell running.</p>}
+      {busy && <p role="status">{busy} Keep the node agent running.</p>}
+      {busy && (
+        <div
+          className="initialization-progress"
+          role="progressbar"
+          aria-label={busy}
+        >
+          <span />
+        </div>
+      )}
+      {!!liveLog.length && (
+        <pre className="copyable" aria-label="Initialization log">
+          {liveLog.join("\n")}
+        </pre>
+      )}
       {report && (
         <div className="setup-result" role="status">
           <strong>
@@ -319,6 +386,7 @@ export function AgentWorkflowSetup({
                     {a.source ||
                       "Bundled MyMovie plugin / private transfer reference"}
                   </p>
+                  <SourceLink source={a.source} />
                   <code>{a.sha256}</code>
                 </details>
               </article>

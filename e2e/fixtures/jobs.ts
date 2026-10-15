@@ -91,7 +91,7 @@ export async function openFixture(
   page: Page,
   movie = project,
   connections = settings,
-  options: { catalogue?: Workflow[]; setupReports?: unknown[] } = {},
+  options: { catalogue?: Workflow[]; setupReports?: unknown[]; globalOnly?: boolean } = {},
 ) {
   // Intercept only the UI bridge: no native filesystem, credentials or provider calls.
   await page.route("**/@tauri-apps_api_webview.js*", (route) =>
@@ -117,15 +117,18 @@ export async function openFixture(
       contentType: "application/javascript",
       body: `
     export const native = true;
-    let project = ${JSON.stringify(movie)};
+    let movieDocument = ${JSON.stringify(movie)};
+    let project = JSON.parse(sessionStorage.getItem("fixture-workspace") ?? "null") ?? {...structuredClone(movieDocument), id:"global", name:"Studio", episodes:[], characters:[]};
     let settings = JSON.parse(sessionStorage.getItem("fixture-settings") ?? "null") ?? ${JSON.stringify(connections)};
     let catalogue = ${JSON.stringify(options.catalogue ?? movie.workflows)};
     let setupPending = false; let staleSettings = null; let setupReports = ${JSON.stringify(options.setupReports ?? [])}; let setupOperations = {}; let initializations = [];
     let runnerTokens = { MYMOVIE_AGENT_TOKEN: 'fixture-agent-'.repeat(3), MYMOVIE_DESKTOP_TOKEN: 'fixture-desktop-'.repeat(3) };
     let runs = []; let jobs = JSON.parse(sessionStorage.getItem("fixture-jobs") ?? "[]");
     let recents = Array.from({length: 12}, (_, i) => ({name: "Recent movie " + i, path: "/tmp/movie-" + i + ".mymovie", opened: "2026-10-14T10:00:00Z"}));
-    window.fixture = { initializations: () => initializations, setInitializations: rows => { initializations = rows; }, setupCalls: [], holdSetup: value => { setupPending = value; }, staleSettingsReturned: false, preparations: [], staleSettings: () => structuredClone(settings), returnSettingsOnce: value => { staleSettings = value; }, movie: () => project, submissions: [], enqueued: [], installs: [], thumbnails: [], setResults: results => { jobs.forEach((job, i) => { job.results = results[i] ?? []; job.state = "succeeded"; }); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, setJobStates: states => { jobs.forEach((job, i) => job.state = states[i]); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, jobHistory: () => jobs };
+    window.fixture = { initializations: () => initializations, setInitializations: rows => { initializations = rows; }, setupCalls: [], holdSetup: value => { setupPending = value; }, staleSettingsReturned: false, preparations: [], staleSettings: () => structuredClone(settings), returnSettingsOnce: value => { staleSettings = value; }, movie: () => project, submissions: [], enqueued: [], installs: [], thumbnails: [], setResults: results => { jobs.forEach((job, i) => { job.results = results[i] ?? []; job.state = "completed"; }); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, setJobStates: states => { jobs.forEach((job, i) => job.state = states[i]); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, jobHistory: () => jobs };
     export async function call(command, args = {}) {
+      if (command === 'open_external_url') { (window.fixture.openedSources ??= []).push(args.url); return; }
+      if (command === 'local_agent_instructions') return '# Local agent setup\\nUse the managed supervisor on ports 8191 and 8789.';
       if (command === 'plan_deployment' || command === 'runner_action') { window.fixture.setupCalls.push({command, ...args}); const id = 'setup-' + window.fixture.setupCalls.length; setupOperations[id] = setupReports.shift() ?? {state:'ready',ready:true}; return {id}; }
       if (command === 'list_initializations') return initializations.filter(r => r.connectionId === args.connectionId);
       if (command === 'start_initialization') { window.fixture.setupCalls.push({command, ...args}); const id = 'initialization-1'; const w = project.workflows.find(w => w.id === args.workflowId); initializations = [{id,connectionId:args.connectionId,workflowId:w.id,workflowName:w.name,state:'running',createdAt:Math.floor(Date.now()/1000),lastContact:Math.floor(Date.now()/1000),progress:{stage:'download',detail:'Downloading sd15.safetensors',bytes:104857600,totalBytes:2147483648,log:[{stage:'inventory',detail:'Exact dependencies reviewed',at:Math.floor(Date.now()/1000)}]}}]; return {id}; }
@@ -133,7 +136,7 @@ export async function openFixture(
       if (command === 'cancel_initialization') { initializations.find(r => r.id === args.operationId).state='canceled'; return {}; }
       if (command === 'archive_workflow') { const w = project.workflows.find(w => w.id === args.workflowId); w.wrapper = {...w.wrapper, archivedAt: args.archived ? new Date().toISOString() : undefined}; project.revision++; return project; }
       if (command === 'clear_workflow_trash') { project.workflows = project.workflows.filter(w => !w.wrapper?.archivedAt); project.revision++; return project; }
-      if (command === 'console_request') { (window.fixture.consoleCommands ??= []).push(args.command); return { id:'fixture-console', state:args.command?.type === 'close' ? 'closed' : 'running', output:[{text:'CPU worker ready\\n$ '}] }; }
+      if (command === 'console_request') { (window.fixture.consoleCommands ??= []).push(args.command); return { id:'fixture-console', state:args.command?.type === 'close' ? 'closed' : 'running', output:[{seq:0,text:'CPU worker ready\\n$ '}] }; }
       if (command === 'runner_operation') return setupPending ? {state:'running',report:{}} : {state:'completed',report:setupOperations[args.operationId]};
       if (command === 'get_runner_tokens') return structuredClone(runnerTokens);
       if (command === 'save_runner_tokens') { runnerTokens = structuredClone(args.tokens); return; }
@@ -147,7 +150,9 @@ export async function openFixture(
       if (command === 'video_thumbnail') { window.fixture.thumbnails.push(args); return true; }
       if (command === 'install_workflow') { window.fixture.installs.push(args); return {installed:true, loadedCanvas:false, libraryPath:'workflows/MyMovie/fixture.json'}; }
       if (command === 'close_project') return null;
-      if (command === 'get_project') return project;
+      if (command === 'get_project') return movieDocument;
+      if (command === 'get_workspace') return project;
+      if (command === 'save_workspace') { project = {...args.project, revision: args.expectedRevision + 1}; sessionStorage.setItem('fixture-workspace', JSON.stringify(project)); window.fixture.saved = project; return project; }
       if (command === 'list_workflows') return catalogue;
       if (command === 'catalogue_workflow') {
         const w = project.workflows.find(w => w.id === args.workflowId);
@@ -161,6 +166,8 @@ export async function openFixture(
         return project;
       }
       if (command === 'save_workflow_form') { const w = project.workflows.find(w => w.id === args.workflowId); w.bindings = args.bindings; w.layout = args.layout; project.revision++; window.fixture.saved = project; return project; }
+      if (command === 'duplicate_workflow') {const w=structuredClone(project.workflows.find(w=>w.id===args.workflowId));w.id='copy-'+w.id;w.wrapper={...w.wrapper,exampleId:undefined};project.workflows.push(w);return project;}
+      if (command === 'cancel_job') {jobs.find(j=>j.id===args.jobId).state='canceled';return jobs;}
       if (command === 'asset_availability') return {};
       if (command === 'save_workflow_layout') {
         const w = project.workflows.find(w => w.id === args.workflowId);
@@ -175,8 +182,8 @@ export async function openFixture(
         w.lastTarget = args.connectionId;
         project.revision++; window.fixture.saved = project; return project;
       }
-      if (command === 'open_project') return project;
-      if (command === 'save_project') { project = {...args.project, revision: args.expectedRevision + 1}; window.fixture.saved = project; return project; }
+      if (command === 'open_project') return movieDocument;
+      if (command === 'save_project') { movieDocument = {...args.project, revision: args.expectedRevision + 1}; window.fixture.saved = movieDocument; return movieDocument; }
       if (command === 'list_jobs' || command === 'refresh_jobs') return jobs;
       if (command === 'list_job_runs') return runs;
       if (command === 'enqueue_job_draft' || command === 'replace_queued_job_run') { if (command === 'replace_queued_job_run') { const old = runs.find(r => r.id === args.runId); if (!old?.queued || old.state !== 'paused') throw new Error('Batch already started'); old.queued = false; old.state = 'canceled'; jobs.forEach(j => { if (j.runId === old.id) j.state = 'canceled'; }); } window.fixture.enqueued.push(args); const draft = project.jobDrafts.find(d => d.id === args.draftId); if (draft.queuedJobIds?.length) {jobs.forEach(j => {if(draft.queuedJobIds.includes(j.id)) j.state='canceled';});} const id = 'run-' + runs.length; const ids = draft.items.map((item, index) => { const jobId = id + '-job-' + index; jobs.push({id:jobId, runId:id, workflowId:item.workflowId, connectionId:item.connectionId, frameId:draft.frameId, workflowVersion:project.workflows.find(w => w.id === item.workflowId).version, state:'paused', progress:0, error:null, results:[], snapshot:{semantic:structuredClone(item.values),media:Object.fromEntries(Object.entries(item.assets).map(([k,id]) => [k,project.assets.find(a => a.id === id)])),bindings:structuredClone(item.bindings ?? project.workflows.find(w => w.id === item.workflowId).bindings),context:structuredClone(draft.context),connection:structuredClone(settings.connections.find(c => c.id === item.connectionId))}}); return jobId; }); runs.push({id, name:draft.name, draftId:draft.id, jobIds:ids, state:'paused', queued:true, createdAt:'2026-10-14'}); return jobs; }
@@ -197,7 +204,8 @@ export async function openFixture(
     }),
   );
   await page.goto("/");
-  await page.getByRole("button", { name: /Open a movie/ }).click();
+  if (!options.globalOnly) await page.getByRole("button", {name:"Open movie",exact:true}).click();
+  if (options.globalOnly) return;
   await page.getByRole("button", { name: "Workflows", exact: true }).click();
   await page.getByRole("button", { name: /Imported image workflow/ }).click();
   await page.locator(".workflow-job-entry summary").click();

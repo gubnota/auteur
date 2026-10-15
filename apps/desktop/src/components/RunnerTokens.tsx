@@ -17,6 +17,7 @@ export function RunnerTokenFields({
   change: (value: Tokens) => void;
 }) {
   const [visible, setVisible] = useState(false);
+  const [error, setError] = useState("");
   return (
     <>
       <Field
@@ -43,7 +44,20 @@ export function RunnerTokenFields({
         <button onClick={() => change({ ...defaultRunnerTokens })}>
           Use predefined values
         </button>
+        <button
+          onClick={() =>
+            void loadRunnerTokens(true)
+              .then((value) => {
+                change(value);
+                setError("");
+              })
+              .catch(() => setError("Unable to read saved private tokens."))
+          }
+        >
+          Load saved private tokens
+        </button>
       </div>
+      {error && <p role="alert">{error}</p>}
     </>
   );
 }

@@ -1,4 +1,10 @@
-import { uid, type Project, type AppSettings, type JobDraft } from "./types";
+import {
+  uid,
+  type Project,
+  type AppSettings,
+  type Workflow,
+  type JobDraft,
+} from "./types";
 export function newJobDraft(
   p: Project,
   settings: AppSettings,
@@ -29,8 +35,25 @@ export function newJobDraft(
           )?.id ??
           "",
         values: {},
-        assets: {},
+        assets: sampleAssets(p, workflow),
       },
     ],
   };
+}
+
+export function sampleAssets(
+  p: Project,
+  workflow?: Workflow,
+): Record<string, string> {
+  const assets: Record<string, string> = {};
+  for (const sample of workflow?.wrapper?.sampleMedia ?? []) {
+    const binding = workflow?.bindings.find(
+      (b) => b.nodeId === sample.nodeId && b.input === sample.input && b.media,
+    );
+    const asset = p.assets.find(
+      (a) => a.sha256 === sample.sha256 && !a.archivedAt,
+    );
+    if (binding && asset) assets[binding.semantic] = asset.id;
+  }
+  return assets;
 }

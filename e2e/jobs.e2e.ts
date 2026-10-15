@@ -54,15 +54,12 @@ test("queued batches stay idle across reopening until explicitly started", async
   expect(
     await page.evaluate(() => (window as any).fixture.submissions),
   ).toEqual([]);
-  await page.getByRole("button", { name: "Welcome", exact: true }).click();
-  await page.getByRole("button", { name: /Open a movie/ }).click();
+  await page.getByRole("button", { name: "Close movie", exact: true }).click();
   await page.getByRole("button", { name: "Jobs", exact: true }).click();
   expect(
     await page.evaluate(() => (window as any).fixture.submissions),
   ).toEqual([]);
-  await page
-    .getByRole("button", { name: "Select queued", exact: true })
-    .click();
+  await page.getByLabel("Select all visible").check();
   await page.getByRole("button", { name: "Run selected", exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => (window as any).fixture.submissions.length))
@@ -158,8 +155,7 @@ test("invalid raw inputs persist through item switching and reopening and block 
       ),
     )
     .toBe(2);
-  await page.getByRole("button", { name: "Welcome", exact: true }).click();
-  await page.getByRole("button", { name: /Open a movie/ }).click();
+  await page.getByRole("button", { name: "Close movie", exact: true }).click();
   await page.getByRole("button", { name: "Generate", exact: true }).click();
   await expect(
     page.getByRole("textbox", { name: "config", exact: true }),
@@ -191,18 +187,17 @@ test("collapse editor, edit a queued node and save an idle replacement", async (
   await page.getByLabel("seed", { exact: true }).fill("99");
   await page.getByRole("button", { name: "Jobs", exact: true }).click();
   await expect(page.getByLabel("Generation name")).toHaveCount(0);
-  await page.getByRole("button", { name: "Edit queued batch" }).click();
+  await page.getByRole("button", { name: "Edit as draft / destination" }).click();
   await expect(page.getByLabel("seed", { exact: true })).toHaveValue("7");
   await page
     .getByRole("button", { name: "Execution node", exact: true })
     .click();
   await page.getByRole("button", { name: /ComfyUI 2 Automatic FIFO/ }).click();
   // Pending queue edits survive reopening as a saved draft.
-  await page.getByRole("button", { name: "Welcome", exact: true }).click();
-  await page.getByRole("button", { name: /Open a movie/ }).click();
+  await page.getByRole("button", { name: "Close movie", exact: true }).click();
   await page.getByRole("button", { name: "Jobs", exact: true }).click();
-  await page.getByText(/^Saved drafts ·/).click();
-  await page.getByRole("button", { name: /Edit Generation 1 edit/ }).click();
+  await page.getByRole("tab", {name: /^Drafts/}).click();
+  await page.getByRole("article").filter({hasText: "Generation 1 edit"}).getByRole("button", {name: "Configure",exact:true}).click();
   await page.getByRole("button", { name: "Review exact inputs" }).click();
   await expect(page.getByRole("button", { name: /Run now/ })).toBeDisabled();
   await page
@@ -255,15 +250,15 @@ test("clear finished queue entries persists without removing history or active j
     ]),
   );
   await page.getByRole("button", { name: "Jobs", exact: true }).click();
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
-  await expect(page.locator(".queue-job")).toHaveCount(5);
+  await page.getByRole("tab", {name: /^All/}).click();
+  await expect(page.locator(".jobs-task")).toHaveCount(5);
   const stale = await page.evaluate(() =>
     (window as any).fixture.staleSettings(),
   );
   await page
     .getByRole("button", { name: "Clear finished", exact: true })
     .click();
-  await expect(page.locator(".queue-job")).toHaveCount(2);
+  await expect(page.locator(".jobs-task")).toHaveCount(2);
   await page.evaluate(
     (value) => (window as any).fixture.returnSettingsOnce(value),
     stale,
@@ -274,15 +269,15 @@ test("clear finished queue entries persists without removing history or active j
       { timeout: 8000 },
     )
     .toBe(true);
-  await expect(page.locator(".queue-job")).toHaveCount(2);
-  await expect(page.locator(".queue-job .state-unknown")).toBeVisible();
-  await expect(page.locator(".queue-job .state-submitted")).toBeVisible();
+  await expect(page.locator(".jobs-task")).toHaveCount(2);
+  await expect(page.locator(".jobs-task .state-unknown")).toBeVisible();
+  await expect(page.locator(".jobs-task .state-submitted")).toBeVisible();
   expect(
     await page.evaluate(() => (window as any).fixture.jobHistory().length),
   ).toBe(5);
   await page.reload();
-  await page.getByRole("button", { name: /Open a movie/ }).click();
-  await expect(page.locator(".queue-job")).toHaveCount(2);
+  await page.getByRole("tab", {name:/^All/}).click();
+  await expect(page.locator(".jobs-task")).toHaveCount(2);
   await expect(
     page.getByRole("button", { name: "Clear finished", exact: true }),
   ).toBeDisabled();
@@ -309,11 +304,8 @@ test("selection starts only one task and removes another without submitting it",
     .getByRole("button", { name: "Add to queue", exact: true })
     .click();
   await page.getByRole("button", { name: "Jobs", exact: true }).click();
-  await page.locator(".jobs-run summary").click();
-  await expect(page.getByLabel(/^Select task/).first()).not.toBeVisible();
-  await page.locator(".jobs-run summary").click();
   await page
-    .getByLabel(/^Select task/)
+    .getByLabel(/^Select run-/)
     .first()
     .check();
   await page.getByRole("button", { name: "Run selected", exact: true }).click();
@@ -327,13 +319,13 @@ test("selection starts only one task and removes another without submitting it",
       ),
     )
     .toBe(1);
-  await expect(page.getByLabel(/^Select task/)).toHaveCount(2);
+  await expect(page.getByLabel(/^Select run-/)).toHaveCount(2);
   await page
-    .getByLabel(/^Select task/)
+    .getByLabel(/^Select run-/)
     .first()
     .check();
   await page
-    .getByRole("button", { name: "Remove selected from queue", exact: true })
+    .getByRole("button", { name: "Cancel selected", exact: true })
     .click();
   const states = await page.evaluate(() =>
     (window as any).fixture.jobHistory().map((j: any) => j.state),

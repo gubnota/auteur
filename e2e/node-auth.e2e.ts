@@ -49,7 +49,7 @@ for (const [suffix, label] of [
       ),
     ).toBe(true);
     await page
-      .getByRole("button", { name: "Connections", exact: true })
+      .getByRole("button", { name: "Instances", exact: true })
       .click();
     await page.getByRole("button", { name: "Colab / Kaggle" }).click();
     const modal = page.getByRole("dialog", { name: "Connect notebook nodes" });

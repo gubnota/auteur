@@ -280,6 +280,7 @@ export function Characters({
 export function Library({
   project: p,
   root,
+  usageProject,
   onImport,
   onCollect,
   onRelink,
@@ -288,6 +289,7 @@ export function Library({
   update,
   rendersOnly = false,
 }: {
+  usageProject?: Project;
   jobs: Job[];
   update: Update;
   rendersOnly?: boolean;
@@ -336,7 +338,8 @@ export function Library({
         : a.kind === filter) &&
       a.name.toLowerCase().includes(search.toLowerCase()),
   );
-  const usage = usageId ? assetUsage(p, usageId, jobs) : null;
+  const usageSource = usageProject ? {...p, episodes: usageProject.episodes, characters: usageProject.characters} : p;
+  const usage = usageId ? assetUsage(usageSource, usageId, jobs) : null;
   const chosen = p.assets.filter(
     (a) => selected.includes(a.id) && !!a.archivedAt === trash,
   );
@@ -353,7 +356,7 @@ export function Library({
   return (
     <>
       <PageTitle
-        eyebrow={rendersOnly ? "TRACEABLE RESULTS" : "SHARED MOVIE MATERIAL"}
+        eyebrow={rendersOnly ? "TRACEABLE RESULTS" : "SHARED STUDIO MEDIA"}
         title={rendersOnly ? "Renders" : "Library"}
         description="One shared library for imports and renders. Removing media moves it to Trash and keeps references and receipts."
         action={
@@ -463,7 +466,7 @@ export function Library({
                 {selected.includes(a.id) ? "Selected" : "Select"}
               </button>
               <button onClick={() => setUsageId(a.id)}>
-                Usage · {assetUsage(p, a.id, jobs).frames.length} keyframes
+                Usage · {assetUsage(usageSource, a.id, jobs).frames.length} keyframes
               </button>
               <code title={a.sha256}>SHA256 {a.sha256.slice(0, 16)}…</code>
             </article>
@@ -481,7 +484,7 @@ export function Library({
             available again.
           </p>
           {chosen.map((a) => {
-            const u = assetUsage(p, a.id, jobs);
+            const u = assetUsage(usageSource, a.id, jobs);
             return (
               <p key={a.id}>
                 {a.name} · {u.frames.length} frames · {u.characters.length}{" "}
@@ -561,10 +564,12 @@ export function Library({
 }
 export function Workflows({
   project: p,
+  movie,
   settings,
   update,
   onImport,
   pin,
+  duplicate,
   onGenerate,
   prepare,
   notify,
@@ -587,6 +592,8 @@ export function Workflows({
   update: Update;
   onImport: () => void;
   pin: (id: string) => Promise<void>;
+  duplicate: (id: string) => Promise<void>;
+  movie?: Project;
   onGenerate: (frameId: string, workflowId: string) => void;
 }) {
   const [selected, setSelected] = useState(""),
@@ -669,7 +676,7 @@ export function Workflows({
             {clearingTrash ? "Clearing…" : "Clear trash"}
           </button>
           <small>
-            Removes trashed workflows from this movie’s catalogue. Job history
+            Removes trashed workflows from Studio’s catalogue. Job history
             and original graph files are kept.
           </small>
         </div>
@@ -679,12 +686,13 @@ export function Workflows({
           <h2>Examples · start here</h2>
           <p>
             Original illustrations · reusable workflows with step-by-step agent
-            setup. Choose a movie copy to open its guide and initialization
+            setup. Use a workflow to open its guide and initialization
             controls.
           </p>
           <div className="asset-grid">
             {examples
               .filter((v) => mediaKind === "all" || v.mediaKind === mediaKind)
+              .filter((v, n, all) => all.findIndex(x => (x.wrapper?.familyId || x.id) === (v.wrapper?.familyId || v.id)) === n)
               .map((example) => {
                 const existing = p.workflows.find((v) => v.id === example.id);
                 return (
@@ -717,13 +725,7 @@ export function Workflows({
                           .finally(() => setPinning(""));
                       }}
                     >
-                      {existing && !existing.wrapper?.archivedAt
-                        ? "Open movie copy"
-                        : pinning === example.id
-                          ? "Adding…"
-                          : existing
-                            ? "Restore movie copy"
-                            : "Use example"}
+                      {pinning === example.id ? "Adding…" : "Use"}
                     </button>
                   </article>
                 );
@@ -749,6 +751,7 @@ export function Workflows({
               (w) =>
                 mediaKind === "all" || (w.mediaKind ?? "other") === mediaKind,
             )
+            .filter((v, n, all) => showTrash || all.findIndex(x => (x.wrapper?.familyId || x.id) === (v.wrapper?.familyId || v.id)) === n)
             .map((w) => (
               <button
                 className="panel workflow-card"
@@ -765,7 +768,7 @@ export function Workflows({
                   <WorkflowIcon size={28} />
                 )}
                 {w.wrapper?.exampleId && (
-                  <small className="example-label">Example · movie copy</small>
+                  <small className="example-label">Example · Studio</small>
                 )}
                 <strong>{w.name}</strong>
                 {w.wrapper?.collection && (
@@ -790,10 +793,11 @@ export function Workflows({
       {w && (
         <Modal title={w.name} onClose={() => setSelected("")}>
           <div className="workflow-trash-actions">
+            {w.wrapper?.exampleId && <button onClick={()=>void duplicate(w.id).then(()=>setSelected("")).catch(e=>notify(String(e)))}>Create editable copy</button>}
             <p>
               {w.wrapper?.archivedAt
                 ? "In Trash. Restore to edit, initialize or run. Results and job history are retained."
-                : "Removing a workflow moves this movie copy to Trash. Results and job history are retained. Active initialization continues; cancel it in Activity."}
+                : "Removing a workflow moves this Studio workflow to Trash. Results and job history are retained. Active initialization continues; cancel it in Activity."}
             </p>
             <button
               disabled={targetBusy}
@@ -841,11 +845,11 @@ export function Workflows({
               />
               <details className="workflow-job-entry">
                 <summary>Create a job</summary>
-                <h3>Generate a keyframe</h3>
+                <h3>Generate with this workflow</h3>
                 <Picker
                   title="Target keyframe"
                   value={frameId}
-                  options={p.episodes.flatMap((e) =>
+                  options={(movie?.episodes ?? []).flatMap((e) =>
                     e.scenes.flatMap((s) =>
                       s.shots.flatMap((sh) =>
                         sh.frames.map((f) => ({
@@ -869,8 +873,7 @@ export function Workflows({
                   Create generation job
                 </button>
                 <p className="muted">
-                  Choose a keyframe, then review the account and job inputs
-                  before submission.
+                  A Movie keyframe is optional. Review the instance and exact inputs before adding the job to the queue.
                 </p>
               </details>
             </>

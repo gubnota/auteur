@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import type { Connection } from "../lib/types";
 import { call, native } from "../lib/bridge";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { AgentTerminal } from "./AgentTerminal";
 import { Modal, Picker } from "./Controls";
 
 type Progress = {
@@ -58,6 +58,8 @@ export function BackgroundActivity({
     [rows, setRows] = useState<Initialization[]>([]),
     [errors, setErrors] = useState<Record<string, string>>({}),
     [consoleId, setConsoleId] = useState("");
+  const [corner,setCorner]=useState(localStorage.getItem("studio.activityCorner") || "bottom-right");
+  const dragged=useRef(false);
   const [refresh, setRefresh] = useState(0);
   const applied = useRef(new Set<string>()),
     applying = useRef(new Set<string>());
@@ -96,7 +98,7 @@ export function BackgroundActivity({
           try {
             const data = await call<Omit<Initialization, "connection">[]>(
               "list_initializations",
-              { connectionId: connection.id },
+              { connectionId: connection.id, passive: refresh === 0 },
             );
             if (stopped) return;
             setRows((old) => [
@@ -162,7 +164,11 @@ export function BackgroundActivity({
     <>
       <button
         className={`activity-launcher ${count ? "has-activity" : ""}`}
-        onClick={() => setOpen(true)}
+        data-corner={corner}
+        onPointerDown={e=>{dragged.current=false;e.currentTarget.setPointerCapture(e.pointerId);}}
+        onPointerMove={e=>{if(e.buttons){dragged.current=true;const next=`${e.clientY<innerHeight/2?"top":"bottom"}-${e.clientX<innerWidth/2?"left":"right"}`;setCorner(next);}}}
+        onPointerUp={()=>localStorage.setItem("studio.activityCorner",corner)}
+        onClick={() => {if(!dragged.current)setOpen(true);}}
         aria-label="Open background activity"
       >
         <Activity size={18} />
@@ -287,6 +293,7 @@ export function BackgroundActivity({
                       Console
                     </button>
                   </div>
+                  <pre className="progress-tail">{p?.log?.slice(-3).map(line=>line.detail).join("\n")}</pre>
                   <details>
                     <summary>Steps & logs</summary>
                     <ol className="activity-log">
@@ -306,304 +313,11 @@ export function BackgroundActivity({
         </Modal>
       )}
       {terminalConnection && (
-        <RemoteConsole
+        <AgentTerminal
           connection={terminalConnection}
           onClose={() => setConsoleId("")}
         />
       )}
     </>
-  );
-}
-type ConsoleState = {
-  id: string;
-  state: string;
-  output: { seq: number; text: string }[];
-};
-function RemoteConsole({
-  connection,
-  onClose,
-}: {
-  connection: Connection;
-  onClose: () => void;
-}) {
-  const [session, setSession] = useState<ConsoleState | null>(null),
-    [error, setError] = useState(""),
-    [input, setInput] = useState(""),
-    [size, setSize] = useState("auto"),
-    [fullScreen, setFullScreen] = useState(false);
-  const restoreFullScreen = useRef<boolean | null>(null);
-  const terminal = useRef<HTMLPreElement>(null);
-  const request = (command?: Record<string, unknown>) =>
-    call<ConsoleState>("console_request", {
-      connectionId: connection.id,
-      sessionId: session?.id ?? null,
-      command: command ?? null,
-    });
-  useEffect(() => {
-    let stopped = false;
-    void call<ConsoleState>("console_request", {
-      connectionId: connection.id,
-      sessionId: null,
-      command: null,
-    })
-      .then((v) => {
-        if (!stopped) setSession(v);
-      })
-      .catch((e) => {
-        if (!stopped) setError(String(e));
-      });
-    return () => {
-      stopped = true;
-    };
-  }, [connection.id]);
-  useEffect(() => {
-    if (!session?.id) return;
-    let stopped = false;
-    let pending = false;
-    const timer = setInterval(() => {
-      if (pending) return;
-      pending = true;
-      void call<ConsoleState>("console_request", {
-        connectionId: connection.id,
-        sessionId: session.id,
-        command: null,
-      })
-        .then((v) => {
-          if (!stopped) {
-            setSession(v);
-            setError("");
-          }
-        })
-        .catch((e) => {
-          if (!stopped) setError(String(e));
-        })
-        .finally(() => {
-          pending = false;
-        });
-    }, 700);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-    };
-  }, [session?.id, connection.id]);
-  const inputQueue = useRef(Promise.resolve());
-  const send = (command: Record<string, unknown>) => {
-    inputQueue.current = inputQueue.current.then(async () => {
-      try {
-        setSession(await request(command));
-        setError("");
-      } catch (e) {
-        setError(String(e));
-      }
-    });
-    return inputQueue.current;
-  };
-  const toggleFullScreen = async () => {
-    try {
-      if (native) {
-        const appWindow = getCurrentWindow();
-        const before = await appWindow.isFullscreen();
-        if (restoreFullScreen.current === null)
-          restoreFullScreen.current = before;
-        await appWindow.setFullscreen(!before);
-        setFullScreen(!before);
-      } else if (document.fullscreenElement) {
-        await document.exitFullscreen();
-        setFullScreen(false);
-      } else {
-        await document.documentElement.requestFullscreen();
-        setFullScreen(true);
-      }
-    } catch (e) {
-      setError(String(e));
-    }
-  };
-  useEffect(
-    () => () => {
-      if (native && restoreFullScreen.current !== null)
-        void getCurrentWindow()
-          .setFullscreen(restoreFullScreen.current)
-          .catch(() => {});
-      else if (!native && document.fullscreenElement)
-        void document.exitFullscreen().catch(() => {});
-    },
-    [],
-  );
-  useEffect(() => {
-    if (
-      !terminal.current ||
-      !session?.id ||
-      session.state === "closed" ||
-      size !== "auto"
-    )
-      return;
-    let timer: ReturnType<typeof setTimeout>;
-    let previous = "";
-    const element = terminal.current;
-    const observer = new ResizeObserver(() => {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        const style = getComputedStyle(element);
-        const measure = document.createElement("span");
-        measure.style.font = style.font;
-        measure.textContent = "M";
-        element.append(measure);
-        const charWidth = measure.getBoundingClientRect().width || 8;
-        measure.remove();
-        const cols = Math.max(
-          20,
-          Math.min(
-            300,
-            Math.floor(
-              (element.clientWidth -
-                parseFloat(style.paddingLeft) -
-                parseFloat(style.paddingRight)) /
-                charWidth,
-            ),
-          ),
-        );
-        const rows = Math.max(
-          5,
-          Math.min(
-            120,
-            Math.floor(
-              (element.clientHeight -
-                parseFloat(style.paddingTop) -
-                parseFloat(style.paddingBottom)) /
-                (parseFloat(style.lineHeight) || 20),
-            ),
-          ),
-        );
-        const next = `${cols}x${rows}`;
-        if (next !== previous) {
-          previous = next;
-          void send({ type: "resize", cols, rows });
-        }
-      }, 150);
-    });
-    observer.observe(element);
-    return () => {
-      observer.disconnect();
-      clearTimeout(timer);
-    };
-  }, [session?.id, session?.state, size]);
-  useEffect(() => {
-    if (terminal.current)
-      terminal.current.scrollTop = terminal.current.scrollHeight;
-  }, [session?.output]);
-  // Bounded plain-text view. Escape sequences never become HTML.
-  const output =
-    session?.output
-      .map((o) => o.text)
-      .join("")
-      .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "") ?? "";
-  return (
-    <Modal
-      title={`Remote console · ${connection.name}`}
-      onClose={onClose}
-      fullScreen
-      className="console-window"
-    >
-      <details className="console-help">
-        <summary>Session · {session?.state ?? "connecting"} · Help</summary>
-        <p>
-          Interactive agent terminal · {session?.state ?? "connecting"}.
-          Requires private tokens and an agent started with{" "}
-          <code>--allow-console</code>. Opening a console clears readiness;
-          initialize again after changes. Closing this window detaches;
-          reopening reconnects. Sessions end after 30 minutes. Output keeps the
-          latest 256 KiB.
-        </p>
-      </details>
-      <pre
-        className="remote-terminal"
-        ref={terminal}
-        tabIndex={0}
-        aria-label="Remote terminal output"
-        onKeyDown={(e) => {
-          if (!session || session.state === "closed") return;
-          const key =
-            e.ctrlKey && e.key.toLowerCase() === "c"
-              ? "\x03"
-              : e.key === "Enter"
-                ? "\r"
-                : e.key === "Backspace"
-                  ? "\x7f"
-                  : e.key === "Tab"
-                    ? "\t"
-                    : ((
-                        {
-                          ArrowUp: "\x1b[A",
-                          ArrowDown: "\x1b[B",
-                          ArrowRight: "\x1b[C",
-                          ArrowLeft: "\x1b[D",
-                        } as Record<string, string>
-                      )[e.key] ??
-                      (!e.ctrlKey && !e.metaKey && e.key.length === 1
-                        ? e.key
-                        : ""));
-          if (key) {
-            e.preventDefault();
-            void send({ type: "input", data: key });
-          }
-        }}
-      >
-        {output || "Waiting for terminal…"}
-      </pre>
-      <form
-        className="console-input"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (input) {
-            void send({ type: "input", data: input + "\n" });
-            setInput("");
-          }
-        }}
-      >
-        <input
-          maxLength={4095}
-          aria-label="Remote command"
-          placeholder="Enter a command…"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          disabled={!session || session.state === "closed"}
-        />
-        <button disabled={!input || !session}>Send</button>
-      </form>
-      <div className="jobs-toolbar">
-        <button
-          disabled={!session}
-          onClick={() => void send({ type: "input", data: "\x03" })}
-        >
-          Ctrl+C
-        </button>
-        <button onClick={() => void toggleFullScreen()}>
-          {fullScreen ? <Minimize size={16} /> : <Maximize size={16} />}
-          {fullScreen ? "Exit full screen" : "Enter full screen"}
-        </button>
-        <Picker
-          title="Terminal size"
-          value={size}
-          options={["auto", "80x24", "100x30", "140x40"].map((id) => ({
-            id,
-            label: id === "auto" ? "Fit window" : id,
-          }))}
-          onChange={(v) => {
-            setSize(v);
-            if (v !== "auto") {
-              const [cols, rows] = v.split("x").map(Number);
-              void send({ type: "resize", cols, rows });
-            }
-          }}
-        />
-        <button
-          disabled={!session || session.state === "closed"}
-          onClick={() => void send({ type: "close" })}
-        >
-          End session
-        </button>
-      </div>
-      {error && <p role="alert">{error}</p>}
-    </Modal>
   );
 }

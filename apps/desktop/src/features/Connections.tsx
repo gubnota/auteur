@@ -1,3 +1,4 @@
+import { NodeMetrics } from "../components/NodeMetrics";
 import { NotebookDownload } from "../components/NotebookDownload";
 import { openConsole, openActivity } from "../components/BackgroundActivity";
 import { AssistantDialog } from "./PromptAssistant";
@@ -60,6 +61,16 @@ export function Connections({
   project: Project;
   notify: (s: string) => void;
 }) {
+  useEffect(() => {
+    const reveal = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      setFilter("all");
+      requestAnimationFrame(() => document.getElementById(`instance-${id}`)?.scrollIntoView({behavior:"smooth",block:"center"}));
+    };
+    window.addEventListener("mymovie:node", reveal);
+    return () => window.removeEventListener("mymovie:node", reveal);
+  }, []);
+  const [preset, setPreset] = useState("");
   const [filter, setFilter] = useState("all");
   const [notebook, setNotebook] = useState(false);
   const [host, setHost] = useState<"colab" | "kaggle">("colab");
@@ -249,7 +260,7 @@ export function Connections({
     <>
       <PageTitle
         eyebrow="EXECUTION NETWORK"
-        title="Connections"
+        title="Instances"
         description="Local ComfyUI and private outbound runners."
         action={
           <div className="row">
@@ -257,13 +268,18 @@ export function Connections({
               <Cloud size={18} />
               Colab / Kaggle
             </button>
-            <button className="primary" onClick={add}>
+            <button className="primary" onClick={() => setPreset("choose")}>
               <Plus size={18} />
               Add connection
             </button>
           </div>
         }
       />
+      {preset && <Modal title="Connect an instance" onClose={()=>setPreset("")}>
+        <p>Install the agent beside ComfyUI. The agent connects outward to a relay; it needs no public listening port. SSH keys can help install it when SSH is reachable.</p>
+        <div className="attach-grid">{["local-mac","linux","orbstack","runpod","ssh","colab","kaggle"].map(type=><button key={type} title={`Configure ${type} connection and agent access`} onClick={()=>{setPreset("");if(type==="colab"||type==="kaggle"){setHost(type);void openNotebook();return;}setSecret("");setEditing({id:uid(),name:type==="local-mac"?"Local Mac agent":`${type} agent`,kind:"relay",url:["local-mac","orbstack"].includes(type)?"http://127.0.0.1:8789":"https://",credentialRef:null,deploymentId:type==="local-mac"?"local-mps-0":"",apiFamily:null,concurrency:1,hosting:type as Connection["hosting"]});}}>{type}</button>)}<button title="Connect directly; remote installation and terminal require the agent" onClick={()=>{setPreset("");add();}}>Direct ComfyUI</button></div>
+        <p>Local setup: docs/LOCAL_COMFYUI_TEST.md. RunPod and SSH nodes use the same agent/relay protocol. For nodes behind NAT, use an accessible relay or tunnel. Paste the relay URL, node ID and desktop token below.</p>
+      </Modal>}
       <div className="filters" aria-label="Filter connections">
         {["all", ...Object.keys(connectionTypes)].map((type) => (
           <button
@@ -282,7 +298,7 @@ export function Connections({
               c.kind !== "retired" && (filter === "all" || c.kind === filter),
           )
           .map((c) => (
-            <article className="panel connection" key={c.id}>
+            <article className="panel connection" id={`instance-${c.id}`} key={c.id}>
               <header>
                 <span className="connection-icon">
                   {[
@@ -301,12 +317,13 @@ export function Connections({
                   <h2>{c.name}</h2>
                   <span className="badge">
                     {c.hosting
-                      ? `${c.hosting === "kaggle" ? "Kaggle" : "Colab"} · private runner`
+                      ? `${c.hosting} · ${c.kind === "relay" ? "private runner" : "ComfyUI"}`
                       : (connectionTypes[c.kind]?.label ?? c.kind)}
                   </span>
                 </div>
               </header>
               <p className="mono">{c.url}</p>
+              {["relay", "comfyui"].includes(c.kind) && <NodeMetrics connection={c}/>}
               <small>
                 {c.credentialRef
                   ? "Credential stored in system vault"
@@ -362,7 +379,7 @@ export function Connections({
                     </button>
                     <button onClick={openActivity}>Activity</button>
                     <button onClick={() => openConsole(c.id)}>
-                      Remote console
+                      Terminal
                     </button>
                     <button
                       onClick={() =>
@@ -372,6 +389,7 @@ export function Connections({
                       Drain
                     </button>
                   </div>
+                  <button title="Stop queued work and request cancellation of active jobs on this instance" onClick={()=>void call("abort_node_queue",{connectionId:c.id}).then(()=>notify("Cancellation requested. Follow job status in Jobs.")).catch(e=>notify(String(e)))}>Abort queue</button>
                   <Picker
                     title="Workflows to initialize"
                     multiple
@@ -398,7 +416,7 @@ export function Connections({
                       })
                     }
                   >
-                    Review bulk initialization plan
+                    Review initialization
                   </button>
                   <button
                     className="primary"

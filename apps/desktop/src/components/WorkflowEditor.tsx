@@ -90,7 +90,7 @@ export function WorkflowEditor({
   const exportBundle = async (collection: boolean) => {
     try {
       const path = await exportDestination(
-        `${collection ? meta.collection : w.name}.mymovie-workflow.json`,
+        `${collection ? meta.collection : w.name}.mymovie-workflow`,
       );
       if (path) {
         await call("export_workflow_bundle", {
@@ -106,11 +106,20 @@ export function WorkflowEditor({
       notify(String(e));
     }
   };
+  if (meta.exampleId) return <div className="workflow-editor">
+    <p className="example-label">Immutable example · configure job values in Generate. Create an editable copy to change the wrapper.</p>
+    {variants.length > 1 && <Picker title="Platform variant" disabled={busy} value={w.id} options={variants.map(v => ({id:v.id,label:v.wrapper?.variantName || v.name,description:`${v.wrapper?.os} · ${v.wrapper?.architecture} · ${v.wrapper?.precision}`}))} onChange={selectVariant}/>}
+    <WorkflowReadme workflow={w}/>
+    <WorkflowTarget locked={setupBusy} onBusyChange={setTargetBusy} workflow={w} connection={connection} prepare={prepare} notify={notify}/>
+    <AgentWorkflowSetup locked={targetBusy} onBusyChange={setSetupBusy} workflow={w} connection={connection} prepare={prepare}/>
+    {!!w.wrapper?.initialization?.length && <details><summary>Initialization recipe</summary>{w.wrapper.initialization.map((step,n)=><section key={n}><h3>{step.name}</h3><pre>{`# Check\n${step.checkScript??"# No custom check"}\n# Install\n${step.script}\n# Verify\n${step.verifyScript??"# Inventory verification"}`}</pre></section>)}</details>}
+    <button onClick={()=>void exportBundle(false)}>Export workflow package</button>
+  </div>;
   return (
     <div className="workflow-editor">
       {meta.exampleId && (
         <p className="example-label">
-          Example · editable movie copy · illustration preview
+          Example · reusable Studio workflow · illustration preview
         </p>
       )}
       <Field
@@ -314,6 +323,7 @@ export function WorkflowEditor({
         {tab === "Guide" && (
           <>
             <div className="jobs-toolbar">
+              <button onClick={() => setTab("Setup")}>Edit dependencies</button>
               <button onClick={() => setEditGuide(!editGuide)}>
                 {editGuide ? "Preview guide" : "Edit guide"}
               </button>

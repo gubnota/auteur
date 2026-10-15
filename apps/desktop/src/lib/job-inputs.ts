@@ -156,6 +156,7 @@ export function workflowForTarget(
   };
 }
 export function resolveInputs(p: Project, draft: JobDraft, item: JobItem) {
+  if (draft.context?.storyboard) p = {...p, ...draft.context.storyboard};
   if (Object.keys(item.inputErrors ?? {}).length)
     throw new Error(Object.values(item.inputErrors!).join("; "));
   const w = workflowForTarget(

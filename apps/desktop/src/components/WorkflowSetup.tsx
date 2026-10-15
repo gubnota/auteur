@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Field, Modal, Picker } from "./Controls";
 import { native, call, exportDestination } from "../lib/bridge";
 import type { Workflow, InstallArtifact } from "../lib/types";
+import { SourceLink } from "./SourceLink";
 
 export const compatibilityOptions = [
   {
@@ -59,6 +60,12 @@ const relative = (s: string) =>
   !s.startsWith("/") &&
   !/[\\:]/.test(s) &&
   s.split("/").every((p) => p && p !== "." && p !== "..");
+export const dependencyDestination = (a: InstallArtifact) =>
+  a.kind === "model"
+    ? `$MODELS_DIR/${a.category}/${a.target}`
+    : a.kind === "wheel"
+      ? `$COMFYUI_DIR/.mymovie-wheels/${a.target}`
+      : `$CUSTOM_NODES_DIR/${a.target}`;
 export function dependencyError(a: InstallArtifact): string {
   if (
     !relative(a.target) ||
@@ -182,7 +189,9 @@ export function WorkflowSetup({
             <small>
               {a.sourceRef ? `Private transfer: ${a.sourceRef}` : a.source}
             </small>
+            <small>Destination: {dependencyDestination(a)}</small>
           </div>
+          <SourceLink source={a.source} />
           <button
             onClick={() => {
               setDraft({ ...a });
@@ -252,11 +261,17 @@ export function WorkflowSetup({
             value={draft.target}
             onChange={(target) => setDraft({ ...draft, target })}
           />
+          <p className="muted">
+            Install to <code>{dependencyDestination(draft)}</code>. The agent
+            resolves these paths inside the selected instance; no absolute Mac
+            paths are exported.
+          </p>
           <Field
             label="Public HTTPS download URL · no secrets"
             value={draft.source ?? ""}
             onChange={(source) => setDraft({ ...draft, source, sourceRef: "" })}
           />
+          <SourceLink source={draft.source} />
           <Field
             label="Or private S3 transfer object reference"
             value={draft.sourceRef ?? ""}

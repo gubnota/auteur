@@ -1,4 +1,5 @@
 import type { Workflow } from "../lib/types";
+import { SourceLink } from "./SourceLink";
 // Render a small Markdown subset as React text. HTML/scripts and remote tracking images are never interpreted.
 export function WorkflowReadme({ workflow: w }: { workflow: Workflow }) {
   return (
@@ -10,6 +11,7 @@ export function WorkflowReadme({ workflow: w }: { workflow: Workflow }) {
           alt={`${w.name} guide illustration`}
         />
       )}
+      {!!w.wrapper?.sampleMedia?.length && <div className="dependency-grid">{w.wrapper.sampleMedia.map(sample => <figure className="panel" key={`${sample.nodeId}.${sample.input}`}><img style={{width:"100%",maxHeight:"12rem",objectFit:"contain"}} src={sample.image} alt={sample.label}/><figcaption>{sample.label}</figcaption><small>Demo input · replace in Generate</small></figure>)}</div>}
       {w.wrapper?.readme ? (
         w.wrapper.readme.split("\n").map((line, n) => {
           if (line.startsWith("### ")) return <h3 key={n}>{line.slice(4)}</h3>;
@@ -48,9 +50,7 @@ export function WorkflowReadme({ workflow: w }: { workflow: Workflow }) {
             </small>
             <code>{a.sha256.slice(0, 16)}</code>
             {a.source?.startsWith("https://") ? (
-              <a href={a.source} target="_blank" rel="noreferrer">
-                Weight / plugin source
-              </a>
+              <SourceLink source={a.source}/>
             ) : (
               <span>Private source · configure on node</span>
             )}

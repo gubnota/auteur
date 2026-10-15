@@ -4,6 +4,7 @@ import { call, native } from "./bridge";
 // Public, user-selected test defaults. Custom values are kept in the OS vault.
 export const defaultRunnerTokens = defaults;
 export type RunnerTokens = typeof defaults;
+let sessionTokens: RunnerTokens | null = null;
 
 export function tokenError(tokens: RunnerTokens): string | null {
   if (Object.values(tokens).some((v) => !/^[!-~]{24,512}$/.test(v)))
@@ -13,14 +14,20 @@ export function tokenError(tokens: RunnerTokens): string | null {
   return null;
 }
 
-export async function loadRunnerTokens(): Promise<RunnerTokens> {
-  return native ? call<RunnerTokens>("get_runner_tokens") : { ...defaults };
+export async function loadRunnerTokens(saved = false): Promise<RunnerTokens> {
+  if (!saved && sessionTokens) return { ...sessionTokens };
+  const value = native
+    ? await call<RunnerTokens>("get_runner_tokens", { saved })
+    : { ...defaults };
+  sessionTokens = { ...value };
+  return value;
 }
 
 export async function saveRunnerTokens(tokens: RunnerTokens): Promise<void> {
   const error = tokenError(tokens);
   if (error) throw new Error(error);
   await call("save_runner_tokens", { tokens });
+  sessionTokens = { ...tokens };
 }
 
 export function notebookTokenConfig(tokens: RunnerTokens): string {

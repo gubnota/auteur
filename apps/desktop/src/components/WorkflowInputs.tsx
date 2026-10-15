@@ -91,7 +91,7 @@ export function WorkflowInputs({
       }) ?? p.ratio
     );
   });
-  const refs = castImages(p, draft.frameId, draft.context?.characterIds);
+  const refs = castImages(draft.context?.storyboard ? { ...p, ...draft.context.storyboard } : p, draft.frameId, draft.context?.characterIds);
   const defaultValue = (b: Binding) => w.graph[b.nodeId]?.inputs[b.input];
   return (
     <section className="jobs-inputs">

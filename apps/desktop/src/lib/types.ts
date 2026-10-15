@@ -76,12 +76,15 @@ export interface WorkflowInput {
 }
 export interface InitializationStep {
   name: string;
+  checkScript?: string | null;
+  verifyScript?: string | null;
   script: string;
   directory: string;
   timeoutSeconds: number;
   policy: "recipe" | "session";
 }
 export interface WorkflowWrapper {
+  sampleMedia?: { nodeId: string; input: string; name: string; label: string; sha256: string; image: string }[];
   archivedAt?: string | null;
   initialization?: InitializationStep[];
   exampleId?: string | null;
@@ -163,7 +166,7 @@ export interface Connection {
   deploymentId: string | null;
   apiFamily: string | null;
   concurrency: number;
-  hosting?: "colab" | "kaggle" | null;
+  hosting?: "local-mac" | "linux" | "orbstack" | "runpod" | "ssh" | "colab" | "kaggle" | null;
 }
 export interface Job {
   id: string;
@@ -266,6 +269,7 @@ export interface JobDraft {
   name: string;
   frameId: string;
   context?: {
+    storyboard?: { movieId: string; movieName: string; positivePrompt: string; negativePrompt: string; episodes: Episode[]; characters: Character[] };
     kind: "storyboard" | "standalone";
     mode: string;
     characterIds: string[];

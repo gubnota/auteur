@@ -1,3 +1,5 @@
+import "./global-workspace.css";
+import { GlobalSearch } from "./global-search";
 import { BackgroundActivity } from "./components/BackgroundActivity";
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -18,12 +20,9 @@ import {
   ScrollText,
   Plus,
   FolderOpen,
-  ChevronUp,
-  ChevronDown,
   X,
   Search,
   Check,
-  ArrowLeft,
 } from "lucide-react";
 import {
   call,
@@ -54,13 +53,17 @@ import { newJobDraft } from "./lib/job-drafts";
 import { Connections, Preferences } from "./features/Connections";
 const routes = [
   ["Keyframes", Layers],
+  ["Scenes", Film],
+  ["Locations", Film],
+  ["Timeline", Layers],
+  ["Movie settings", Settings],
   ["Characters", Users],
   ["Library", Image],
   ["Workflows", WorkflowIcon],
   ["Generate", WandSparkles],
   ["Jobs", ListChecks],
   ["Renders", Clapperboard],
-  ["Connections", Server],
+  ["Instances", Server],
   ["Settings", Settings],
   ["Notifications", Bell],
   ["Logs", ScrollText],
@@ -75,18 +78,21 @@ const initialSettings: AppSettings = {
 };
 export type Update = (fn: (p: Project) => void) => void;
 export default function App() {
+  const [movie,setMovie] = useState<Project | null>(null);
+  const movieRef = useRef<Project | null>(null);
+  const movieRevision = useRef(0);
+  const [searchOpen,setSearchOpen] = useState(false);
+  const [moviesOpen,setMoviesOpen] = useState(false);
   const [p, setP] = useState<Project | null>(null),
     [root, setRoot] = useState(""),
-    [route, setRoute] = useState("Keyframes"),
+    [route, setRoute] = useState(localStorage.getItem("studio.globalRoute") || "Workflows"),
     [episodeId, setEpisodeId] = useState(""),
     [settings, replaceSettings] = useState(initialSettings),
     [jobs, setJobs] = useState<Job[]>([]),
     [status, setStatus] = useState("Saved locally"),
     [modal, setModal] = useState<ReactNode>(null),
     [toasts, setToasts] = useState<{ id: string; message: string }[]>([]),
-    [height, setHeight] = useState(180),
-    [expanded, setExpanded] = useState(true);
-  const [clearingQueue, setClearingQueue] = useState(false);
+    [workspaceError,setWorkspaceError] = useState("");
   const setSettings = (incoming: AppSettings) =>
     replaceSettings((previous) => ({
       ...incoming,
@@ -118,8 +124,7 @@ export default function App() {
   const generation = useRef(0);
   const current = useRef<Project | null>(null),
     revision = useRef(0),
-    pending = useRef(Promise.resolve()),
-    drag = useRef<{ start: number; height: number } | null>(null);
+    pending = useRef(Promise.resolve());
   const dropHandler = useRef<
     (paths: string[], target: HTMLElement | null) => void
   >(() => {});
@@ -168,15 +173,36 @@ export default function App() {
     }
   };
   const loaded = (project: Project, path: string) => {
-    generation.current++;
-    current.current = project;
-    revision.current = project.revision;
-    setP(project);
+    movieRef.current = project;
+    movieRevision.current = project.revision;
+    setMovie(project);
     setRoot(path);
     setEpisodeId(project.episodes[0]?.id ?? "");
-    setStatus("Saved locally");
-    void run(async () => setJobs(await call<Job[]>("list_jobs")));
+    setRoute("Keyframes");
+    void run(async () => acceptWorkspace(await call<Project>("get_workspace")));
     if (native) void run(async () => setRecent(await call("recent_projects")));
+  };
+  const acceptWorkspace = (project:Project) => {
+    current.current=project; revision.current=project.revision; setP(project);
+  };
+  const movieRoutes = ["Keyframes","Scenes","Characters","Locations","Timeline","Movie settings"];
+  useEffect(() => { if(!movieRoutes.includes(route)) localStorage.setItem("studio.globalRoute",route); },[route]);
+  useEffect(() => { void call<Project>("get_workspace").then(acceptWorkspace).catch(e=>setWorkspaceError(String(e))); },[]);
+  useEffect(() => {
+    const handler=(e:KeyboardEvent)=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"){e.preventDefault();setSearchOpen(v=>!v);}};
+    window.addEventListener("keydown",handler);return()=>window.removeEventListener("keydown",handler);
+  },[]);
+  const updateMovie:Update = fn => {
+    if(!movieRef.current)return;
+    const before=movieRef.current, next=structuredClone(before); fn(next);
+    movieRef.current=next;setMovie(next);
+    pending.current=pending.current.then(async()=>{
+      if(movieRef.current?.id !== next.id)return;
+      try {const saved=await call<Project>("save_project",{project:next,expectedRevision:movieRevision.current});
+        movieRevision.current=saved.revision;
+        if(movieRef.current===next){movieRef.current=saved;setMovie(saved);}
+      }catch(e){notify(String(e));const saved=await call<Project>("get_project");movieRevision.current=saved.revision;movieRef.current=saved;setMovie(saved);}
+    });
   };
   const openMovie = async (path: string): Promise<Project> => {
     try {
@@ -217,7 +243,7 @@ export default function App() {
     void run(async () => {
       const s = await call<AppSettings>("get_settings");
       setSettings(s);
-      setHeight(s.queueHeight || 180);
+
       if (native) setRecent(await call("recent_projects"));
     });
     if (!native) return;
@@ -237,13 +263,13 @@ export default function App() {
     document.documentElement.dataset.theme = settings.theme || "light";
   }, [settings.theme]);
   useEffect(() => {
-    if (!native || !p) return;
-    const timer = setInterval(() => {
+    if (!native) return;
+    const refresh = () => {
       void run(async () => {
         setJobs(await call<Job[]>("list_jobs"));
         setSettings(await call<AppSettings>("get_settings"));
         if (status === "Saved locally") {
-          const saved = await call<Project>("get_project");
+          const saved = await call<Project>("get_workspace");
           if (saved.revision > revision.current) {
             revision.current = saved.revision;
             current.current = saved;
@@ -251,9 +277,11 @@ export default function App() {
           }
         }
       });
-    }, 5000);
+    };
+    refresh();
+    const timer = setInterval(refresh, 5000);
     return () => clearInterval(timer);
-  }, [p?.id, status]);
+  }, [status]);
   const update: Update = (fn) => {
     if (!current.current) return;
     const epoch = generation.current;
@@ -265,7 +293,7 @@ export default function App() {
     pending.current = pending.current.then(async () => {
       if (epoch !== generation.current) return;
       try {
-        const saved = await call<Project>("save_project", {
+        const saved = await call<Project>("save_workspace", {
           project: next,
           expectedRevision: revision.current,
         });
@@ -280,7 +308,7 @@ export default function App() {
         setStatus("Save failed · reload required");
         notify(String(e));
         if (native) {
-          const saved = await call<Project>("get_project");
+          const saved = await call<Project>("get_workspace");
           current.current = saved;
           revision.current = saved.revision;
           setP(saved);
@@ -292,29 +320,6 @@ export default function App() {
     const saved = await call<AppSettings>("save_settings", { settings: s });
     setSettings(saved);
   };
-  const finished = (job: Job) =>
-    ["completed", "failed", "canceled"].includes(job.state);
-  const dismissed = new Set(settings.dismissedQueueJobIds ?? []);
-  const queueJobs = jobs.filter(
-    (job) => !finished(job) || !dismissed.has(job.id),
-  );
-  const clearFinished = () =>
-    void run(async () => {
-      setClearingQueue(true);
-      try {
-        await saveSettings({
-          ...settings,
-          dismissedQueueJobIds: [
-            ...new Set([
-              ...(settings.dismissedQueueJobIds ?? []),
-              ...queueJobs.filter(finished).map((job) => job.id),
-            ]),
-          ],
-        });
-      } finally {
-        setClearingQueue(false);
-      }
-    });
   const open = () =>
     void run(async () => {
       await pending.current;
@@ -390,7 +395,7 @@ export default function App() {
       "",
     );
   };
-  const episode = p?.episodes.find((e) => e.id === episodeId) ?? p?.episodes[0];
+  const episode = movie?.episodes.find((e) => e.id === episodeId) ?? movie?.episodes[0];
   const queueActions = async (
     command: string,
     args: Record<string, unknown> = {},
@@ -404,6 +409,9 @@ export default function App() {
   const chooseJob = (frameId: string, workflowId?: string) => {
     if (!p) return;
     const draft = newJobDraft(p, settings, frameId, workflowId);
+    if (frameId && movie && draft.context) {
+      draft.context.storyboard = { movieId: movie.id, movieName: movie.name, positivePrompt: movie.positivePrompt, negativePrompt: movie.negativePrompt, episodes: structuredClone(movie.episodes), characters: structuredClone(movie.characters) };
+    }
     update((p) => {
       (p.jobDrafts ??= []).push(draft);
     });
@@ -433,7 +441,7 @@ export default function App() {
           await mutateMedia(
             "pin_workflow",
             { workflowId },
-            "Workflow added to this movie",
+            "Workflow added to Studio",
           );
         }}
       />,
@@ -505,9 +513,7 @@ export default function App() {
           : await call<Project>("import_media_drop", args);
       if (epoch !== generation.current)
         throw new Error("Movie changed during import");
-      revision.current = project.revision;
-      current.current = project;
-      setP(project);
+      if(args.frameId || args.shotId || args.episodeId || args.sceneId || args.newScene || args.characterId) {movieRef.current=project;movieRevision.current=project.revision;setMovie(project);} else acceptWorkspace(project);
       if (target.dataset.fileDrop === "library") setRoute("Library");
       notify(
         args.characterId
@@ -549,9 +555,7 @@ export default function App() {
       const project = "assetIds" in reply ? reply.project : reply;
       if (epoch !== generation.current)
         throw new Error("Movie changed during update");
-      revision.current = project.revision;
-      current.current = project;
-      setP(project);
+      if(command === "import_character_references" || command === "collect_media" && !!movieRef.current) { movieRef.current=project;movieRevision.current=project.revision;setMovie(project); } else acceptWorkspace(project);
       notify(message);
       return project;
     });
@@ -603,7 +607,7 @@ export default function App() {
       // Preparation can persist a refreshed profile even when preflight rejects
       // the job. Keep the document revision current in that case as well.
       try {
-        const project = await call<Project>("get_project");
+        const project = await call<Project>("get_workspace");
         if (epoch !== generation.current)
           throw new Error("Movie changed during preparation");
         revision.current = project.revision;
@@ -624,158 +628,25 @@ export default function App() {
       setStatus("Saved locally");
     }
   };
-  const persistHeight = (h: number) => {
-    void run(() => saveSettings({ ...settings, queueHeight: h }));
-  };
-  const resize = (clientY: number) => {
-    if (drag.current) {
-      setHeight(
-        Math.max(
-          96,
-          Math.min(
-            window.innerHeight * 0.65,
-            drag.current.height + drag.current.start - clientY,
-          ),
-        ),
-      );
-    }
-  };
   const welcome = () =>
     void run(async () => {
       await pending.current;
       if (native) await call("close_project");
-      generation.current++;
-      current.current = null;
-      setP(null);
-      setJobs([]);
+      movieRef.current=null;setMovie(null);setRoot("");
+      setRoute(localStorage.getItem("studio.globalRoute") || "Workflows");
       if (native) setRecent(await call("recent_projects"));
     });
   return (
     <div className="app" inert={importing}>
       {!p ? (
-        <main className="welcome">
-          <div className="brand-mark">
-            <AppSymbol />
-          </div>
-          <span className="eyebrow">MYMOVIE STUDIO</span>
-          <h1>
-            Every movie begins
-            <br />
-            with a moment.
-          </h1>
-          <p>
-            Bring your characters, keyframes and creative direction together in
-            a portable film studio.
-          </p>
-          <div className="welcome-actions">
-            <button className="welcome-card" onClick={open}>
-              <FolderOpen size={30} />
-              <strong>Open a movie</strong>
-              <span>Pick up where your story left off.</span>
-              <small>Choose a .mymovie document →</small>
-            </button>
-            <button className="welcome-card new" onClick={newMovie}>
-              <Plus size={30} />
-              <strong>Create a movie</strong>
-              <span>A fresh canvas for your next story.</span>
-              <small>Choose a name and location →</small>
-            </button>
-          </div>
-          {recent.length > 0 && (
-            <section className="recent-projects">
-              <div className="row recent-heading">
-                <span className="eyebrow">RECENT MOVIES</span>
-                <button
-                  className="text-button"
-                  onClick={() =>
-                    void run(async () =>
-                      setRecent(await call("clear_recent_projects")),
-                    )
-                  }
-                >
-                  Clear list
-                </button>
-              </div>
-              <div className="recent-scroll">
-                {recent.map((r) => (
-                  <div className="recent-entry" key={r.path}>
-                    <button
-                      className="choice"
-                      onClick={() =>
-                        void run(async () =>
-                          loaded(await openMovie(r.path), r.path),
-                        )
-                      }
-                    >
-                      <AppSymbol />
-                      <span>
-                        <strong>{r.name}</strong>
-                        <small>{r.path}</small>
-                      </span>
-                      <small>{new Date(r.opened).toLocaleDateString()}</small>
-                    </button>
-                    <button
-                      className="icon-button"
-                      aria-label={`Remove ${r.name} from recent movies`}
-                      onClick={() =>
-                        void run(async () =>
-                          setRecent(
-                            await call("remove_recent_project", {
-                              path: r.path,
-                            }),
-                          ),
-                        )
-                      }
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <small>Removing entries keeps your movie files.</small>
-            </section>
-          )}
-          <div className="welcome-note">
-            <span>LOCAL FIRST</span>
-            <span>YOUR ASSETS, YOUR STORY</span>
-            <span>BUILT FOR MACOS</span>
-          </div>
-          {!native && (
-            <button className="text-button" onClick={demoPreview}>
-              Explore the browser preview
-            </button>
-          )}
-        </main>
+        <main className="welcome"><AppSymbol/><h1>MyMovie Studio</h1><p>{workspaceError || "Opening Studio…"}</p>{workspaceError && <button onClick={()=>window.location.reload()}>Retry</button>}</main>
       ) : (
         <>
           <aside className="sidebar">
             <button
               className="brand"
-              onClick={() =>
-                setModal(
-                  <Modal title="Your movie" onClose={() => setModal(null)}>
-                    <button
-                      className="choice"
-                      onClick={() => {
-                        setModal(null);
-                        newMovie();
-                      }}
-                    >
-                      Create a new movie
-                    </button>
-                    <button
-                      className="choice"
-                      onClick={() => {
-                        setModal(null);
-                        open();
-                      }}
-                    >
-                      Open another .mymovie
-                    </button>
-                    <RenameMovie p={p} update={update} />
-                  </Modal>,
-                )
-              }
+              aria-label="MyMovie STUDIO"
+              onClick={() => setMoviesOpen(true)}
             >
               <span className="brand-mark small">
                 <AppSymbol />
@@ -786,10 +657,10 @@ export default function App() {
             </button>
             <div className="sidebar-project">
               <span className="eyebrow">MOVIE DOCUMENT</span>
-              <strong title={p.name}>{p.name}</strong>
+              <strong title={movie?.name}>{movie?.name || "Global workspace"}</strong>
               <small>
                 {native
-                  ? `${p.episodes.length} episodes · local document`
+                  ? movie ? `${movie.episodes.length} episodes` : "No Movie required"
                   : "Browser preview · memory only"}
               </small>
             </div>
@@ -800,6 +671,8 @@ export default function App() {
                   aria-label={name}
                   data-file-drop={name === "Library" ? "library" : undefined}
                   className={route === name ? "active" : ""}
+                  data-inactive={!movie && movieRoutes.includes(name)}
+                  title={!movie && movieRoutes.includes(name) ? "Open a Movie to use this workspace" : name}
                   onClick={() => setRoute(name)}
                 >
                   <Icon size={18} />
@@ -812,12 +685,12 @@ export default function App() {
               ))}
             </nav>
             <div className="sidebar-bottom">
-              <button className="text-button" onClick={welcome}>
-                <ArrowLeft size={16} />
-                Welcome
+              <button className="text-button" onClick={movie ? welcome : ()=>setMoviesOpen(true)}>
+                <FolderOpen size={16} />
+                {movie ? "Close movie" : "Movies"}
               </button>
               <span className="status-dot" /> {status}
-              <small>⌘ Your story stays with you</small>
+              <small>Shared Studio resources</small>
             </div>
           </aside>
           <section
@@ -828,31 +701,33 @@ export default function App() {
               <div className="row">
                 <button
                   className="icon-button"
-                  aria-label="Back to welcome"
-                  onClick={welcome}
+                  aria-label="Open movie"
+                  onClick={open}
                 >
-                  <ArrowLeft size={18} />
+                  <FolderOpen size={18} />
                 </button>
-                <span className="muted">{p.name}</span>
+                <span className="muted">{movie?.name || "Studio"}</span>
                 <span className="muted">/</span>
                 <strong>{route}</strong>
               </div>
               <div className="row">
+                <button title="Search Studio (Command K)" onClick={()=>setSearchOpen(true)}><Search size={16}/>Search Studio</button>
+                <button onClick={newMovie}><Plus size={16}/>Movie</button>
                 <Picker
                   title="Media imports"
                   value={importMode}
                   options={[
                     {
                       id: "copy",
-                      label: "Copy into movie",
+                      label: "Import into Library",
                       description:
-                        "Portable originals inside the .mymovie package",
+                        "Store originals once in the global Library; attach them to Movies when needed",
                     },
                     {
                       id: "link",
                       label: "Keep original location",
                       description:
-                        "Link files; collect them before sharing the movie",
+                        "Link original files; Collect makes a Movie portable",
                     },
                   ]}
                   onChange={setImportMode}
@@ -870,7 +745,11 @@ export default function App() {
               </div>
             </header>
             <main className="workspace">
-              {route === "Keyframes" && episode && (
+              {movieRoutes.includes(route) && !movie && <Empty title="Open a Movie for this workspace"><p>Scenes, characters and the storyboard belong to a Movie. Workflows, jobs and media remain available globally.</p><div className="row"><button className="primary" onClick={newMovie}>Create Movie</button><button onClick={open}>Open Movie</button></div></Empty>}
+              {movie && ["Scenes","Timeline"].includes(route) && <><h1>{route}</h1><button onClick={()=>setRoute("Keyframes")}>Open storyboard</button>{movie.episodes.map(e=><article className="panel" key={e.id}><h2>{e.name}</h2>{e.scenes.map(scene=><button className="choice" key={scene.id} onClick={()=>{setEpisodeId(e.id);setRoute("Keyframes");}}>{scene.name}<small>{scene.shots.length} shots</small></button>)}</article>)}</>}
+              {movie && route === "Locations" && <Empty title="Scene locations"><p>Location notes are stored in scene descriptions in this version.</p><button onClick={()=>setRoute("Keyframes")}>Open scenes</button></Empty>}
+              {movie && route === "Movie settings" && <><h1>Movie settings</h1><RenameMovie p={movie} update={updateMovie}/><Picker title="Movie ratio" value={movie.ratio} options={["16:9","9:16","1:1","3:4","4:3","2:3","21:9"].map(id=>({id,label:id}))} onChange={value=>updateMovie(p=>{p.ratio=value;})}/><button onClick={()=>void mutateMedia("collect_media",{},"Movie assets collected")}>Collect media for portability</button></>}
+              {route === "Keyframes" && movie && episode && (
                 <>
                   <div className="view-title">
                     <div>
@@ -882,7 +761,7 @@ export default function App() {
                       <Picker
                         title="Episode"
                         value={episode.id}
-                        options={p.episodes.map((e) => ({
+                        options={movie.episodes.map((e) => ({
                           id: e.id,
                           label: e.name,
                           description: `${e.scenes.length} scenes`,
@@ -893,9 +772,9 @@ export default function App() {
                         onClick={() =>
                           setModal(
                             <EpisodeDialog
-                              p={p}
+                              p={movie!}
                               episodeId={episode.id}
-                              update={update}
+                              update={updateMovie}
                               onClose={() => setModal(null)}
                             />,
                           )
@@ -907,10 +786,10 @@ export default function App() {
                   </div>
                   <Board
                     key={episode.id}
-                    project={p}
+                    project={movie!}
                     episode={episode}
                     root={root}
-                    update={update}
+                    update={updateMovie}
                     onGenerate={chooseJob}
                     navigation={frameNavigation}
                     characterFilter={characterFilter}
@@ -918,18 +797,18 @@ export default function App() {
                   />
                 </>
               )}
-              {route === "Characters" && (
+              {route === "Characters" && movie && (
                 <Characters
-                  project={p}
+                  project={movie!}
                   root={root}
-                  update={update}
+                  update={updateMovie}
                   onImport={importCharacterReferences}
                   onNavigate={navigateFrame}
                   onFilterCharacter={(id) => {
                     setCharacterFilter(id);
                     setFrameNavigation(undefined);
                     setRoute("Keyframes");
-                    const e = p.episodes.find((e) =>
+                    const e = movie.episodes.find((e) =>
                       e.scenes.some(
                         (s) =>
                           s.characterIds?.includes(id) ||
@@ -942,9 +821,11 @@ export default function App() {
                   }}
                 />
               )}{" "}
+              {route === "Library" && movie && <details className="panel"><summary>Attach existing media to {movie.name}</summary><div className="attach-grid">{p.assets.filter(a=>!a.archivedAt).map(a=><button key={a.id} onClick={()=>void run(async()=>{const attached=await call<Project>("attach_global_asset",{assetId:a.id});movieRef.current=attached;movieRevision.current=attached.revision;setMovie(attached);notify("Media attached to Movie");})}>{a.name}</button>)}</div></details>}
               {route === "Library" && (
                 <Library
                   project={p}
+                  usageProject={movie ?? undefined}
                   root={root}
                   jobs={jobs}
                   update={update}
@@ -970,6 +851,8 @@ export default function App() {
               )}{" "}
               {route === "Workflows" && (
                 <Workflows
+                  movie={movie ?? undefined}
+                  duplicate={async workflowId=>{await mutateMedia("duplicate_workflow",{workflowId},"Editable workflow copy created");}}
                   clearTrash={async () => { await mutateMedia("clear_workflow_trash", {}, "Workflow trash cleared"); }}
                   archive={async (workflowId, archived) => { await mutateMedia("archive_workflow", {workflowId, archived}, archived ? "Workflow moved to Trash" : "Workflow restored"); }}
                   project={p}
@@ -980,7 +863,7 @@ export default function App() {
                     await mutateMedia(
                       "pin_workflow",
                       { workflowId },
-                      "Example added to this movie",
+                      "Example ready in Studio",
                     );
                   }}
                   prepare={prepareWorkflow}
@@ -1035,6 +918,7 @@ export default function App() {
               )}
               {route === "Renders" && (
                 <Renders
+                  usageProject={movie ?? undefined}
                   jobs={jobs}
                   root={root}
                   project={p}
@@ -1059,7 +943,7 @@ export default function App() {
                   }}
                 />
               )}{" "}
-              {route === "Connections" && (
+              {route === "Instances" && (
                 <Connections
                   settings={settings}
                   save={saveSettings}
@@ -1084,7 +968,7 @@ export default function App() {
                       <h1>{route}</h1>
                       <p>
                         {route === "Logs"
-                          ? "Redacted diagnostics. Generation receipts stay in your movie."
+                          ? "Redacted diagnostics. Generation receipts stay in Studio."
                           : "A clear view of progress and things that need attention."}
                       </p>
                     </div>
@@ -1121,155 +1005,6 @@ export default function App() {
                 </>
               )}
             </main>
-            <section
-              className="queue"
-              style={{ height: expanded ? height : "3.5rem" }}
-            >
-              <div
-                className="queue-divider"
-                role="separator"
-                aria-label="Resize render queue"
-                aria-orientation="horizontal"
-                aria-valuenow={Math.round(height)}
-                tabIndex={0}
-                onPointerDown={(e) => {
-                  drag.current = { start: e.clientY, height };
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                  setExpanded(true);
-                }}
-                onPointerMove={(e) => resize(e.clientY)}
-                onPointerUp={() => {
-                  drag.current = null;
-                  persistHeight(height);
-                }}
-                onPointerCancel={() => {
-                  drag.current = null;
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-                    e.preventDefault();
-                    const h = Math.max(
-                      96,
-                      Math.min(
-                        window.innerHeight * 0.65,
-                        height + (e.key === "ArrowUp" ? 24 : -24),
-                      ),
-                    );
-                    setHeight(h);
-                    persistHeight(h);
-                  }
-                }}
-              >
-                <span />
-              </div>
-              <header className="queue-header">
-                <div className="row">
-                  <Clapperboard size={18} />
-                  <strong>Render queue</strong>
-                  <span className="badge">{queueJobs.length} jobs</span>
-                </div>
-                <div className="row">
-                  <button
-                    className="text-button"
-                    disabled={clearingQueue || !queueJobs.some(finished)}
-                    title="Clear completed, failed and canceled entries. Results and history stay in Jobs and Renders."
-                    onClick={clearFinished}
-                  >
-                    Clear finished
-                  </button>
-                  <button
-                    className="text-button"
-                    onClick={() => void queueActions("refresh_jobs")}
-                  >
-                    Refresh
-                  </button>
-                  <button
-                    className="icon-button"
-                    aria-label={expanded ? "Collapse queue" : "Expand queue"}
-                    onClick={() => setExpanded(!expanded)}
-                  >
-                    {expanded ? (
-                      <ChevronDown size={18} />
-                    ) : (
-                      <ChevronUp size={18} />
-                    )}
-                  </button>
-                </div>
-              </header>
-              {expanded && (
-                <div className="queue-body">
-                  {queueJobs.length === 0 ? (
-                    <p className="muted">
-                      Choose a workflow in Generate or select a keyframe to
-                      start a render.
-                    </p>
-                  ) : (
-                    queueJobs.map((j) => (
-                      <article className="queue-job" key={j.id}>
-                        <div>
-                          <strong>
-                            {!j.frameId
-                              ? (p.workflows.find((w) => w.id === j.workflowId)
-                                  ?.name ?? "Standalone generation")
-                              : (p.episodes
-                                  .flatMap((e) =>
-                                    e.scenes.flatMap((s) =>
-                                      s.shots.flatMap((sh) => sh.frames),
-                                    ),
-                                  )
-                                  .find((f) => f.id === j.frameId)?.name ??
-                                "Archived frame")}
-                          </strong>
-                          <small>{j.remoteId ?? j.id}</small>
-                        </div>
-                        <span className={`badge state-${j.state}`}>
-                          {j.state}
-                        </span>
-                        {j.error && <span className="error">{j.error}</span>}
-                        {j.state === "unknown" && !j.remoteId ? (
-                          <button
-                            onClick={() =>
-                              setModal(
-                                <ReconcileDialog
-                                  job={j}
-                                  onClose={() => setModal(null)}
-                                  reconcile={async (
-                                    remoteId,
-                                    confirmedAbsent,
-                                  ) => {
-                                    await pending.current;
-                                    await call("reconcile_job", {
-                                      jobId: j.id,
-                                      remoteId,
-                                      confirmedAbsent,
-                                    });
-                                    setJobs(await call<Job[]>("list_jobs"));
-                                  }}
-                                />,
-                              )
-                            }
-                          >
-                            Resolve submission
-                          </button>
-                        ) : (
-                          !["completed", "failed", "canceled"].includes(
-                            j.state,
-                          ) && (
-                            <button
-                              onClick={() =>
-                                void queueActions("cancel_job", { jobId: j.id })
-                              }
-                            >
-                              Cancel
-                            </button>
-                          )
-                        )}
-                      </article>
-                    ))
-                  )}
-                </div>
-              )}
-            </section>
           </section>
         </>
       )}
@@ -1283,6 +1018,29 @@ export default function App() {
         pending.current=operation.catch(() => {});
         return operation;
       }}/>
+      {moviesOpen && <Modal title="Movies" onClose={()=>setMoviesOpen(false)}>                    <button
+                      className="choice"
+                      onClick={() => {
+                        setMoviesOpen(false);
+                        newMovie();
+                      }}
+                    >
+                      Create a new movie
+                    </button>
+                    <button
+                      className="choice"
+                      onClick={() => {
+                        setMoviesOpen(false);
+                        open();
+                      }}
+                    >
+                      Open another .mymovie
+                    </button>
+                    {movie && <RenameMovie p={movie} update={updateMovie} />}
+                    {movie && <button className="choice" onClick={()=>{setMoviesOpen(false);welcome();}}>Close movie</button>}
+                    <button disabled={!recent.length} onClick={()=>void run(async()=>setRecent(await call("clear_recent_projects")))}>Clear list</button><div className="recent-scroll">{recent.map(r=><div className="choice" key={r.path}><button onClick={()=>void run(async()=>{await pending.current;loaded(await openMovie(r.path),r.path);setMoviesOpen(false);})}><strong>{r.name}</strong><small>{r.path}</small></button><button type="button" aria-label={`Remove ${r.name} from recents`} onClick={e=>{e.stopPropagation();void run(async()=>setRecent(await call("remove_recent_project",{path:r.path})));}}><X size={16}/></button></div>)}</div>
+</Modal>}
+      {searchOpen && p && <GlobalSearch project={p} jobs={jobs} connections={settings.connections} recent={recent} close={()=>setSearchOpen(false)} navigate={setRoute} useWorkflow={id=>chooseJob("",id)} openMovie={path=>void run(async()=>loaded(await openMovie(path),path))}/>}
       {modal}
       <div className="toast-host" aria-live="polite">
         {toasts.map((t) => (

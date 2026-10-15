@@ -1,7 +1,67 @@
 import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { openFixture, project, settings } from "./fixtures/jobs";
 import type { Workflow } from "../apps/desktop/src/lib/types";
+
+test("FLUX packages display two families with hardware variants and reference previews", async ({
+  page,
+}) => {
+  const demos: Workflow[] = ["flux3-t2i", "flux3-i2i-2ref"].flatMap(
+    (name) =>
+      JSON.parse(
+        execFileSync(
+          "python3",
+          [
+            "-c",
+            "import sys,zipfile; print(zipfile.ZipFile(sys.argv[1]).read('collection.json').decode())",
+            `examples/flux3/${name}.mymovie-workflow`,
+          ],
+          { encoding: "utf8" },
+        ),
+      ).workflows,
+  );
+  const workspace = structuredClone(project);
+  workspace.workflows = demos;
+  await openFixture(page, workspace, settings, {
+    catalogue: demos,
+    globalOnly: true,
+  });
+  const examples = page.locator(".example-section");
+  await expect(examples.locator(".workflow-card")).toHaveCount(2);
+  await page.screenshot({
+    path: "docs/screenshots/flux3-families-0.1.20.png",
+    fullPage: true,
+  });
+  await examples
+    .locator(".workflow-card")
+    .filter({ hasText: "Two-reference image" })
+    .getByRole("button", { name: "Use", exact: true })
+    .click();
+  await expect(
+    page.getByRole("img", {
+      name: "Subject / identity reference",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: "Style / palette reference", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Platform variant", exact: true })
+    .click();
+  await page.getByRole("button", { name: /^Apple Silicon/ }).click();
+  await expect(
+    page.getByRole("button", { name: "Platform variant", exact: true }),
+  ).toContainText("Apple Silicon");
+  await expect(page.getByLabel("Workflow name", { exact: true })).toHaveCount(
+    0,
+  );
+  await page.screenshot({
+    path: "docs/screenshots/flux3-references-0.1.20.png",
+    fullPage: true,
+  });
+});
 
 function example(): Workflow {
   const w = structuredClone(project.workflows[0]);
@@ -26,7 +86,7 @@ function example(): Workflow {
   return w;
 }
 
-test("bundled example opens its guide and reuses a single movie copy", async ({
+test("bundled example keeps Use and opens an immutable global definition", async ({
   page,
 }) => {
   await openFixture(page, structuredClone(project), settings, {
@@ -35,20 +95,16 @@ test("bundled example opens its guide and reuses a single movie copy", async ({
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
   const section = page.locator(".example-section");
   await expect(section.getByRole("img")).toBeVisible();
-  await section
-    .getByRole("button", { name: "Use example", exact: true })
-    .click();
-  await expect(
-    page.getByRole("tab", { name: "Guide", exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
+  await section.getByRole("button", { name: "Use", exact: true }).click();
+  await expect(page.getByLabel("Workflow name", { exact: true })).toHaveCount(
+    0,
+  );
   await expect(
     page.getByRole("heading", { name: "Connect once" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
-  await expect(
-    section.getByRole("button", { name: "Open movie copy" }),
-  ).toBeVisible();
-  await section.getByRole("button", { name: "Open movie copy" }).click();
+  await expect(section.getByRole("button", { name: "Use" })).toBeVisible();
+  await section.getByRole("button", { name: "Use" }).click();
   const count = await page.evaluate(
     () =>
       (window as any).fixture
@@ -114,9 +170,8 @@ test("guided setup hands ownership to the agent and cancellation survives closin
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
   await page
     .locator(".example-section")
-    .getByRole("button", { name: "Use example", exact: true })
+    .getByRole("button", { name: "Use", exact: true })
     .click();
-  await page.getByRole("tab", { name: "Setup", exact: true }).click();
   const setup = page.getByRole("region", { name: "Agent initialization" });
   await setup
     .getByRole("button", { name: "Initialize on Colab T4", exact: true })
@@ -388,17 +443,16 @@ test("remote console fills the app window on smaller screens", async ({
     .getByRole("button", { name: "CPU notebook", exact: true })
     .click();
   const console = page.getByRole("dialog").last();
-  await expect(console.getByLabel("Remote terminal output")).toContainText(
-    "CPU worker ready",
-  );
+  await expect(console.locator(".xterm-screen")).toBeVisible();
   const bounds = await console.boundingBox();
   expect(bounds).toEqual({ x: 0, y: 0, width: 1024, height: 700 });
   await expect(
     console.getByRole("button", { name: "End session", exact: true }),
   ).toBeInViewport();
-  await expect(console.getByLabel("Remote command")).toBeInViewport();
+  await expect(console.locator(".xterm-screen")).toBeInViewport();
   expect(
-    (await console.getByLabel("Remote terminal output").boundingBox())!.height,
+    (await console.getByLabel("Interactive remote terminal").boundingBox())!
+      .height,
   ).toBeGreaterThan(200);
   await expect
     .poll(() =>
@@ -427,10 +481,11 @@ test("remote console fills the app window on smaller screens", async ({
     )
     .toBeGreaterThan(previous.cols);
   expect(
-    (await console.getByLabel("Remote terminal output").boundingBox())!.height,
+    (await console.getByLabel("Interactive remote terminal").boundingBox())!
+      .height,
   ).toBeGreaterThan(650);
   await console
-    .getByRole("button", { name: "Enter full screen", exact: true })
+    .getByRole("button", { name: "Full screen", exact: true })
     .click();
   await expect
     .poll(() => page.evaluate(() => (window as any).fixtureFullscreen))
@@ -461,7 +516,7 @@ test("custom recipe steps can be saved, reordered and removed", async ({
     const modal = page.getByRole("dialog").last();
     await modal.getByLabel("Step name", { exact: true }).fill(name);
     await modal
-      .getByLabel("Shell script", { exact: true })
+      .getByLabel("Install script", { exact: true })
       .fill("test -d models");
     await modal.getByRole("button", { name: "Save step", exact: true }).click();
   }
@@ -506,9 +561,7 @@ test("trashed example restores immediately and selects another instance for loca
   movie.workflows.push(structuredClone(w));
   await openFixture(page, movie, settings, { catalogue: [example()] });
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Restore movie copy", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Use", exact: true }).click();
   await page
     .getByRole("button", { name: "Run and install on", exact: true })
     .click();
@@ -517,9 +570,8 @@ test("trashed example restores immediately and selects another instance for loca
     .last()
     .getByRole("button", { name: "Second node" })
     .click();
-  await page.getByRole("tab", { name: "Setup", exact: true }).click();
   await page
-    .getByRole("button", { name: "Initialize on Second node", exact: true })
+    .getByRole("button", { name: "Prepare workflow on Second node", exact: true })
     .click();
   await expect(
     page.getByText(
@@ -537,6 +589,6 @@ test("trashed example restores immediately and selects another instance for loca
     .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Restore movie copy", exact: true }),
+    page.getByRole("button", { name: "Use", exact: true }),
   ).toBeVisible();
 });

@@ -8,7 +8,7 @@ test("small welcome scrolls and clears history while a movie remains reopenable"
   await openFixture(page);
   await page.getByRole("button", { name: "Close dialog", exact: true }).click();
   await page
-    .getByRole("button", { name: "Back to welcome", exact: true })
+    .getByRole("button", { name: "MyMovie STUDIO", exact: true })
     .click();
   const list = page.locator(".recent-scroll");
   expect(await list.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(
@@ -16,25 +16,25 @@ test("small welcome scrolls and clears history while a movie remains reopenable"
   );
   await page
     .getByRole("button", {
-      name: "Remove Recent movie 0 from recent movies",
+      name: "Remove Recent movie 0 from recents",
       exact: true,
     })
     .click();
   await expect(
     page.getByRole("button", {
-      name: "Remove Recent movie 0 from recent movies",
+      name: "Remove Recent movie 0 from recents",
       exact: true,
     }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Clear list", exact: true }).click();
-  await expect(list).toHaveCount(0);
+  await expect(list.locator(".choice")).toHaveCount(0);
   await page.screenshot({
     path: "docs/screenshots/welcome-small.png",
     fullPage: true,
   });
-  await page.getByRole("button", { name: /Open a movie/ }).click();
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Back to welcome", exact: true }),
+    page.getByRole("button", { name: "MyMovie STUDIO", exact: true }),
   ).toBeVisible();
 });
 
@@ -140,7 +140,6 @@ test("renders share library identity, bulk trash retains receipts and restore su
     const f = (window as any).fixture;
     f.setResults([[f.saved.assets[1]]]);
   });
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await page.getByRole("button", { name: "Renders", exact: true }).click();
   await expect(page.locator(".media-card")).toHaveCount(1);
   await expect(page.locator(".media-card .badge")).toContainText("Render");
@@ -159,8 +158,7 @@ test("renders share library identity, bulk trash retains receipts and restore su
   await expect(page.locator(".media-card")).toHaveCount(0);
   await page.getByRole("button", { name: "Renders", exact: true }).click();
   await expect(page.locator(".media-card")).toHaveCount(0);
-  await page.getByRole("button", { name: "Welcome", exact: true }).click();
-  await page.getByRole("button", { name: /Open a movie/ }).click();
+  await page.getByRole("button", { name: "Close movie", exact: true }).click();
   await page.getByRole("button", { name: "Library", exact: true }).click();
   await page.getByRole("button", { name: "Trash", exact: true }).click();
   await expect(page.locator(".media-card")).toHaveCount(2);
@@ -176,9 +174,7 @@ test("renders share library identity, bulk trash retains receipts and restore su
   await expect(page.locator(".media-card")).toHaveCount(2);
   const saved = await page.evaluate(() => (window as any).fixture.saved);
   expect(saved.assets.map((a: any) => a.id)).toEqual(["asset-0", "asset-1"]);
-  expect(saved.episodes[0].scenes[0].shots[0].frames[0].assetId).toBe(
-    "asset-0",
-  );
+  expect(movie.episodes[0].scenes[0].shots[0].frames[0].assetId).toBe("asset-0");
   expect(
     await page.evaluate(
       () => (window as any).fixture.jobHistory()[0].results[0].id,
