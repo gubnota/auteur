@@ -400,9 +400,53 @@ test("remote console fills the app window on smaller screens", async ({
   expect(
     (await console.getByLabel("Remote terminal output").boundingBox())!.height,
   ).toBeGreaterThan(200);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).fixture.consoleCommands.filter(
+            (c: any) => c?.type === "resize",
+          ).length,
+      ),
+    )
+    .toBeGreaterThan(0);
+  const previous = await page.evaluate(() =>
+    (window as any).fixture.consoleCommands
+      .filter((c: any) => c?.type === "resize")
+      .at(-1),
+  );
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).fixture.consoleCommands
+            .filter((c: any) => c?.type === "resize")
+            .at(-1).cols,
+      ),
+    )
+    .toBeGreaterThan(previous.cols);
+  expect(
+    (await console.getByLabel("Remote terminal output").boundingBox())!.height,
+  ).toBeGreaterThan(650);
+  await console
+    .getByRole("button", { name: "Enter full screen", exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).fixtureFullscreen))
+    .toBe(true);
+  await expect(
+    console.getByRole("button", { name: "Exit full screen", exact: true }),
+  ).toBeVisible();
   await page.screenshot({
     path: "docs/screenshots/remote-console-fullscreen.png",
   });
+  await console
+    .getByRole("button", { name: "Close dialog", exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).fixtureFullscreen))
+    .toBe(false);
 });
 
 test("custom recipe steps can be saved, reordered and removed", async ({
@@ -451,4 +495,48 @@ test("custom recipe steps can be saved, reordered and removed", async ({
     path: "docs/screenshots/workflow-recipe.png",
     fullPage: true,
   });
+});
+
+test("trashed example restores immediately and selects another instance for local setup", async ({
+  page,
+}) => {
+  const movie = structuredClone(project),
+    w = example();
+  w.wrapper!.archivedAt = "2026-10-15";
+  movie.workflows.push(structuredClone(w));
+  await openFixture(page, movie, settings, { catalogue: [example()] });
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Restore movie copy", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Run and install on", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .last()
+    .getByRole("button", { name: "Second node" })
+    .click();
+  await page.getByRole("tab", { name: "Setup", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Initialize on Second node", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "Workflow prepared. Select this instance in Generate to queue a job.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => (window as any).fixture.preparations.at(-1).connectionId,
+    ),
+  ).toBe("account-1");
+  await page
+    .getByRole("button", { name: "Move workflow to Trash", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Restore movie copy", exact: true }),
+  ).toBeVisible();
 });

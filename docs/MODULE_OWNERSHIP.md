@@ -89,3 +89,5 @@
 - BackgroundActivity observes/apply results through native project/connection/version checks; it never overwrites changed forms.
 - Shared-runtime locks serialize mutations; independent instances remain parallel. Recipe receipts never replace verified readiness.
 - Console transport is separate from generation jobs, private and opted-in; helpers terminate descendants on lost parent pipes. Workflow Trash belongs to wrapper metadata and preserves receipts/assets.
+
+- Native project-core retains exact imported graphs and prepared profiles during desktop metadata saves; React owns editable names, board structure and wrapper metadata only. Direct ComfyUI preparation/publication reuses installed dependencies; dependency mutation remains agent-owned.

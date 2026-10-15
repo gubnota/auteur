@@ -1,5 +1,7 @@
 # MyMovie Studio
 
+Version 0.1.19 adds a dark terminal that fills the window, **Enter full screen**, and automatic **Fit window** sizing. Shot lanes can be dragged, moved up/down or removed with confirmation. Renaming frames/characters preserves exact imported workflow graphs. Restore example copies immediately; select an instance in Setup for direct ComfyUI preparation/import (dependencies must already exist). Connections/Setup can save version-labelled CPU/GPU notebooks: upload a fresh copy and Run all. Agent connections install missing dependencies. Live cloud validation remains pending.
+
 **Colab quick start:** open the [current notebook](https://colab.research.google.com/github/gubnota/auteur/blob/main/deploy/colab/MyMovie_ComfyUI.ipynb), connect a CPU or GPU runtime, and **Run all** unchanged. Predefined test keys, verified agent/relay, pinned ComfyUI, browser importer and cloudflared are set up automatically. Copy the printed relay URL/node ID into Connections with temporary-tunnel polling enabled. Models and workflow plugins are installed later from Studio. Run all leaves the node running; Stop is manual. Existing Drive copies must be reopened from this link to get updates.
 
 **CPU mode:** both Colab and Kaggle default to `DEVICE = "auto"`: use available CUDA GPUs or start one CPU worker. Choose `"cpu"` to force CPU or `"cuda"` to require the configured GPU count. Test connections/setup with the weight-free mask canary; model generation on CPU can be very slow. Reopen the updated notebook; saved notebook copies do not update themselves.

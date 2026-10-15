@@ -100,6 +100,12 @@ export async function openFixture(
       body: "export const getCurrentWebview = () => ({ onDragDropEvent: async () => () => {} });",
     }),
   );
+  await page.route("**/@tauri-apps_api_window.js*", (route) =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: "let fullscreen = false; export const getCurrentWindow = () => ({ isFullscreen: async () => fullscreen, setFullscreen: async value => { fullscreen = value; window.fixtureFullscreen = value; } });",
+    }),
+  );
   await page.route("**/@tauri-apps_api_event.js*", (route) =>
     route.fulfill({
       contentType: "application/javascript",
@@ -127,7 +133,7 @@ export async function openFixture(
       if (command === 'cancel_initialization') { initializations.find(r => r.id === args.operationId).state='canceled'; return {}; }
       if (command === 'archive_workflow') { const w = project.workflows.find(w => w.id === args.workflowId); w.wrapper = {...w.wrapper, archivedAt: args.archived ? new Date().toISOString() : undefined}; project.revision++; return project; }
       if (command === 'clear_workflow_trash') { project.workflows = project.workflows.filter(w => !w.wrapper?.archivedAt); project.revision++; return project; }
-      if (command === 'console_request') return { id:'fixture-console', state:args.command?.type === 'close' ? 'closed' : 'running', output:[{text:'CPU worker ready\\n$ '}] };
+      if (command === 'console_request') { (window.fixture.consoleCommands ??= []).push(args.command); return { id:'fixture-console', state:args.command?.type === 'close' ? 'closed' : 'running', output:[{text:'CPU worker ready\\n$ '}] }; }
       if (command === 'runner_operation') return setupPending ? {state:'running',report:{}} : {state:'completed',report:setupOperations[args.operationId]};
       if (command === 'get_runner_tokens') return structuredClone(runnerTokens);
       if (command === 'save_runner_tokens') { runnerTokens = structuredClone(args.tokens); return; }
@@ -149,7 +155,9 @@ export async function openFixture(
       }
       if (command === 'pin_workflow') {
         const w = catalogue.find(w => w.id === args.workflowId);
-        if (!project.workflows.some(x => x.id === w.id)) project.workflows.push(structuredClone(w));
+        const existing = project.workflows.find(x => x.id === w.id);
+        if (existing) existing.wrapper = {...existing.wrapper, archivedAt: undefined};
+        else project.workflows.push(structuredClone(w));
         return project;
       }
       if (command === 'save_workflow_form') { const w = project.workflows.find(w => w.id === args.workflowId); w.bindings = args.bindings; w.layout = args.layout; project.revision++; window.fixture.saved = project; return project; }

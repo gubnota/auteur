@@ -12,8 +12,9 @@
 - Durable agent initialization, global Activity/cancel/reconnect, editable recipes, full-window private terminal and workflow Trash/Clear implemented; live private cloud acceptance remains open.
 - Background setup/console require matching 0.1.18 agent and relay; see docs/NODE_ACTIVITY.md.
 - Example setup requires matching 0.1.16 agent/supervisor; the last published agent remains v0.1.15 until a new release is built.
-- Current source: 0.1.18; designer wrappers, platform families, portable collections and selective queued-task control. Installation evidence is in TASK_LOG.
+- Current source: 0.1.19; designer wrappers, platform families, portable collections and selective queued-task control. Installation evidence is in TASK_LOG.
 - Published v0.1.15 includes the matching Linux agent/relay. CPU/GPU notebooks support unchanged Run all with shared test keys, pinned base ComfyUI, isolated Python, browser compiler and verified cloudflared; models/plugins remain app-initialized. Evidence: TASK_LOG and CI_RELEASES.
+- 0.1.19: full-screen auto-fit terminal; exact native graph preservation during metadata saves; shot reorder/removal; immediate example restore; direct ComfyUI prepare/import; version-labelled notebook export.
 - Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.
 - Real SQLite package persistence; browser preview is memory-only.

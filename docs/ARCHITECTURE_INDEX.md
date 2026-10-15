@@ -135,3 +135,9 @@
 - desktop/src-tauri/src/service/initialization.rs: operation start/list/cancel/apply, console proxy and workflow archive.
 - components/BackgroundActivity.tsx / InitializationRecipe.tsx: app-wide status/terminal and portable ordered recipe editor.
 - docs/NODE_ACTIVITY.md: controls, versions, private-console activation and acceptance limits.
+
+## Desktop fixes (0.1.19)
+- project-core `save_metadata`: authoritative native graphs/profiles retained across JavaScript metadata saves.
+- Board.tsx: shot drag/up/down and confirmed removal; Library/catalogue: archived example restoration.
+- BackgroundActivity.tsx: dark full-window terminal, native full-screen toggle and automatic PTY sizing.
+- NotebookDownload.tsx / service `export_notebook`: version-labelled bundled CPU/GPU notebooks saved from Connections/Setup.

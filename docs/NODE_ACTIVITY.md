@@ -93,7 +93,7 @@ pair instead of the shared public test defaults:
    `MYMOVIE_ALLOW_CONSOLE=true`). Both the agent and relay must use the private pair.
 3. Connections → **Remote console**, or use the terminal button in Activity.
    A PTY shell opens in this node's ComfyUI folder. Output is plain text; command
-   input, Ctrl-C and terminal-size controls are supported. The console fills the app window, with a flexible output area and accessible controls on smaller screens.
+   input, Ctrl-C and terminal-size controls are supported. The dark console fills the app window. **Enter full screen** also uses macOS full screen; **Fit window** automatically resizes terminal rows/columns when the window changes. Help stays collapsed. Closing restores the previous full-screen state.
 4. Closing the window detaches. Reopen to reconnect to the same live session;
    **End session** terminates it. Sessions last at most 30 minutes and retain up to
    256 KiB of output. An agent restart closes the old session without replaying commands.
@@ -118,3 +118,9 @@ Browser screenshots and queue/status tests use fixtures. Local Rust/Python tests
 exercise durable relay state, lease recovery, duplicate prevention, recipe identity,
 process cleanup and PTY transport. Live Colab/Kaggle installation, cancellation and
 GPU output collection with 0.1.18 still require a matching hosted artifact and runtime.
+
+## Fresh CPU/GPU notebooks and direct local setup (0.1.19)
+
+Connections → Connect notebook GPUs → **Save Colab/Kaggle notebook · 0.1.19** exports the bundled version-labelled notebook. Upload it as a fresh notebook, select a CPU or GPU runtime and Run all. Old Drive/Kaggle copies do not update automatically; GPU-only `gpu_indices()` errors or missing bootstrap imports indicate an older or partially executed copy. No models download at startup.
+
+Direct local/remote ComfyUI: Workflows → Run and install on → choose the instance → Setup → **Initialize on [instance]** checks the live registry, prepares the API and publishes an available original editor graph. Missing dependencies fail visibly; installing models/plugins or restarting requires an agent connection. Built-in examples remain reusable; movie copies can be trashed and restored immediately.

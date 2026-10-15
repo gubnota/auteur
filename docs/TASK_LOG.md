@@ -355,3 +355,14 @@
 ## 2026-10-15 — Notebook helper execution fix
 
 - Notebook startup imports and runner creation depended on a hidden helper cell that Kaggle could skip. The helper cell is now visible and documented as required; setup and start fail with a clear Run all instruction if their prerequisites are absent.
+
+## 2026-10-15 — Full-screen terminal and editing fixes, 0.1.19
+
+- Terminal fills the app viewport with dark controls, collapsed help, Fit window PTY measurement and reversible native full-screen toggle. Screenshot: docs/screenshots/remote-console-fullscreen.png (fixture UI; no live remote shell claimed).
+- Desktop metadata saves preserve authoritative native source graphs/editor hashes/prepared profiles, fixing integral-float/large-integer round-trip failures during frame/character renames and storyboard edits. Regression covers reopen, version tampering and revision conflicts.
+- Shot handles support drag reorder, up/down controls and confirmed shot/frame removal. Assets/history retained. Archived example copies restore immediately, keep their identity and select the chosen node for setup.
+- Direct ComfyUI Setup prepares and publishes existing editor workflows on the selected node; missing dependencies require an agent. Agent installation behavior remains unchanged.
+- Connections/Setup exports fresh version-labelled Colab/Kaggle notebooks. Current CPU auto-detection regression passes; user errors reference stale GPU-only or partially executed copies. Live notebook execution remains unverified.
+- Validation: 65 Rust tests plus doc tests, 27 frontend unit tests, 62 Python tests, 29 fixture browser tests, production frontend/native ARM64 build, version parity, strict ad-hoc signature and diff checks passed.
+- Installed /Applications/MyMovie Studio.app 0.1.19; previous 0.1.18 app preserved at /private/tmp/MyMovie Studio-0.1.18-before-0.1.19.app. Running app was not stopped; reopen to load new version.
+- EN/RU/FR READMEs and compact memory updated. Personal projects/drafts/credentials untouched; no cloud generation, tags or published releases. Matching current remote artifact is still needed for new background initialization/console capabilities.

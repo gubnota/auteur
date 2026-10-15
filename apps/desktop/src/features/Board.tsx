@@ -50,7 +50,11 @@ export function Board({
     [query, setQuery] = useState(""),
     [sceneEditor, setSceneEditor] = useState(false),
     [newScene, setNewScene] = useState(""),
-    [dragged, setDragged] = useState("");
+    [dragged, setDragged] = useState(""),
+    [deleteShot, setDeleteShot] = useState<{
+      sceneId: string;
+      shotId: string;
+    } | null>(null);
   useEffect(() => {
     if (navigation) {
       setSelected(navigation.frameId);
@@ -79,6 +83,7 @@ export function Board({
     .filter((a): a is NonNullable<typeof a> => !!a);
   const sort = useRef<{
     id: string;
+    sceneId?: string;
     x: number;
     y: number;
     active: boolean;
@@ -93,7 +98,9 @@ export function Board({
   const sortTarget = (e: PointerEvent) =>
     document
       .elementFromPoint(e.clientX, e.clientY)
-      ?.closest<HTMLElement>("[data-sort-shot]");
+      ?.closest<HTMLElement>(
+        sort.current?.sceneId ? "[data-shot-id]" : "[data-sort-shot]",
+      );
   const sortMove = (e: PointerEvent) => {
     const drag = sort.current;
     if (!drag) return;
@@ -109,7 +116,12 @@ export function Board({
   const sortEnd = (e: PointerEvent) => {
     const drag = sort.current,
       target = sortTarget(e);
-    if (drag?.active && target && target.dataset.frameId !== drag.id) {
+    if (drag?.active && drag.sceneId && target) {
+      const scene = episode.scenes.find((s) => s.id === drag.sceneId);
+      const index =
+        scene?.shots.findIndex((sh) => sh.id === target.dataset.shotId) ?? -1;
+      if (index >= 0) reorderShot(drag.sceneId, drag.id, index);
+    } else if (drag?.active && target && target.dataset.frameId !== drag.id) {
       const shot = episode.scenes
         .flatMap((s) => s.shots)
         .find((sh) => sh.id === target.dataset.sortShot);
@@ -124,6 +136,23 @@ export function Board({
     }
     clearSort();
   };
+  const reorderShot = (sceneId: string, shotId: string, index: number) =>
+    update((p) => {
+      const scene = p.episodes
+        .find((ep) => ep.id === episode.id)
+        ?.scenes.find((s) => s.id === sceneId);
+      if (!scene) return;
+      const from = scene.shots.findIndex((sh) => sh.id === shotId);
+      if (
+        from < 0 ||
+        index < 0 ||
+        index >= scene.shots.length ||
+        from === index
+      )
+        return;
+      const [shot] = scene.shots.splice(from, 1);
+      scene.shots.splice(index, 0, shot);
+    });
   const modify = (id: string, fn: (f: Frame) => void) =>
     update((p) => {
       for (const ep of p.episodes)
@@ -297,9 +326,9 @@ export function Board({
                       Add shot
                     </button>
                   </header>
-                  {s.shots.map((sh) => (
+                  {s.shots.map((sh, shotIndex) => (
                     <div
-                      className="shot-lane"
+                      className={`shot-lane ${dragged === sh.id ? "sorting" : ""}`}
                       key={sh.id}
                       data-sort-shot={sh.id}
                       data-file-drop="new-frame"
@@ -309,6 +338,57 @@ export function Board({
                     >
                       <div className="lane-label">
                         <span className="eyebrow">SHOT</span>
+                        <div className="shot-actions">
+                          <button
+                            className="icon-button drag-handle"
+                            aria-label={`Reorder shot ${sh.name}`}
+                            onPointerDown={(e) => {
+                              e.preventDefault();
+                              sort.current = {
+                                id: sh.id,
+                                sceneId: s.id,
+                                x: e.clientX,
+                                y: e.clientY,
+                                active: false,
+                              };
+                              e.currentTarget.setPointerCapture(e.pointerId);
+                            }}
+                            onPointerMove={sortMove}
+                            onPointerUp={sortEnd}
+                            onPointerCancel={clearSort}
+                          >
+                            <GripVertical size={16} />
+                          </button>
+                          <button
+                            className="icon-button"
+                            aria-label={`Move shot ${sh.name} up`}
+                            disabled={shotIndex === 0}
+                            onClick={() =>
+                              reorderShot(s.id, sh.id, shotIndex - 1)
+                            }
+                          >
+                            <ArrowUp size={16} />
+                          </button>
+                          <button
+                            className="icon-button"
+                            aria-label={`Move shot ${sh.name} down`}
+                            disabled={shotIndex === s.shots.length - 1}
+                            onClick={() =>
+                              reorderShot(s.id, sh.id, shotIndex + 1)
+                            }
+                          >
+                            <ArrowDown size={16} />
+                          </button>
+                          <button
+                            className="icon-button"
+                            aria-label={`Remove shot ${sh.name}`}
+                            onClick={() =>
+                              setDeleteShot({ sceneId: s.id, shotId: sh.id })
+                            }
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                         <input
                           aria-label="Shot name"
                           value={sh.name}
@@ -718,6 +798,39 @@ export function Board({
           )}
         </aside>
       </div>
+      {deleteShot && (
+        <Modal
+          title="Remove shot?"
+          onClose={() => setDeleteShot(null)}
+          footer={
+            <>
+              <button onClick={() => setDeleteShot(null)}>Keep shot</button>
+              <button
+                className="danger"
+                onClick={() => {
+                  update((p) => {
+                    const scene = p.episodes
+                      .find((ep) => ep.id === episode.id)
+                      ?.scenes.find((s) => s.id === deleteShot.sceneId);
+                    if (scene)
+                      scene.shots = scene.shots.filter(
+                        (sh) => sh.id !== deleteShot.shotId,
+                      );
+                  });
+                  setDeleteShot(null);
+                }}
+              >
+                Remove shot and frames
+              </button>
+            </>
+          }
+        >
+          <p>
+            This removes the shot and its keyframes from the storyboard. Library
+            media and job history are kept.
+          </p>
+        </Modal>
+      )}
       {search && (
         <Modal title="Search keyframes" onClose={() => setSearch(false)}>
           <Field

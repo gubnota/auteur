@@ -162,7 +162,7 @@ pub async fn save_project(
     {
         return Err("Use import commands to add originals or workflows".into());
     }
-    s.save(project, expected_revision).map_err(err)
+    s.save_metadata(project, expected_revision).map_err(err)
 }
 #[tauri::command]
 pub async fn import_asset(state: S<'_>, path: String, linked: Option<bool>) -> Reply<Project> {
@@ -957,14 +957,28 @@ pub async fn import_job_media(
     })
 }
 
+fn notebook_source(host: &str) -> Reply<&'static str> {
+    match host {
+        "colab" => Ok(include_str!(
+            "../../../../deploy/colab/MyMovie_ComfyUI.ipynb"
+        )),
+        "kaggle" => Ok(include_str!(
+            "../../../../deploy/kaggle/MyMovie_ComfyUI.ipynb"
+        )),
+        _ => Err("Select Colab or Kaggle".into()),
+    }
+}
+#[tauri::command]
+pub fn export_notebook(host: String, path: String) -> Reply<()> {
+    if Path::new(&path).extension().and_then(|s| s.to_str()) != Some("ipynb") {
+        return Err("Save as a .ipynb notebook".into());
+    }
+    let notebook: Value = serde_json::from_str(notebook_source(&host)?).map_err(err)?;
+    project_core::atomic_json(Path::new(&path), &notebook).map_err(err)
+}
 #[tauri::command]
 pub fn notebook_setup_script(host: String) -> Reply<String> {
-    let source = match host.as_str() {
-        "colab" => include_str!("../../../../deploy/colab/MyMovie_ComfyUI.ipynb"),
-        "kaggle" => include_str!("../../../../deploy/kaggle/MyMovie_ComfyUI.ipynb"),
-        _ => return Err("Select Colab or Kaggle".into()),
-    };
-    let notebook: Value = serde_json::from_str(source).map_err(err)?;
+    let notebook: Value = serde_json::from_str(notebook_source(&host)?).map_err(err)?;
     let cells = notebook["cells"]
         .as_array()
         .ok_or("Invalid bundled notebook")?;
@@ -990,6 +1004,11 @@ mod notebook_script_tests {
             assert!(script.contains("runner.start("));
             assert!(!script.contains("runner.stop()"));
             assert!(script.contains("ARTIFACT_SHA256"));
+            assert!(script.contains("execution_device(DEVICE, GPU_COUNT)"));
+            assert!(script.contains(&format!(
+                "NOTEBOOK_VERSION = \"{}\"",
+                env!("CARGO_PKG_VERSION")
+            )));
         }
     }
 }

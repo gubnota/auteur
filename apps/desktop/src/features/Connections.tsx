@@ -1,3 +1,4 @@
+import { NotebookDownload } from "../components/NotebookDownload";
 import { openConsole, openActivity } from "../components/BackgroundActivity";
 import { AssistantDialog } from "./PromptAssistant";
 import { useEffect, useRef, useState } from "react";
@@ -488,13 +489,11 @@ export function Connections({
             ]}
             onChange={(v) => setHost(v as "colab" | "kaggle")}
           />
+          <NotebookDownload host={host} />
           <p>
-            Open the bundled{" "}
-            {host === "colab" ? "deploy/colab" : "deploy/kaggle"}
-            /MyMovie_ComfyUI.ipynb notebook and choose Run all with a CPU or GPU
-            runtime. The notebook installs its verified Linux client
-            automatically. Copy the public relay address and generated node IDs
-            here. The notebook configures its local relay allowlist.
+            Save the current notebook above, upload it to Colab or Kaggle and
+            choose Run all in a fresh CPU or GPU session. No edits are required.
+            Copy its public relay address and node IDs below.
           </p>
           <Field
             label="Authenticated HTTPS relay"

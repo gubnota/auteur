@@ -25,6 +25,7 @@ export function AgentWorkflowSetup({
   onBusyChange,
   locked,
   connection,
+  prepare,
 }: {
   workflow: Workflow;
   onBusyChange: (busy: boolean) => void;
@@ -146,16 +147,65 @@ export function AgentWorkflowSetup({
       ]);
       openActivity();
     });
+  if (connection?.kind === "comfyui")
+    return (
+      <section
+        className="agent-workflow-setup panel"
+        aria-label="Local workflow initialization"
+      >
+        <h3>Set up on {connection.name}</h3>
+        <p>
+          Check this instance’s live inputs and prepare the workflow. Original
+          editor workflows are also added to its workflow library. Existing
+          models and plugins are reused.
+        </p>
+        <button
+          className="primary"
+          disabled={locked || !!busy}
+          onClick={() =>
+            void act("Preparing workflow…", async () => {
+              setSteps([
+                `Reading the node registry and preparing inputs on ${connection.name}…`,
+              ]);
+              await prepare(workflow.id, connection.id);
+              if (workflow.editorGraph) {
+                setSteps((v) => [
+                  ...v,
+                  "Publishing the original workflow to ComfyUI’s library…",
+                ]);
+                await call("install_workflow", {
+                  workflowId: workflow.id,
+                  connectionId: connection.id,
+                });
+              }
+              setSteps((v) => [
+                ...v,
+                "Workflow prepared. Select this instance in Generate to queue a job.",
+              ]);
+            })
+          }
+        >
+          {busy || `Initialize on ${connection.name}`}
+        </button>
+        <small>
+          Missing models or plugins require an agent connection for
+          installation. This direct connection does not install dependencies or
+          restart your ComfyUI.
+        </small>
+        {!!steps.length && (
+          <ol>
+            {steps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
+        )}
+        {error && <p role="alert">{error}</p>}
+      </section>
+    );
   if (connection?.kind !== "relay")
     return (
       <aside className="setup-guide-note">
-        <strong>Initialize remotely with the agent</strong>
-        <p>
-          Select a Colab / Kaggle or RunPod agent connection above. Run the base
-          notebook once to start ComfyUI, the agent and its connection. All
-          workflow downloads and plugin installations then happen here. Direct
-          ComfyUI connections remain read-only.
-        </p>
+        Choose a ComfyUI or agent instance above to initialize this workflow.
       </aside>
     );
   const artifacts = review?.profile?.artifacts ?? [];

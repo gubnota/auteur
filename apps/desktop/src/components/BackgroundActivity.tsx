@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Activity, RefreshCw, Terminal } from "lucide-react";
+import {
+  Activity,
+  RefreshCw,
+  Terminal,
+  Maximize,
+  Minimize,
+} from "lucide-react";
 import type { Connection } from "../lib/types";
-import { call } from "../lib/bridge";
+import { call, native } from "../lib/bridge";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Modal, Picker } from "./Controls";
 
 type Progress = {
@@ -322,7 +329,9 @@ function RemoteConsole({
   const [session, setSession] = useState<ConsoleState | null>(null),
     [error, setError] = useState(""),
     [input, setInput] = useState(""),
-    [size, setSize] = useState("100x30");
+    [size, setSize] = useState("auto"),
+    [fullScreen, setFullScreen] = useState(false);
+  const restoreFullScreen = useRef<boolean | null>(null);
   const terminal = useRef<HTMLPreElement>(null);
   const request = (command?: Record<string, unknown>) =>
     call<ConsoleState>("console_request", {
@@ -389,6 +398,95 @@ function RemoteConsole({
     });
     return inputQueue.current;
   };
+  const toggleFullScreen = async () => {
+    try {
+      if (native) {
+        const appWindow = getCurrentWindow();
+        const before = await appWindow.isFullscreen();
+        if (restoreFullScreen.current === null)
+          restoreFullScreen.current = before;
+        await appWindow.setFullscreen(!before);
+        setFullScreen(!before);
+      } else if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        setFullScreen(false);
+      } else {
+        await document.documentElement.requestFullscreen();
+        setFullScreen(true);
+      }
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+  useEffect(
+    () => () => {
+      if (native && restoreFullScreen.current !== null)
+        void getCurrentWindow()
+          .setFullscreen(restoreFullScreen.current)
+          .catch(() => {});
+      else if (!native && document.fullscreenElement)
+        void document.exitFullscreen().catch(() => {});
+    },
+    [],
+  );
+  useEffect(() => {
+    if (
+      !terminal.current ||
+      !session?.id ||
+      session.state === "closed" ||
+      size !== "auto"
+    )
+      return;
+    let timer: ReturnType<typeof setTimeout>;
+    let previous = "";
+    const element = terminal.current;
+    const observer = new ResizeObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const style = getComputedStyle(element);
+        const measure = document.createElement("span");
+        measure.style.font = style.font;
+        measure.textContent = "M";
+        element.append(measure);
+        const charWidth = measure.getBoundingClientRect().width || 8;
+        measure.remove();
+        const cols = Math.max(
+          20,
+          Math.min(
+            300,
+            Math.floor(
+              (element.clientWidth -
+                parseFloat(style.paddingLeft) -
+                parseFloat(style.paddingRight)) /
+                charWidth,
+            ),
+          ),
+        );
+        const rows = Math.max(
+          5,
+          Math.min(
+            120,
+            Math.floor(
+              (element.clientHeight -
+                parseFloat(style.paddingTop) -
+                parseFloat(style.paddingBottom)) /
+                (parseFloat(style.lineHeight) || 20),
+            ),
+          ),
+        );
+        const next = `${cols}x${rows}`;
+        if (next !== previous) {
+          previous = next;
+          void send({ type: "resize", cols, rows });
+        }
+      }, 150);
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+    };
+  }, [session?.id, session?.state, size]);
   useEffect(() => {
     if (terminal.current)
       terminal.current.scrollTop = terminal.current.scrollHeight;
@@ -404,12 +502,19 @@ function RemoteConsole({
       title={`Remote console · ${connection.name}`}
       onClose={onClose}
       fullScreen
+      className="console-window"
     >
-      <p>
-        Interactive agent terminal · {session?.state ?? "connecting"}. Requires
-        private tokens and an agent started with <code>--allow-console</code>.
-        Opening a console clears readiness; initialize again after changes.
-      </p>
+      <details className="console-help">
+        <summary>Session · {session?.state ?? "connecting"} · Help</summary>
+        <p>
+          Interactive agent terminal · {session?.state ?? "connecting"}.
+          Requires private tokens and an agent started with{" "}
+          <code>--allow-console</code>. Opening a console clears readiness;
+          initialize again after changes. Closing this window detaches;
+          reopening reconnects. Sessions end after 30 minutes. Output keeps the
+          latest 256 KiB.
+        </p>
+      </details>
       <pre
         className="remote-terminal"
         ref={terminal}
@@ -472,17 +577,23 @@ function RemoteConsole({
         >
           Ctrl+C
         </button>
+        <button onClick={() => void toggleFullScreen()}>
+          {fullScreen ? <Minimize size={16} /> : <Maximize size={16} />}
+          {fullScreen ? "Exit full screen" : "Enter full screen"}
+        </button>
         <Picker
           title="Terminal size"
           value={size}
-          options={["80x24", "100x30", "140x40"].map((id) => ({
+          options={["auto", "80x24", "100x30", "140x40"].map((id) => ({
             id,
-            label: id,
+            label: id === "auto" ? "Fit window" : id,
           }))}
           onChange={(v) => {
             setSize(v);
-            const [cols, rows] = v.split("x").map(Number);
-            void send({ type: "resize", cols, rows });
+            if (v !== "auto") {
+              const [cols, rows] = v.split("x").map(Number);
+              void send({ type: "resize", cols, rows });
+            }
           }}
         />
         <button
@@ -493,10 +604,6 @@ function RemoteConsole({
         </button>
       </div>
       {error && <p role="alert">{error}</p>}
-      <small>
-        Close this window to detach; reopening reconnects to the active session.
-        Sessions end after 30 minutes. Output keeps the latest 256 KiB.
-      </small>
     </Modal>
   );
 }

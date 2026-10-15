@@ -1,3 +1,4 @@
+import { NotebookDownload } from "./NotebookDownload";
 import { useEffect, useState } from "react";
 import type { Workflow } from "../lib/types";
 import { call, exportDestination, native } from "../lib/bridge";
@@ -111,14 +112,18 @@ export function WorkflowBootstrap({
           environment.
         </p>
         {cloud ? (
-          <p>
-            Paste the complete script in a notebook cell. Edit its Configure
-            section: archive source, trusted checksum, pinned ComfyUI revision,
-            and reachable relay HTTPS address. Upload the archive from the
-            current CI build; store the agent token in notebook Secrets. Install
-            ComfyUI first using the notebook guide. Kaggle uses one process per
-            GPU and separate ports, without pooling memory.
-          </p>
+          <>
+            <NotebookDownload host={host as "colab" | "kaggle"} />
+            <p>
+              Upload this notebook to a fresh session and choose Run all, or
+              paste the complete script below into one cell. Default
+              configuration needs no edits, Secrets or copied checksums. CPU and
+              GPU are detected automatically; Kaggle can run two independent GPU
+              workers. The notebook starts its relay and tunnel. Add the printed
+              address and node IDs in Connections, then review workflow
+              dependencies here.
+            </p>
+          </>
         ) : (
           <>
             <Picker

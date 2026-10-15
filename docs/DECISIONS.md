@@ -250,3 +250,13 @@ Context: Initialization lost its UI progress on navigation, lacked cancellation/
 Decision: Persist one initialization operation per node in the existing relay lease protocol. Agent owns full install/restart/prepare/verify lifecycle and local interruption receipts. Shared runtimes serialize mutations and reuse verified files. Store portable ordered recipes with exact success identities. Add a separate private opted-in PTY transport; shared test keys retain typed setup only. Archive movie workflows with recoverable Trash metadata.
 Consequences: Activity works across navigation/Welcome and reconnects without replay. Completed downloads survive cancellation; arbitrary scripts are not rolled back. Script/terminal users must replace both default keys and enable agent execution. Matching 0.1.18 remote builds are required. Live GPU validation remains separate.
 Related files: agent/src/initialization.rs; agent/src/console.rs; relay/src/operations.rs; relay/src/console.rs; BackgroundActivity.tsx; InitializationRecipe.tsx; docs/NODE_ACTIVITY.md.
+
+# ADR-0026: Preserve native workflow graphs during metadata saves
+
+Date: 2026-10-15
+Status: Accepted
+
+Context: JavaScript normalizes integral floats and can round large integers in imported graphs, causing unrelated renames and board edits to fail strict immutability checks.
+Decision: Desktop metadata saves retain native-owned source graphs, hashes and prepared profiles for the same immutable workflow identity/version. Explicit native workflow operations still own import and preparation.
+Consequences: Names/board/wrapper changes persist without rewriting source numeric values; revision and identity checks remain mandatory. Terminal uses available viewport height and a reversible native full-screen toggle; bundled version-labelled notebooks replace stale notebook copies.
+Related files: crates/project-core/src/lib.rs; desktop/src-tauri/src/service.rs; BackgroundActivity.tsx; NotebookDownload.tsx.

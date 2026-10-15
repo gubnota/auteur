@@ -52,7 +52,12 @@ export async function pickFile(
     multiple: false,
     filters:
       kind === "workflow"
-        ? [{ name: "ComfyUI workflow or wrapped collection", extensions: ["json"] }]
+        ? [
+            {
+              name: "ComfyUI workflow or wrapped collection",
+              extensions: ["json"],
+            },
+          ]
         : undefined,
   });
   return typeof path === "string" ? path : null;
@@ -88,10 +93,18 @@ export const posterUrl = (a: { id: string }) =>
   native ? `mymovie://localhost/${a.id}/thumbnail` : "";
 export const jobs = () => call<Job[]>("list_jobs");
 
-export async function exportDestination(name: string): Promise<string | null> {
+export async function exportDestination(
+  name: string,
+  extension = "json",
+): Promise<string | null> {
   if (!native) throw new Error("Open the native app to export setup files");
   return save({
     defaultPath: name,
-    filters: [{ name: "Workflow setup", extensions: ["json"] }],
+    filters: [
+      {
+        name: extension === "ipynb" ? "Jupyter notebook" : "Workflow setup",
+        extensions: [extension],
+      },
+    ],
   });
 }

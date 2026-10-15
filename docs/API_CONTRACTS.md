@@ -5,7 +5,7 @@
 - Manual TS mirror: apps/desktop/src/lib/types.ts; generated parity pending.
 - Schema v5: manifest.json + project.sqlite; SQLite authoritative.
 - Tables: project(id=1, revision, json), jobs(id,json), history(revision,json), projections(id,pending), job_runs(id,json).
-- save_project(project, expectedRevision): UUID identity, revision conflict check, validated references.
+- save_project(project, expectedRevision): UUID identity, revision conflict check, validated references. Metadata-only desktop save restores native graph/editor/hash/profiles for each existing workflow identity/version, avoiding JavaScript number normalization; strict core save still rejects graph mutation.
 - Recoverable projections: manifest, scene keyframes/board.json, character.json, versioned workflow definition.json.
 - UUID IDs and relative package paths; symlinks/traversal rejected; one native writer.
 - close_project releases writer/checkpoints WAL; copy package after closing.
@@ -189,3 +189,7 @@
 - POST /v1/nodes/{node}/console; GET /v1/consoles/{id}; POST /v1/consoles/{id}/input; POST /v1/agent/nodes/{node}/console. Input/output sequence ACKs are monotonic, repeated output is idempotent. Commands input/resize/close; max 128 queued, output 256 KiB, session 30 min.
 - Console/custom scripts require non-default tokens at relay and agent plus --allow-console. Agent heartbeat advertises initialization/console/customScripts capabilities. Console opening invalidates attestation/requires restart; tokens excluded from child environments.
 - Agent release metadata adds initializationVersion=1 and consoleVersion=1. Matching 0.1.18 agent/relay required; a desktop build alone is insufficient.
+
+## Notebook export (0.1.19)
+- `export_notebook(host: colab|kaggle, path: .ipynb)` writes the bundled notebook atomically; no runtime/credential installation occurs. UI filenames include app version. Notebook `NOTEBOOK_VERSION` must match package version.
+- Terminal `resize` uses measured rows/columns in Fit window mode (20–300 columns, 5–120 rows), debounced 150 ms. Closing restores the prior native full-screen state without closing the remote session.

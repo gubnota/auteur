@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = (ROOT / "scripts/notebook-bootstrap.py").read_text()
 DEFAULT_TOKENS = json.loads((ROOT / "deploy/node-auth.defaults.json").read_text())
+VERSION = json.loads((ROOT / "package.json").read_text())["version"]
 RUNTIME = json.loads((ROOT / "deploy/notebook-runtime.defaults.json").read_text())
 
 
@@ -15,7 +16,7 @@ def cell(kind, source, hidden=False):
 
 
 for host, root, count in [("colab", "/content", 1), ("kaggle", "/kaggle/working", 2)]:
-    intro = f"""# MyMovie Studio · {host.title()} ComfyUI client
+    intro = f"""# MyMovie Studio · {host.title()} ComfyUI client · {VERSION}
 **Enable Internet, choose a CPU or GPU runtime, then choose Run all. No edits, Secrets, copied hashes or manual installs are needed for the default test setup.**
 
 The notebook installs pinned ComfyUI {RUNTIME['comfyRelease']} in its own session folder, reuses the runtime's PyTorch in an isolated Python environment, installs the workflow-import browser and checksum-verified cloudflared, and downloads a verified released Linux x86_64 agent + relay. **No model weights or workflow plugins are downloaded.** Install those later through Studio's workflow initialization.
@@ -29,6 +30,7 @@ Automatic mode uses up to two independent CUDA workers on Kaggle and one on Cola
 {"Google's managed-runtime usage restrictions still apply; use an eligible runtime for externally controlled workers. See https://research.google.com/colaboratory/faq.html ." if host == "colab" else "Kaggle GPU/Internet access and notebook lifetime depend on your account. See https://www.kaggle.com/docs/notebooks ."}
 """
     config = f'''from pathlib import Path
+NOTEBOOK_VERSION = "{VERSION}"
 HOST = "{host}"
 DEVICE = "auto"  # auto: CUDA when available, otherwise CPU; or "cpu" / "cuda"
 GPU_COUNT = {count}  # maximum GPUs in auto; exact GPU count in cuda; ignored for CPU
@@ -62,7 +64,7 @@ USE_PRIVATE_DOWNLOAD_SECRET = False
 # MYMOVIE_DESKTOP_TOKEN = os.environ["MYMOVIE_DESKTOP_TOKEN"]
 # MYMOVIE_AGENT_TOKEN = secret(HOST, "MYMOVIE_AGENT_TOKEN")
 # MYMOVIE_DESKTOP_TOKEN = secret(HOST, "MYMOVIE_DESKTOP_TOKEN")
-print("Default configuration loaded. No key or configuration edits are required.")
+print(f"MyMovie notebook {{NOTEBOOK_VERSION}} · CPU/GPU auto detection. No configuration edits required.")
 '''
     bootstrap_loader = f'''import platform
 

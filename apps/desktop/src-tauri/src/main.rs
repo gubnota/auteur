@@ -60,6 +60,7 @@ fn main() {
             export_workflow_bundle,
             export_workflow_setup,
             notebook_setup_script,
+            export_notebook,
             get_settings,
             save_settings,
             save_credential,

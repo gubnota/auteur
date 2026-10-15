@@ -81,7 +81,9 @@ pub async fn pin_workflow(state: S<'_>, workflow_id: String) -> Reply<Project> {
         .ok_or("Catalogue version missing")?;
     let s = i.project.as_mut().ok_or("Open a movie first")?;
     let mut p = s.read().map_err(err)?;
-    if !p.workflows.iter().any(|old| old.id == w.id) {
+    if let Some(existing) = p.workflows.iter_mut().find(|old| old.id == w.id) {
+        existing.wrapper.archived_at = None;
+    } else {
         p.workflows.push(w);
     }
     let revision = p.revision;

@@ -686,7 +686,7 @@ export function Workflows({
             {examples
               .filter((v) => mediaKind === "all" || v.mediaKind === mediaKind)
               .map((example) => {
-                const existing = p.workflows.some((v) => v.id === example.id);
+                const existing = p.workflows.find((v) => v.id === example.id);
                 return (
                   <article className="panel workflow-card" key={example.id}>
                     <img
@@ -706,7 +706,7 @@ export function Workflows({
                       className="primary"
                       disabled={!!pinning}
                       onClick={() => {
-                        if (existing) {
+                        if (existing && !existing.wrapper?.archivedAt) {
                           setSelected(example.id);
                           return;
                         }
@@ -717,11 +717,13 @@ export function Workflows({
                           .finally(() => setPinning(""));
                       }}
                     >
-                      {existing
+                      {existing && !existing.wrapper?.archivedAt
                         ? "Open movie copy"
                         : pinning === example.id
                           ? "Adding…"
-                          : "Use example"}
+                          : existing
+                            ? "Restore movie copy"
+                            : "Use example"}
                     </button>
                   </article>
                 );
