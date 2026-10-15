@@ -1,5 +1,10 @@
 # Task Log
 
+## 2026-10-15 — Local macOS and Linux agent build commands
+
+- README now documents an Apple Silicon `.app`/`.dmg` build and a Docker/OrbStack `cross` build for the Linux x86_64 agent, including target prerequisites, output locations, and the distinction between a bare binary and the full checksummed CI archive.
+- Verified the Tauri CLI target argument forwarding with its help output. Cross compilation was documented but not run in this environment.
+
 ## 2026-10-15 — Bun workspace scripts
 
 - Root `dev`, `build`, and `typecheck` target `@mymovie/desktop` with Bun's `--filter` syntax. The previous `npm run … -w` form was interpreted as recursive watch arguments, causing unbounded root-script recursion.

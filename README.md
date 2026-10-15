@@ -50,14 +50,40 @@ Start with the bundled **64 × 64 mask canary**: no weights/plugins/GPU. The opt
 
 ## Build and checks
 
+### Build locally on an Apple Silicon Mac
+
+Install the JavaScript dependencies and Rust targets once. For the Linux agent
+cross-build, install [`cross`](https://github.com/cross-rs/cross) and start
+Docker or OrbStack before building:
+
 ```sh
-npm ci
-npm run typecheck
-npm test
+bun install
+rustup target add aarch64-apple-darwin x86_64-unknown-linux-gnu
+cargo install cross --locked
+
+# Apple Silicon macOS app bundle (.app and .dmg)
+bun run tauri:build -- --target aarch64-apple-darwin
+
+# Linux x86_64 agent binary (cross-compiles through Docker/OrbStack)
+cross build --locked --release -p mymovie-agent --target x86_64-unknown-linux-gnu
+```
+
+The app bundle is under
+`target/aarch64-apple-darwin/release/bundle/` (`macos/` contains the `.app` and
+`dmg/` contains the installer image).
+The Linux executable is
+`target/x86_64-unknown-linux-gnu/release/mymovie-agent`. This is the agent
+binary only; use the tagged CI release for the checksummed deployment archive,
+which also includes the matching relay and runtime helpers.
+
+Run the standard checks with:
+
+```sh
+bun run typecheck
+bun run test
 cargo test --workspace
 python3 -m unittest discover -s scripts/tests
-npx playwright test
-npm run tauri:build -- --bundles app
+bun run test:e2e
 ```
 
 [CI/release guide](docs/CI_RELEASES.md): GitHub Actions and `.gitlab-ci.yml` build macOS Apple Silicon, Windows x64 and Linux x86_64 desktops, plus Linux x86_64/macOS Apple Silicon agents with matching relays. GitHub also builds Linux ARM64 desktop; GitLab keeps that entry disabled. macOS Intel desktop/agent and Linux ARM64 agent entries are commented out. Notebooks automatically resolve public releases (including prereleases) and verify the archive checksum; custom uploads still require SHA256. Local Cloudflare mode requires a current relay-inclusive archive. Tags must match the source version. Windows outbound agents are not shipped.
