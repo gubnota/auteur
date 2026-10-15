@@ -1,6 +1,8 @@
 # MyMovie Studio
 
-Version 0.1.19 adds a dark terminal that fills the window, **Enter full screen**, and automatic **Fit window** sizing. Shot lanes can be dragged, moved up/down or removed with confirmation. Renaming frames/characters preserves exact imported workflow graphs. Restore example copies immediately; select an instance in Setup for direct ComfyUI preparation/import (dependencies must already exist). Connections/Setup can save version-labelled CPU/GPU notebooks: upload a fresh copy and Run all. Agent connections install missing dependencies. Live cloud validation remains pending.
+Version **0.1.20** makes Workflows, Generate, Jobs, Library, Renders, Instances, Search and Settings available without opening a Movie. Movies add the storyboard and cast workspace; closing one keeps global resources and execution active. The terminal accepts direct keyboard input, and connected agents report CPU, RAM and GPU memory.
+
+The immutable examples now include **FLUX.3 Klein T2I and two-reference I2I**, each with T4, RTX and Apple Silicon variants inside one compressed workflow package. Choose a variant before initialization. [Example guides](docs/WORKFLOW_EXAMPLES.md) explain model access, exact downloads and hardware limits. [Local agent setup](docs/LOCAL_COMFYUI_TEST.md) covers a separate MPS or CPU instance, private terminal access and ports. Real FLUX/cloud GPU generation remains unverified.
 
 **Colab quick start:** open the [current notebook](https://colab.research.google.com/github/gubnota/auteur/blob/main/deploy/colab/MyMovie_ComfyUI.ipynb), connect a CPU or GPU runtime, and **Run all** unchanged. Predefined test keys, verified agent/relay, pinned ComfyUI, browser importer and cloudflared are set up automatically. Copy the printed relay URL/node ID into Connections with temporary-tunnel polling enabled. Models and workflow plugins are installed later from Studio. Run all leaves the node running; Stop is manual. Existing Drive copies must be reopened from this link to get updates.
 
@@ -10,7 +12,7 @@ Version 0.1.19 adds a dark terminal that fills the window, **Enter full screen**
 
 A portable film studio for macOS: Finder `.mymovie` packages, scenes and keyframes, shared characters and media, reusable ComfyUI workflows and traceable jobs.
 
-Current source/app version: **0.1.18**. [Published v0.1.15 downloads](https://github.com/gubnota/auteur/releases/tag/v0.1.15) include the Linux agent and matching relay. Commit version changes before creating a matching tag; staging alone does not update a tag. Local macOS builds use an ad-hoc signature; notarization and foreign-platform launch acceptance remain pending.
+Current source/app version: **0.1.20**. [Published v0.1.15 downloads](https://github.com/gubnota/auteur/releases/tag/v0.1.15) include the Linux agent and matching relay. Commit version changes before creating a matching tag; staging alone does not update a tag. Local macOS builds use an ad-hoc signature; notarization and foreign-platform launch acceptance remain pending.
 
 ## One workflow, many jobs
 
@@ -40,6 +42,8 @@ A private node connects outbound to an authenticated HTTPS relay. Enter its reac
 
 To test against a separate local instance, follow the [OrbStack CPU and Apple Silicon MPS guide](docs/LOCAL_COMFYUI_TEST.md). It uses OrbStack port 8192 and a fresh M2 Max MPS instance on port 8191, and explains the extra authenticated relay needed for Studio's full agent actions.
 
+**Guide → Edit dependencies** opens source and relative-destination settings for your workflow. **Open source** uses your browser; the editor shows the resolved model/plugin path. Direct connections show preparation progress; installation logs and cancellation require a relay-backed agent. Public test tokens never access Keychain. Use **Load saved private tokens** or **Check connection** explicitly when using saved private credentials.
+
 Start with the bundled **64 × 64 mask canary**: no weights/plugins/GPU. The optional **u2netp** test needs the reviewed model, plugin and compatible offline wheels; it produces an image and foreground mask.
 
 **Settings → Node access** shows editable `MYMOVIE_AGENT_TOKEN` and `MYMOVIE_DESKTOP_TOKEN`, populated with your predefined public test pair. Save custom values to the system vault or copy assignments into the notebook Configure cell; env/Secrets alternatives are commented out. New **Connections → Colab / Kaggle** entries inherit the desktop token. For private deployments replace both shared defaults. The notebook can start its bundled relay on a custom `RELAY_PORT` and tunnel it with an installed `cloudflared`; enable **Temporary Cloudflare tunnel · polling only** in the app and paste the printed public relay address/node IDs. ComfyUI remains private. Custom credentials never enter project files. Google/DeepSeek/OpenRouter prompt assistance is optional; custom/fal generation endpoints remain configuration-only. Historical retired destinations are retained but cannot run. Ambiguous submissions stay unknown until reconciled; desktop polling and replayable relay SSE preserve progress. Native Dock/system notifications and cleanable in-app logs are included.
@@ -63,7 +67,7 @@ Persistent project memory: [context](docs/PROJECT_CONTEXT.md), [architecture](do
 ## Example workflows
 
 **Workflows → Examples · start here** offers illustrated connection, SD 1.5 T4 and
-tiny background-removal examples. Open a movie copy, choose **Run and install on**
+tiny background-removal examples. Choose **Use**, then **Run and install on**
 inside the workflow modal, then **Setup → Initialize on [instance]**. Review downloads
 and choose **Install & prepare on [instance]**: the agent installs dependencies,
 restarts managed idle ComfyUI if needed, compiles/publishes the graph and verifies

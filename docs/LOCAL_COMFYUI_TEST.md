@@ -1,229 +1,194 @@
-# Local ComfyUI test nodes: OrbStack CPU and Apple Silicon MPS
+# Local ComfyUI + agent: Apple Silicon and OrbStack CPU
 
-This guide creates a separate ComfyUI instance on a non-standard port so the
-existing installation at `127.0.0.1:8188` stays untouched. Use the CPU node for
-connection, registry, workflow import, queue and lightweight mask checks. Use
-the Mac MPS node to check Apple Silicon workflows and real local inference.
+Studio works without opening a Movie. For the complete test use **Instances →
+Add connection → Local Mac / Linux** and connect to the agent's relay. A direct
+ComfyUI connection can execute workflows but cannot install dependencies or open
+the agent terminal.
 
-ComfyUI uses PyTorch MPS on Apple Silicon; “MPS” is the Metal backend (not
-CUDA). The OrbStack machine/container uses CPU, not the Mac GPU. Workflow
-compatibility still depends on its custom nodes, model files, and supported
-precision. A connection test does not mean every workflow can run on either
-node.
+## Ports and ownership
 
-## Option A — CPU ComfyUI in OrbStack
+| Service | Mac MPS | Linux CPU example | Exposure |
+| --- | --- | --- | --- |
+| ComfyUI | 8191 | 8192 | Loopback inside its machine |
+| Relay | 8789 | 8790 | Localhost for local tests; reachable relay for remote nodes |
+| Agent | No listening port | No listening port | Outbound authenticated connection to relay |
 
-Start OrbStack, then open Terminal in the repository. This builds the included
-weight-free CPU canary image and publishes it only on the Mac loopback interface
-at port `8192`:
+The agent needs no public IP, SSH server or open inbound port. For a notebook or
+RunPod behind NAT, run the agent beside ComfyUI and connect it to a reachable
+relay. The bundled notebooks can expose **the relay** with Cloudflare. The relay
+URL is an authenticated API, not the ComfyUI website. SSH public-key access is a
+separate transport and does not by itself make a private address reachable.
 
-```sh
-cd deploy/cpu
-docker build -t auteur-comfy-cpu .
-docker run -d --name auteur-comfy-cpu \
-  -p 127.0.0.1:8192:8188 \
-  -v auteur-comfy-input:/opt/comfy/input \
-  -v auteur-comfy-output:/opt/comfy/output \
-  auteur-comfy-cpu
-```
+## 1. Fresh Mac ComfyUI on port 8191
 
-Check `http://127.0.0.1:8192/system_stats` in a browser. The ComfyUI web page
-is at `http://127.0.0.1:8192/`. In Studio → Connections, add a ComfyUI
-connection at `http://127.0.0.1:8192`; select it in Workflows before **Prepare
-inputs**, installing a workflow, or making a test job. Run the included
-weight-free mask canary first. This checks CPU queueing and result collection
-without downloading a model.
-
-Stop and restart the container with:
+Your existing test installation is `$HOME/Downloads/ComfyUI-mymovie-mps`.
+For a fresh installation:
 
 ```sh
-docker stop auteur-comfy-cpu
-docker start auteur-comfy-cpu
-```
-
-To remove this test container and its persisted input/output volumes after
-testing:
-
-```sh
-docker rm -f auteur-comfy-cpu
-docker volume rm auteur-comfy-input auteur-comfy-output
-```
-
-OrbStack runs the Docker engine in its Linux VM; the container's `8188` is
-forwarded to Mac-only `127.0.0.1:8192`. If Docker says it cannot reach its
-daemon, start OrbStack first. See [OrbStack's quick start](https://docs.orbstack.dev/quick-start).
-
-## Option B — fresh ComfyUI on M2 Max (Apple Silicon MPS)
-
-Install into a new folder and Python environment. This does not change your
-existing ComfyUI Desktop or its models. The example uses port `8191`.
-
-```sh
-cd "$HOME"
+cd "$HOME/Downloads"
 git clone https://github.com/Comfy-Org/ComfyUI.git ComfyUI-mymovie-mps
-cd "$HOME/ComfyUI-mymovie-mps"
+cd "$HOME/Downloads/ComfyUI-mymovie-mps"
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install --pre torch torchvision torchaudio
 python -m pip install -r requirements.txt
 python -c 'import torch; print("MPS available:", torch.backends.mps.is_available())'
-python main.py --listen 127.0.0.1 --port 8191
 ```
 
-Use a recent Python supported by ComfyUI and its custom nodes. If the MPS check
-prints `False`, resolve the PyTorch/macOS environment before treating this as a
-GPU test. The official ComfyUI project currently recommends a PyTorch nightly
-for Apple Silicon; consult its [manual install notes](https://github.com/Comfy-Org/ComfyUI#apple-mac-silicon)
-and [Apple's PyTorch/Metal guide](https://developer.apple.com/metal/pytorch/)
-if the install commands change. Keep this ComfyUI folder, `.venv`, `user`, and
-`models` separate from your other installation.
+If you already started `python main.py --port 8191`, stop that process with
+Ctrl+C before step 3. The supervisor must own the process to restart it after
+plugin installation. `--attach` is available for an existing server, but attached
+runtimes are read-only for dependency installation and managed restart.
 
-In Studio → Connections, add a ComfyUI connection at
-`http://127.0.0.1:8191`. Confirm its registry is populated, select it in
-Workflows, and choose **Prepare inputs / Refresh inputs**. Import an editor
-workflow once, prepare it against this node, configure Inputs/Outputs, then
-create a small job. For MPS, use a workflow explicitly compatible with Apple
-Silicon and start with a small image/short clip and a model that fits unified
-memory. CUDA-only custom nodes or CUDA-only workflow profiles will not become
-MPS compatible by changing the node URL.
+## 2. Install matching agent and relay
 
-## Running the agent against the local node
-
-There are two levels of testing:
-
-1. A direct ComfyUI connection tests registry discovery, workflow preparation,
-   installation in ComfyUI's saved-workflow library, job submission, history,
-   and result collection. It does not provide remote dependency installation,
-   custom scripts, or the interactive agent console.
-2. Studio's agent initialization, cancellation/progress, reconnect, dependency
-   setup, and console need a running `mymovie-agent` connected to an
-   authenticated HTTPS relay. For these full checks, run the agent on the Mac
-   against the fresh MPS ComfyUI root. The OrbStack container is a good direct
-   CPU workflow target; agent-managed filesystem installs need an agent running
-   inside that Linux runtime with its matching Linux binary. Only the relay
-   needs a temporary HTTPS address; keep ComfyUI bound to loopback. Use a
-   private token pair for console/custom-script checks.
-
-### Agent workflow commands without a relay
-
-Build the current agent utilities in the repository:
+Download and verify the matching macOS arm64 agent archive from the project's
+release assets. It contains `mymovie-agent`, `mymovie-relay`, runtime/compiler
+helpers and `mymovie_local.py`. Extract all files to one folder. Alternatively,
+build and package this checkout (Rust and the Apple command line tools required):
 
 ```sh
-cargo build --release -p mymovie-agent -p mymovie-relay
+cd "$HOME/Documents/petProjects/auteur"
+DEVELOPER_DIR=/Library/Developer/CommandLineTools cargo build --release -p mymovie-agent -p mymovie-relay
+python3 scripts/package-agent.py target/release/mymovie-agent artifacts/local-mac \
+  --platform macos --architecture aarch64 --build-os macos
+mkdir -p "$HOME/Downloads/mymovie-client-mac"
+tar -xzf artifacts/local-mac/mymovie-agent-macos-aarch64.tar.gz \
+  -C "$HOME/Downloads/mymovie-client-mac"
+chmod +x "$HOME/Downloads/mymovie-client-mac/mymovie-agent" \
+  "$HOME/Downloads/mymovie-client-mac/mymovie-relay"
 ```
 
-Set paths for the fresh MPS ComfyUI. Substitute `8192` for the OrbStack CPU
-node, or `8191` for the MPS instance:
+For ordinary editor-workflow JSON conversion, install the compiler's browser
+requirements in the ComfyUI environment. API JSON does not require conversion:
 
 ```sh
-export COMFY_URL=http://127.0.0.1:8191
-export COMFY_ROOT="$HOME/ComfyUI-mymovie-mps"
-export AGENT_BIN="$PWD/target/release/mymovie-agent"
-export AGENT_DATA="$HOME/Library/Application Support/MyMovie/local-mps-agent"
-mkdir -p "$AGENT_DATA"
+"$HOME/Downloads/ComfyUI-mymovie-mps/.venv/bin/python" -m pip install \
+  -r "$HOME/Downloads/mymovie-client-mac/workflow-compiler-requirements.txt"
+"$HOME/Downloads/ComfyUI-mymovie-mps/.venv/bin/python" -m playwright install chromium
 ```
 
-Inspect the local runtime, then test immutable workflow registration and
-publication using an editor-format workflow JSON:
+## 3. Start ComfyUI, relay and agent together
 
 ```sh
-"$AGENT_BIN" doctor --comfy-url "$COMFY_URL"
-"$AGENT_BIN" inventory --comfy-url "$COMFY_URL" \
-  --comfy-root "$COMFY_ROOT" --python "$COMFY_ROOT/.venv/bin/python" \
-  --runtime-helper "$PWD/deploy/runner/mymovie_runtime.py" --data "$AGENT_DATA"
-"$AGENT_BIN" workflow-install --comfy-url "$COMFY_URL" \
-  --workflow-source /absolute/path/to/workflow_editor.json \
-  --workflow-name "Local MPS test" --publish-to-comfyui --data "$AGENT_DATA"
+python3 "$HOME/Downloads/mymovie-client-mac/mymovie_local.py" \
+  --comfy-root "$HOME/Downloads/ComfyUI-mymovie-mps" \
+  --python "$HOME/Downloads/ComfyUI-mymovie-mps/.venv/bin/python" \
+  --data "$HOME/Downloads/mymovie-local-mps" \
+  --port 8191 --relay-port 8789 --node-id local-mps-0 --allow-console
 ```
 
-Compilation of ordinary editor JSON also requires the agent's compiler helper,
-Python compiler requirements, and Playwright Chromium. Follow the
-[compiler setup](WORKFLOW_SETUP.md#compiler-prerequisites-mac-or-linux) before
-testing `workflow-compile`. `workflow-install` publishes the original editor
-workflow to the chosen ComfyUI library; it does not replace the active canvas
-or submit a job.
+Keep this terminal running. It waits for ComfyUI and agent registration before
+printing Ready. Ctrl+C stops its owned processes. Logs and private credentials
+are saved in `mymovie-local-mps/`; repeated starts reuse the same pair.
+`--allow-console` enables the private interactive terminal and custom setup
+scripts. Use it only with a private token pair. The supervisor generates one;
+it does not use the notebooks' shared demonstration defaults.
 
-### Full Studio agent, setup and console path
+In Studio → Instances, add a relay connection:
 
-This path exposes the relay, not the ComfyUI port. Use it only for a temporary
-local test session; the temporary tunnel address changes after it stops.
+- Relay: `http://127.0.0.1:8789`.
+- Node ID: `local-mps-0`.
+- Desktop token: the `MYMOVIE_DESKTOP_TOKEN` value in
+  `$HOME/Downloads/mymovie-local-mps/tokens.json`. Read it locally; do not post it.
+- Cloudflare polling: off for this localhost connection.
 
-1. In Studio → Settings → Node access, create a **private**, distinct desktop
-   token and agent token (at least 24 characters). Do not use the shared
-   predefined test pair for the console. Keep the values in the OS vault.
-2. In one terminal, start the relay on loopback port `8789`. Enter the same
-   private values when prompted; they are not saved in shell history:
+The agent uses the other token automatically. The desktop never sends the agent
+token as its own credential. ComfyUI's optional browser UI remains
+`http://127.0.0.1:8191/`.
 
-   ```sh
-   cd /path/to/auteur
-   export MYMOVIE_RELAY_BIND=127.0.0.1:8789
-   export MYMOVIE_NODE_IDS=local-mps-0
-   printf 'Private desktop token: '; read -r -s MYMOVIE_DESKTOP_TOKEN; printf '\n'; export MYMOVIE_DESKTOP_TOKEN
-   printf 'Private agent token: '; read -r -s MYMOVIE_AGENT_TOKEN; printf '\n'; export MYMOVIE_AGENT_TOKEN
-   cargo run --release -p mymovie-relay
-   ```
+Predefined public test tokens do not access Keychain. This supervisor creates a
+private pair instead: save its desktop token when adding the connection. After
+relaunch, explicitly **Check connection** to unlock its saved credential for
+monitoring and background work. **Settings → Node access → Load saved private
+tokens** is needed only to retrieve a custom saved pair; browsing Studio does
+not request it.
 
-3. In a second terminal, start a Cloudflare Quick Tunnel to the loopback relay:
+## 4. Test the complete app path without a Movie
 
-   ```sh
-   brew install cloudflared
-   cloudflared tunnel --url http://127.0.0.1:8789
-   ```
+1. Workflows → Examples → **Use** the weight-free mask canary.
+2. Select `local-mps-0`, Setup → Initialize. Inventory checks this runtime;
+   installation/preparation progress is available in Activity after closing the
+   modal. This example needs no model download.
+3. Configure inputs → Add to queue. Jobs → Scheduled: select the task and
+   **Run selected**. Merely adding it must not start it.
+4. Confirm completion in Jobs, Renders and Library. These views remain usable
+   after closing a Movie or restarting Studio. Clear finished retains media.
+5. Instances → Terminal. Type directly: history, Tab, paste, Ctrl+C and resize
+   work through a PTY. Closing detaches; reopening reconnects to the same shell.
+6. Open or close a Movie while a job or initialization runs. Global activity
+   must continue. Attach an existing Library asset to a Movie; use Collect when
+   preparing a portable package.
 
-   Copy the printed `https://…trycloudflare.com` address. Do not tunnel port
-   `8191`, `8192`, or ComfyUI's `8188`.
-4. In a third terminal, start the local agent. Enter the private agent token
-   again at the prompt. Use `COMFY_URL` and `COMFY_ROOT` for the chosen instance.
-   Add `--allow-console` only for this private test pair:
+For a model-download test, use the SD 1.5 starter on compatible hardware and
+review its exact download size/license first. CUDA-only workflows need CUDA;
+choosing a Mac node does not convert their graphs or precision requirements.
+Each workflow can include hardware variants and Check / Install / Verify steps.
+Checks rerun before installing; successful verified receipts avoid unnecessary
+reinstallation. Predefined variables include `COMFYUI_DIR`, `COMFYUI_PYTHON`,
+`MODELS_DIR`, `CUSTOM_NODES_DIR`, `WORKFLOW_DIR` and `CACHE_DIR`. Keep downloads
+and plugin commands in the workflow setup, not in notebook bootstrap cells.
 
-   ```sh
-   cd /path/to/auteur
-   export COMFY_URL=http://127.0.0.1:8191
-   export COMFY_ROOT="$HOME/ComfyUI-mymovie-mps"
-   export AGENT_BIN="$PWD/target/release/mymovie-agent"
-   export AGENT_DATA="$HOME/Library/Application Support/MyMovie/local-mps-agent"
-   printf 'Private agent token: '; read -r -s MYMOVIE_AGENT_TOKEN; printf '\n'; export MYMOVIE_AGENT_TOKEN
-   "$AGENT_BIN" serve --comfy-url "$COMFY_URL" \
-     --relay https://YOUR-QUICK-TUNNEL.trycloudflare.com \
-     --node-id local-mps-0 --data "$AGENT_DATA" \
-     --comfy-root "$COMFY_ROOT" --python "$COMFY_ROOT/.venv/bin/python" \
-     --runtime-helper "$PWD/deploy/runner/mymovie_runtime.py" \
-     --managed-runtime --allow-console
-   ```
+For your own workflow, open **Guide → Edit dependencies** (or **Setup**). Add or
+edit a pinned model/plugin, set its HTTPS source and relative destination, and
+review its checksum, size and license. **Open source** opens that URL in your
+browser. Models resolve under `$MODELS_DIR/<category>/<relative filename>`;
+plugins under `$CUSTOM_NODES_DIR/<relative directory>`. The editor previews the
+destination before saving. Examples remain immutable; create an editable copy
+to change their dependencies.
 
-   Keep the same agent binary, helper files, and repository checkout available.
-   This MPS agent can use the Mac filesystem to install reviewed files into the
-   fresh MPS root. The OrbStack CPU container can use direct ComfyUI actions;
-   for managed setup there, run a Linux agent inside its Linux runtime, mount
-   its actual ComfyUI root, assign node ID `local-cpu-0`, and add that ID to
-   `MYMOVIE_NODE_IDS` before restarting the relay.
-5. In Studio → Connections, add a **Private runner** using the temporary HTTPS
-   relay URL, the exact node ID, and the private desktop token. Turn on
-   **Temporary Cloudflare tunnel · polling only**. Confirm the node is online.
-6. Select that agent node in the workflow's setup modal. Run Inventory, review
-   dependencies, then Initialize. Start with a workflow whose required models
-   and plugins are already installed. The setup helper is limited to its
-   reviewed dependency records; it is not an unrestricted remote shell.
-7. Test Activity progress/reconnect/cancel on a setup with safe, small
-   dependencies; open and close the remote console; prepare a workflow; queue
-   and run a minimal job; confirm its result appears in Renders/Library. Stop
-   the agent, tunnel, and relay when done. A fresh Quick Tunnel URL needs to be
-   copied into Connections again.
+**Prepare workflow** on a direct ComfyUI connection shows preparation progress
+but cannot install files or provide agent logs. Its **Set up local agent**
+button opens this guide. Select the relay-backed instance for **Initialize**,
+review dependencies, then **Install & prepare**. Activity retains stage/log
+progress across navigation and provides reconnect/cancel controls.
 
-If the local agent reports that the runtime is external/read-only, use the
-direct workflow commands above for that node. Do not enable managed installation
-on an existing personal ComfyUI root. Keep agent initialization pointed at the
-fresh test root so any reviewed plugin/model changes stay isolated.
+## OrbStack Linux CPU node
 
-## Test matrix
+Run these steps **inside** the OrbStack Linux VM, with its matching Linux agent
+archive extracted to `$HOME/mymovie-client`. This exercises the actual Linux
+filesystem and agent, rather than a Mac agent pointing at a forwarded server.
 
-| Test | OrbStack CPU (`8192`) | Mac MPS (`8191`) |
-| --- | --- | --- |
-| Connect and read node registry | Yes | Yes |
-| Import/prepare editor and API workflows | Yes, if dependencies exist | Yes, if dependencies exist |
-| Run weight-free mask canary | Yes | Yes |
-| Apple Silicon/MPS model workflow | No | Yes, if its nodes/weights support MPS |
-| CUDA workflow | No | No |
-| Agent inventory/install/progress/console | Yes, with a Linux agent inside the container | Yes, via local Mac agent + relay |
+```sh
+sudo apt-get update
+sudo apt-get install -y python3 python3-venv python3-pip git
+cd "$HOME"
+git clone https://github.com/Comfy-Org/ComfyUI.git ComfyUI-mymovie-cpu
+python3 -m venv "$HOME/ComfyUI-mymovie-cpu/.venv"
+"$HOME/ComfyUI-mymovie-cpu/.venv/bin/python" -m pip install \
+  torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+"$HOME/ComfyUI-mymovie-cpu/.venv/bin/python" -m pip install \
+  -r "$HOME/ComfyUI-mymovie-cpu/requirements.txt"
+python3 "$HOME/mymovie-client/mymovie_local.py" \
+  --comfy-root "$HOME/ComfyUI-mymovie-cpu" \
+  --python "$HOME/ComfyUI-mymovie-cpu/.venv/bin/python" \
+  --data "$HOME/mymovie-cpu-data" --cpu --port 8192 \
+  --relay-port 8790 --node-id local-cpu-0 --allow-console
+```
 
+Use a Linux archive matching `uname -m`. In another **Mac terminal**, forward the
+relay over OrbStack SSH (substitute your actual VM alias):
+
+```sh
+ssh -N -L 8790:127.0.0.1:8790 debian.orb.local
+```
+
+Connect Studio to `http://127.0.0.1:8790`, node `local-cpu-0`, using that VM's
+desktop token. Keep both processes running. No Cloudflare is required locally.
+Use the mask canary on CPU. Mac MPS GPU acceleration is unavailable inside this
+Linux VM. Production remote nodes can instead use `--relay https://your-relay`
+with matching private credentials and an allowed node ID on that relay.
+
+## Troubleshooting
+
+- Not Ready: inspect `comfyui.log`, `agent.log`, `relay.log` in the data folder.
+- Address in use: stop the previous standalone test process or choose two unused
+  distinct ports; do not stop your personal ComfyUI instance on 8188.
+- Terminal/script capability missing: use the matching agent build, private
+  credentials and `--allow-console`; reconnect the app to the relay connection.
+- Initialization read-only: restart this fresh test root under the supervisor
+  instead of attaching to an unrelated existing process.
+- Cloudflare notebook: enable Temporary Cloudflare tunnel · polling only. The
+  root path may return 404. Test the authenticated `/v1/nodes/<node-id>` endpoint
+  with the desktop token; never expose tokens in screenshots or shared logs.

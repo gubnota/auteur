@@ -1,6 +1,14 @@
 # Generation acceptance — current main
 
-Date: 2026-10-14. Checks below distinguish published 0.1.6 from current 0.1.11. Publication is recorded in CI_RELEASES. No paid cloud jobs were submitted by the agent.
+Current source: 0.1.20, 2026-10-15. Historical entries below retain their original scope. Publication is recorded in CI_RELEASES. No paid cloud jobs were submitted by the agent.
+
+## 0.1.20 local agent acceptance
+
+- An isolated managed MPS ComfyUI on 127.0.0.1:8193 used an authenticated loopback relay on 8793. Existing user instances on 8188/8191 were left alone. The test supervisor generated private local credentials; none are included here.
+- Live CPU/RAM/unified-memory telemetry, PTY creation/resize/input/output/close and two guided initialization runs passed. The recipe exercised Check/Install/Verify and reuse. Initialization canaries required no model/plugin download.
+- Agent generation of a 64×64 solid-color image passed. The desktop-side test pulled 393 PNG bytes through the authenticated relay and checked the PNG signature and SHA256 `66c0fa98c650b8e4874c17e727df8cc0fedf3469171d061dab53e99b07927a39`.
+- A regression fixes readiness invalidation caused by changing free RAM/VRAM, retaining hardware identity/capacity checks. Passive credential access and public defaults have native regression coverage.
+- FLUX family import/guides/reference slots and global no-Movie flows use browser fixtures. No FLUX weights were downloaded; real FLUX, notebook GPU, S3 and paid cloud execution remain unverified. Finder Quick Look and native SSH remain pending.
 
 ## 0.1.11 retired hosted provider workflow upload contract
 

@@ -8,25 +8,20 @@
 - License: Apache-2.0 OR MIT; original license texts retained.
 
 ## Current milestone
-- Revised Phases 0–3 approved by user `go` on 2026-10-13.
-- Durable agent initialization, global Activity/cancel/reconnect, editable recipes, full-window private terminal and workflow Trash/Clear implemented; live private cloud acceptance remains open.
-- Background setup/console require matching 0.1.18 agent and relay; see docs/NODE_ACTIVITY.md.
-- Example setup requires matching 0.1.16 agent/supervisor; the last published agent remains v0.1.15 until a new release is built.
-- Current source: 0.1.19; designer wrappers, platform families, portable collections and selective queued-task control. Installation evidence is in TASK_LOG.
-- Published v0.1.15 includes the matching Linux agent/relay. CPU/GPU notebooks support unchanged Run all with shared test keys, pinned base ComfyUI, isolated Python, browser compiler and verified cloudflared; models/plugins remain app-initialized. Evidence: TASK_LOG and CI_RELEASES.
-- 0.1.19: full-screen auto-fit terminal; exact native graph preservation during metadata saves; shot reorder/removal; immediate example restore; direct ComfyUI prepare/import; version-labelled notebook export.
-- Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
-- Cold Finder opening and warm saved-project opening verified; startup abort fixed.
-- Real SQLite package persistence; browser preview is memory-only.
-- Native picker import, linked character reference and collection verified.
-- Scrollable/removable recents, Welcome navigation, filename ellipsis, posters and cast/asset usage links implemented.
-- Linux ARM64 utility ran in OrbStack Debian: immutable workflow publish/reuse and frontend API compilation passed against local CPU ComfyUI.
-- Weight-free local Docker ComfyUI HTTP/history/result canary passed.
-- Local two-instance setup guide covers OrbStack CPU on 8192 and fresh Apple Silicon MPS on 8191, plus direct and agent-backed checks: docs/LOCAL_COMFYUI_TEST.md.
-- Automated Finder file-drop acceptance remains unverified.
-- Full approval scope: docs/IMPLEMENTATION_PLAN.md.
-- Design sources: ignored drafts/index.html, index-alt.html and studio.html.
-- Export references are design data; drafts remain untracked and unmodified.
+- Approved global Studio plan: docs/GLOBAL_STUDIO_PLAN.md, 2026-10-15. Continue on main.
+- Current source: 0.1.20. No Movie required for workflows, generation, jobs, media, instances, search or settings.
+- App workspace SQLite owns global assets/workflows/drafts/history; Movies retain scenes/cast and reference shared media.
+- Migration is journaled by Movie identity/revision and receipt hash; historical pending jobs are quarantined, never resubmitted.
+- Opening/closing Movies leaves global dispatch, initialization and terminal sessions intact.
+- Immutable built-in examples: connection canary, SD1.5, tiny background removal, FLUX.3 T2I and two-reference I2I.
+- Each FLUX family bundles T4/RTX/Apple Silicon original graph variants, pins, scripts, guide and reference illustrations.
+- Portable bounded ZIP .mymovie-workflow; legacy JSON import retained; no credentials or installations exported.
+- Managed local supervisor, private opted-in PTY, idempotent recipe steps, telemetry, global Activity/cancellation and search implemented.
+- Current runtime features require matching agent/relay/helper builds; old releases do not acquire source changes automatically.
+- Installed app and verification evidence: latest TASK_LOG entry. Native signing is local ad-hoc.
+- Public node test tokens bypass Keychain; passive background work never unlocks uncached private credentials. Explicit Check unlocks a private connection for the session.
+- Pending: live FLUX/cloud GPU generation, Finder Quick Look extension, native SSH transport and Telegram delivery.
+- Original design exports remain ignored in drafts/.
 
 ## Implemented stack
 - React 19, strict TypeScript, Vite and Tauri 2.
@@ -55,7 +50,7 @@
 - Collect is consolidation, not a separate ZIP/export-copy wizard.
 - Close a collected movie before copying the package to another machine.
 - Supported materials: allowlisted images, video, audio and safetensors LoRAs.
-- Workflows import separately and are stored inside the document.
+- Workflow packages import globally; Movies retain portable pins/references when used.
 
 ## Board and characters
 - Ordered episode/scene/shot lanes, editable names and empty-episode screen.
@@ -126,7 +121,7 @@
 - No credentials/private sessions/drafts in source, projects or diagnostics.
 - Conversation credentials were not used; use secure Settings entry instead.
 - Remote upload occurs only upon deliberate submission or sync.
-- No public unauthenticated ComfyUI exposure or arbitrary remote shell.
+- No public unauthenticated ComfyUI exposure. Private PTY/scripts require explicit agent opt-in.
 - Reference repositories stay read-only.
 - No fabricated ownership, node availability, model origins or prices.
 - No paid resources used. Authorized safe local MPS FaceSwap and weight-free mask execution passed; cloud acceptance remains pending.
@@ -159,7 +154,7 @@
 
 ## Workflow catalogue milestone
 - Approved scope: docs/WORKFLOW_CATALOGUE_PLAN.md.
-- Immutable local catalogue; each movie pins portable versions and remembers targets/layouts.
+- Immutable application catalogue; Movies reference portable versions. Global drafts remember targets/layouts.
 - Original editor JSON retained; selected frontend exports API in an isolated compiler context.
 - Compiler requires Python/Playwright/Chromium; instructions: docs/WORKFLOW_SETUP.md.
 - Target profiles carry source/API/registry/frontend hashes; dispatch checks current registry.

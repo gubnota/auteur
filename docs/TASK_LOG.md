@@ -1,5 +1,14 @@
 # Task Log
 
+## 2026-10-15 — Global Studio and agent setup, 0.1.20
+
+- Implemented the approved GLOBAL_STUDIO_PLAN: global workflows, instances, generation, jobs and shared media work without a Movie. Movie migration preserves original documents and frozen history; movies reference shared resources. Global search, queue selection/status actions, shared render/library trash, instance monitoring and full-window interactive agent terminal are available.
+- Added portable compressed FLUX.3 T2I and two-reference I2I families with T4, RTX and Apple Silicon variants, original reference illustrations and pinned dependency recipes. Examples remain immutable; editable copies expose named input/output bindings and ordered initialization scripts.
+- Dependency source buttons open through the native bridge. Setup edits source URL, pinned verification and relative model/plugin destination, displaying the resolved path. Direct ComfyUI preparation has staged visible progress; agent installation retains logs, progress, cancellation and reconnect in Activity. A local-agent guide is available in the setup dialog and LOCAL_COMFYUI_TEST.md.
+- Public test defaults and passive monitoring no longer access Keychain; private credentials unlock through an explicit connection check. Free RAM/VRAM changes no longer invalidate an otherwise initialized workflow.
+- Validation: 75 Rust workspace, 28 frontend and 63 Python tests passed. Browser acceptance covered 34 scenarios; a stale direct-preparation label assertion was corrected and all 15 workflow scenarios passed on rerun. Local isolated MPS ComfyUI on 8193 passed private PTY, metrics, initialization twice and weight-free generation with authenticated PNG collection (393 bytes, SHA256 66c0fa98c650b8e4874c17e727df8cc0fedf3469171d061dab53e99b07927a39). User instances on 8188/8191 were preserved.
+- EN/RU/FR documentation, compact context and screenshots updated. Rebuilt, ad-hoc signed and installed /Applications/MyMovie Studio.app 0.1.20; strict signature verified. Native relaunch confirmed global mode, source buttons and direct preparation/local-agent guidance, without a Keychain prompt. Temporary verification supervisor stopped; user ComfyUI processes preserved. Live FLUX model execution on cloud GPUs, native SSH transport, Finder Quick Look and Telegram delivery remain pending; no paid generation, release/tag or publication performed.
+
 ## 2026-10-15 — CPU notebooks, workflow trash cleanup and full-window console
 
 - Approved continuation on main, including requested CPU instances. Colab/Kaggle DEVICE=auto chooses available CUDA workers or one CPU worker; explicit cpu/cuda modes supported. CPU runs ComfyUI with --cpu, skips NVIDIA checks and uses a cpu0 node identity. Runtime cache markers include device mode. Kaggle dual GPUs remain independent workers, without pooled memory.

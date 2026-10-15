@@ -20,7 +20,8 @@
 - lib/job-inputs.ts / job-inputs.test.ts: typed input resolution/readiness.
 - features/Connections.tsx: endpoint types, credentials, runtime/storage settings.
 - components/RunnerTokens.tsx / lib/node-auth.ts: shared token fields, notebook config copy, explicit temporary-relay URL validation.
-- src-tauri/src/service/runner_tokens.rs: atomic OS-vault pair with public-default fallback.
+- src-tauri/src/service/runner_tokens.rs: vault-free public defaults; explicit private-pair load/save.
+- components/SourceLink.tsx: validated native HTTPS source opening; WorkflowSetup previews managed relative destinations.
 - deploy/node-auth.defaults.json: public test defaults shared by UI, native and notebook generation.
 - features/PromptAssistant.tsx: optional provider prompt assistance.
 - components/Controls.tsx: styled controls, modal pickers and dialogs.
@@ -142,3 +143,14 @@
 - Board.tsx: shot drag/up/down and confirmed removal; Library/catalogue: archived example restoration.
 - BackgroundActivity.tsx: dark full-window terminal, native full-screen toggle and automatic PTY sizing.
 - NotebookDownload.tsx / service `export_notebook`: version-labelled bundled CPU/GPU notebooks saved from Connections/Setup.
+
+## Global Studio (0.1.20)
+- service/workspace.rs: application resource store, journaled Movie migration, frozen history context and shared-asset attachment.
+- project-core open_workspace/save_metadata: global SQLite independent from Movie package projections; exact native graphs stay authoritative.
+- App.tsx/global-search.tsx/global-workspace.css: always available shell, optional Movie, cross-resource search, activity and queue layout.
+- components/AgentTerminal.tsx/NodeMetrics.tsx: modal-mounted xterm PTY, resize/reconnect and stale-aware telemetry.
+- agent/src/metrics.rs and deploy/runner/mymovie_metrics.py: bounded CPU/RAM/NVIDIA/Apple sampling.
+- deploy/runner/mymovie_local.py: private local relay+agent+managed ComfyUI supervisor; separate ports, no agent listener.
+- examples/flux3/: six preserved designer graphs, exact model pins, recipes, refs and two compressed demo families.
+- workflow-core examples/export_demos.rs: rebuild family packages; bundle.rs owns bounded ZIP/hash validation.
+- e2e/global-workspace.e2e.ts: zero-Movie navigation, search and instance onboarding.

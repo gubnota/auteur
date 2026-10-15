@@ -76,9 +76,9 @@
 - Verified Linux x86_64 archive; current CI bundles mymovie-agent, mymovie-relay and runtime/compiler helpers. SHA256 required before extraction; bounded, architecture-validated binaries.
 - Notebook defaults to local authenticated relay on custom RELAY_PORT, agent → loopback relay and cloudflared → relay only. ComfyUI stays loopback. Stop owns relay/tunnel/agents/managed servers; Attach leaves an existing ComfyUI alive.
 - Temporary trycloudflare.com addresses require explicit desktop polling selection; desktop uses REST polling, without SSE. Session/tunnel changes require new address/node IDs.
-- get_runner_tokens() -> {MYMOVIE_AGENT_TOKEN, MYMOVIE_DESKTOP_TOKEN}; save_runner_tokens({tokens}) -> void. Distinct 24–512 printable ASCII characters, no spaces. Atomic OS vault entry runner-token-pair; only a missing entry falls back to public test defaults.
+- get_runner_tokens({saved?:bool}) -> {MYMOVIE_AGENT_TOKEN, MYMOVIE_DESKTOP_TOKEN}; defaults load without vault access. Only explicit saved=true retrieves the private runner-token-pair. save_runner_tokens({tokens}) writes custom pairs atomically; saving public defaults needs no vault. Distinct 24–512 printable ASCII characters, no spaces.
 - deploy/node-auth.defaults.json is the single public, user-selected test pair, embedded into UI/native and generated notebook configuration. Optional env/Secrets overrides are commented out. Custom pairs never enter settings/project JSON or logs.
-- New notebook connections store only the desktop token in their connection vault entry; agents receive only the agent token. Updating global defaults does not rotate existing connections; edit those credentials explicitly.
+- Connections using public defaults store a connection:<id>:test-default marker, not a vault item. Custom desktop tokens use a connection vault reference and process-local cache; agents receive only the agent token. Passive health/jobs/initialization polling never unlocks an uncached credential; explicit Check/Initialize unlocks it for this session. Updating global defaults does not rotate existing connections.
 
 ## Release artifact contract (v0.1.5)
 - Desktop targets: macOS aarch64/x86_64 DMG; Windows x64 MSI/NSIS EXE; Linux x86_64/aarch64 DEB/AppImage.
@@ -193,3 +193,13 @@
 ## Notebook export (0.1.19)
 - `export_notebook(host: colab|kaggle, path: .ipynb)` writes the bundled notebook atomically; no runtime/credential installation occurs. UI filenames include app version. Notebook `NOTEBOOK_VERSION` must match package version.
 - Terminal `resize` uses measured rows/columns in Fit window mode (20–300 columns, 5–120 rows), debounced 150 ms. Closing restores the prior native full-screen state without closing the remote session.
+
+## Global Studio (0.1.20)
+- get_workspace/save_workspace: application Project-compatible DTO with no Movie prerequisite. get_project/save_project: selected Movie only. close_project does not stop global workers.
+- workspace.sqlite owns global entities/receipts; movie_migrations journals source identity/revision/historyHash and stable workflow-ID mappings. Historical nonterminal submissions become unknown for reconciliation.
+- JobDraft.context may retain frozen Movie episode/character/prompt provenance; standalone generation requires none. Attach uses global source paths; Collect materializes linked originals for portability.
+- ZIP .mymovie-workflow: manifest + collection JSON, SHA256, <=20 MiB archive/16 MiB collection. All family variants exported together; complete graphs retained. Legacy schema-1 JSON accepted.
+- WorkflowWrapper.sampleMedia defaults []: nodeId/input/name/label/sha256/image. Up to 8 PNG data URLs, <=4 MiB each, validated digest; content-addressed import reuses existing assets.
+- Metrics: sampledAt, cpuPercent?, ramUsedBytes?, ramTotalBytes?, memoryKind, gpus[]. No reading is represented as an unavailable sample, never fabricated zero utilization.
+- Console lifecycle: open/reuse private session; input/resize/close ordered; detach preserves session. Input is never replayed after transport errors.
+- Local supervisor ports: ComfyUI 8191, relay 8789, agent no inbound listener. Private tokens persisted 0600; custom scripts and console opt in.

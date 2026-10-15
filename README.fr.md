@@ -1,6 +1,8 @@
 # MyMovie Studio
 
-Version 0.1.19 : terminal sombre occupant toute la fenêtre, **Enter full screen** et dimensionnement automatique **Fit window**. Glisser, déplacer ou supprimer les plans avec confirmation. Renommer images clés/personnages préserve les graphes importés exacts. Restaurer immédiatement les copies des exemples ; choisir une instance dans Setup pour préparer/importer vers ComfyUI avec dépendances déjà installées. Connections/Setup exporte un notebook CPU/GPU avec version : importer une copie neuve et exécuter Run all. L’agent installe les dépendances manquantes. La validation cloud réelle reste à effectuer.
+Version **0.1.20** : Workflows, Generate, Jobs, Library, Renders, Instances, Search et Settings fonctionnent sans film ouvert. Le film ajoute storyboard et personnages ; sa fermeture conserve les ressources et les tâches globales. Le terminal accepte la saisie directe ; l’agent affiche CPU, RAM et mémoire GPU.
+
+Nouveaux exemples immuables : **FLUX.3 Klein T2I et I2I à deux références**, avec variantes T4, RTX et Apple Silicon dans chaque paquet compressé. Choisir la variante avant l’initialisation. [Exemples et dépendances](docs/WORKFLOW_EXAMPLES.md), [installation locale de l’agent](docs/LOCAL_COMFYUI_TEST.md). L’agent télécharge les modèles ; FLUX exige l’acceptation de sa licence et une authentification Hugging Face sur le nœud. La génération FLUX et le test GPU cloud restent à valider.
 
 **Démarrage Colab :** ouvrir le [notebook actuel](https://colab.research.google.com/github/gubnota/auteur/blob/main/deploy/colab/MyMovie_ComfyUI.ipynb), connecter un CPU ou GPU et choisir **Run all**, sans modification. Clés de test préremplies, agent/relay vérifiés, version figée de ComfyUI, navigateur d’import et cloudflared sont installés automatiquement. Copier l’adresse relay et l’ID du nœud dans Connections avec le polling du tunnel temporaire. Installer ensuite les modèles/plugins du workflow depuis Studio. Run all laisse le nœud actif ; l’arrêt est manuel. Les anciennes copies Drive ne se mettent pas à jour : rouvrir ce lien.
 
@@ -10,7 +12,7 @@ Version 0.1.19 : terminal sombre occupant toute la fenêtre, **Enter full screen
 
 Un studio de cinéma portable pour macOS : documents Finder `.mymovie`, épisodes et storyboard, personnages et médias partagés, workflows ComfyUI réutilisables et tâches traçables.
 
-Version des sources/de l’application : **0.1.18**. Les [téléchargements v0.1.15](https://github.com/gubnota/auteur/releases/tag/v0.1.15) incluent l’agent Linux et son relay correspondant. Commitez les versions avant de créer le tag correspondant ; git add prépare seulement les changements. La compilation locale macOS utilise une signature ad-hoc ; notarisation et validation sur les autres plateformes restent à faire.
+Version des sources/de l’application : **0.1.20**. Les [téléchargements v0.1.15](https://github.com/gubnota/auteur/releases/tag/v0.1.15) incluent l’agent Linux et son relay correspondant. Commitez les versions avant de créer le tag correspondant ; git add prépare seulement les changements. La compilation locale macOS utilise une signature ad-hoc ; notarisation et validation sur les autres plateformes restent à faire.
 
 ## Parcours unique
 
@@ -33,6 +35,8 @@ Créer/ouvrir `.mymovie`, renommer épisodes/scènes et ordonner les images clé
 Schéma **v5** : mise à niveau explicite avec sauvegarde pour les anciens documents. Garder une copie complète pour une ancienne application.
 
 ## Initialisation du nœud
+
+**Guide → Edit dependencies** ouvre la source et le chemin relatif des modèles/plugins. **Open source** ouvre le navigateur ; le chemin final est affiché avant l’enregistrement. Une connexion directe montre la préparation ; l’installation et ses journaux nécessitent l’agent. Les jetons de test publics n’accèdent pas au trousseau. Pour les identifiants privés enregistrés, utilisez **Load saved private tokens** ou **Check connection**.
 
 **Workflows → Setup → Complete setup script** propose Mac/Linux/SSH, Colab et Kaggle. Choisir l’archive d’agent et son checksum vérifié, les chemins du ComfyUI et les dépendances modèles/LoRA/plugins/wheels épinglées. Un runtime géré installe les dépendances vérifiées, demande un redémarrage puis prépare le graphe API. La disponibilité exige une vérification et un canary dans la session courante ; un ancien fichier marqueur ne suffit pas.
 
@@ -65,5 +69,5 @@ les workers Kaggle partagent les fichiers et sérialisent les modifications du r
 **Move to Trash / Restore** retire et restaure un workflow avec ses réglages. **Trash → Clear trash** vide la liste en conservant les graphes sources et l’historique des jobs. Le terminal occupe toute la fenêtre.
 Setup propose un **Initialization recipe** ordonné et modifiable. Le terminal agent
 et les scripts libres exigent des tokens privés et une activation explicite.
-[Guide](docs/NODE_ACTIVITY.md). Agent et relay **0.1.18** requis ; le dernier agent
+[Guide](docs/NODE_ACTIVITY.md). Agent et relay **0.1.20** requis ; le dernier agent
 publié reste v0.1.15. Mettre à jour le desktop ne met pas à jour le notebook.

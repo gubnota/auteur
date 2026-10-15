@@ -91,3 +91,11 @@
 - Console transport is separate from generation jobs, private and opted-in; helpers terminate descendants on lost parent pipes. Workflow Trash belongs to wrapper metadata and preserves receipts/assets.
 
 - Native project-core retains exact imported graphs and prepared profiles during desktop metadata saves; React owns editable names, board structure and wrapper metadata only. Direct ComfyUI preparation/publication reuses installed dependencies; dependency mutation remains agent-owned.
+
+## Application resources (0.1.20)
+- Global workspace owns workflows, instances, drafts, jobs and media. Movie storage owns scenes/cast/storyboard only; commands explicitly select the correct store.
+- Movie migration copies resources with provenance, reuses content hashes and never submits historical pending tasks. UI changes cannot rewrite native immutable graph versions.
+- Workflow definitions and hardware families are independent of node/session installations. Archive/restore applies to a whole family.
+- The local/notebook supervisor owns process restart. The agent is outbound-only; the relay is the desktop endpoint. Direct ComfyUI and native SSH are not agent capabilities.
+- MediaPicker and Renders resolve the same global asset identities. Example reference imports deduplicate across variants.
+- workflow-core owns portable ZIP integrity and family selection; storage-s3 owns bounded HTTPS redirects. Provider credentials never cross redirect origins.

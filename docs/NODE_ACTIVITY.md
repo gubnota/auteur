@@ -1,29 +1,29 @@
-# Background setup, recipes and remote console (0.1.18)
+# Background setup, recipes and remote console (0.1.20)
 
 ## Start and follow initialization
 
-1. Use an agent **and relay built from 0.1.18**, plus the current Colab/Kaggle
+1. Use an agent **and relay built from 0.1.20**, plus the current Colab/Kaggle
    notebook supervisor. Updating the desktop does not update a running notebook.
    The last published archive is v0.1.15; publish/install a matching verified
    artifact before testing these new controls on a remote GPU.
 2. Connections → connect the notebook's relay URL and worker ID. Temporary
    Cloudflare addresses require polling mode. The relay root is not a ComfyUI page.
-3. Workflows → open a movie copy → choose **Run and install on** → Setup →
+3. Workflows → Examples → Use → choose **Run and install on** → Setup →
    **Initialize on [instance]**. This checks and resolves dependencies without installing.
 4. Review the exact sources, destinations, sizes, hashes and licenses. Select
    **Install & prepare on [instance]** once. The relay persists an initialization
    operation; the agent owns installation, recipes, managed restart, preparation,
    publication and readiness verification. This does not run your generation graph.
-5. **Activity** is available across the app, including Welcome. Close the workflow
+5. **Activity** is available across the app, including global mode with no Movie. Close the workflow
    window or switch tabs freely. Activity shows stage, recent output, elapsed time,
    last contact, file bytes/total and observed transfer speed where available.
 6. Once ready, create a job, choose media, Add to queue, then Run selected in Jobs.
-   Outputs are collected into the movie's Library.
+   Outputs are collected into the global Library. No Movie is required.
 
 An identical active request on one node reconnects to its existing operation.
 A different initialization on that node is refused until the active one finishes
 or is canceled. **Reconnect** refreshes status; it never starts the scripts again.
-Completed preparations apply only to the same open movie, source, connection and
+Completed preparations apply only to the same global workflow, source, connection and
 unchanged wrapper. Changed forms are never overwritten by a late remote result.
 
 ## Cancel, disconnect and restart
@@ -123,4 +123,10 @@ GPU output collection with 0.1.18 still require a matching hosted artifact and r
 
 Connections → Connect notebook GPUs → **Save Colab/Kaggle notebook · 0.1.19** exports the bundled version-labelled notebook. Upload it as a fresh notebook, select a CPU or GPU runtime and Run all. Old Drive/Kaggle copies do not update automatically; GPU-only `gpu_indices()` errors or missing bootstrap imports indicate an older or partially executed copy. No models download at startup.
 
-Direct local/remote ComfyUI: Workflows → Run and install on → choose the instance → Setup → **Initialize on [instance]** checks the live registry, prepares the API and publishes an available original editor graph. Missing dependencies fail visibly; installing models/plugins or restarting requires an agent connection. Built-in examples remain reusable; movie copies can be trashed and restored immediately.
+Direct local/remote ComfyUI: Workflows → choose the instance → Setup → **Prepare workflow on [instance]** checks the live registry, prepares the API and publishes an available original editor graph with visible progress. Missing dependencies fail visibly; installing models/plugins or restarting requires an agent connection. **Set up local agent** opens the complete bundled guide. Built-in examples remain immutable; editable copies can be trashed and restored immediately.
+
+## Local supervisor and interactive terminal
+
+Use the complete [local installation guide](LOCAL_COMFYUI_TEST.md) for agent, relay, compiler and private-token setup. ComfyUI and relay have different ports; the agent has no listening port. Studio’s full-window terminal uses a PTY with direct typing, history, Tab, Ctrl+C, resize and session reconnect. Closing the view detaches instead of replaying input.
+
+CPU/RAM/NVIDIA samples are timestamped; stale samples are labelled. Apple Silicon displays unified memory instead of inventing dedicated VRAM. Workflows and instances remain available without opening a Movie.

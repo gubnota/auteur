@@ -260,3 +260,23 @@ Context: JavaScript normalizes integral floats and can round large integers in i
 Decision: Desktop metadata saves retain native-owned source graphs, hashes and prepared profiles for the same immutable workflow identity/version. Explicit native workflow operations still own import and preparation.
 Consequences: Names/board/wrapper changes persist without rewriting source numeric values; revision and identity checks remain mandatory. Terminal uses available viewport height and a reversible native full-screen toggle; bundled version-labelled notebooks replace stale notebook copies.
 Related files: crates/project-core/src/lib.rs; desktop/src-tauri/src/service.rs; BackgroundActivity.tsx; NotebookDownload.tsx.
+
+# ADR-0027: Application-owned Studio and complete compressed workflow variants
+
+Date: 2026-10-15
+Status: Accepted
+
+Context: Movie-scoped resources blocked standalone generation and ephemeral-node reuse. Hardware variants alter graph structure as well as weights.
+Decision: Use app-owned SQLite resources and optional Movie context; migrate with provenance and no historical replay. Package full immutable family graphs in a bounded ZIP rather than positional JSON patches. Reuse sample media by digest. Agent remains outbound to an authenticated relay; managed supervisors own restart.
+Consequences: Movie switches preserve jobs/media/nodes. Bundles are self-contained without base graph dependencies. Readiness remains per node/session. Gated models need node-local access; compatible ComfyUI core is explicit. Finder thumbnail extension and native SSH are separate pending work.
+Related files: GLOBAL_STUDIO_PLAN.md; service/workspace.rs; workflow-core/src/bundle.rs; examples/flux3; deploy/runner/mymovie_local.py.
+
+# ADR-0028: Explicit vault access and stable readiness
+
+Date: 2026-10-15
+Status: Accepted
+
+Context: Passive monitoring prompted Keychain even when browsing; changing available unified memory invalidated an initialized instance.
+Decision: Public test tokens bypass the vault. Private credentials load only through explicit actions and are cached for the process; passive polling cannot unlock them. Runtime readiness excludes volatile free-memory measurements while retaining hardware identity and capacity.
+Consequences: Private connections need Check after relaunch to unlock monitoring. Memory consumption remains visible without invalidating setup. Dependency sources open through a validated native HTTPS command and destinations stay relative to managed roots.
+Related files: service.rs; service/runner_tokens.rs; service/jobs.rs; provision-core/src/lib.rs; SourceLink.tsx; WorkflowSetup.tsx.
