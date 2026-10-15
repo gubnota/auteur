@@ -250,6 +250,30 @@ impl ProjectStore {
     pub fn save(&mut self, project: Project, expected_revision: u64) -> Result<Project> {
         self.save_inner(project, expected_revision, false)
     }
+    /// UI saves edit metadata; immutable source graphs and compiled profiles stay native-owned.
+    /// JavaScript cannot round-trip all JSON numbers without changing their representation.
+    pub fn save_metadata(
+        &mut self,
+        mut project: Project,
+        expected_revision: u64,
+    ) -> Result<Project> {
+        let old = self.read()?;
+        if project.workflows.len() != old.workflows.len() {
+            return Err("Use import commands to add or remove workflow versions".into());
+        }
+        for w in &mut project.workflows {
+            let original = old
+                .workflows
+                .iter()
+                .find(|x| x.id == w.id && x.version == w.version)
+                .ok_or("Imported workflow identity is immutable")?;
+            w.graph = original.graph.clone();
+            w.editor_graph = original.editor_graph.clone();
+            w.editor_hash = original.editor_hash.clone();
+            w.profiles = original.profiles.clone();
+        }
+        self.save(project, expected_revision)
+    }
     fn save_inner(
         &mut self,
         mut project: Project,
@@ -501,6 +525,46 @@ pub fn validate(p: &Project) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn metadata_save_keeps_exact_graphs_while_allowing_names_and_board_edits() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut store =
+            ProjectStore::create(tmp.path().join("film.mymovie"), "Film", true).unwrap();
+        let mut p = store.read().unwrap();
+        let w: Workflow = serde_json::from_str(&format!(r#"{{"id":"00000000-0000-4000-8000-000000000001","name":"Original","version":"{}","graph":{{"1":{{"inputs":{{"scale":1.0,"seed":9007199254740993}},"class_type":"Test"}}}},"editorGraph":{{"nodes":[{{"widgets_values":[1.0]}}]}},"editorHash":"{}","bindings":[]}}"#, "a".repeat(64), "b".repeat(64))).unwrap();
+        p.workflows.push(w.clone());
+        let mut p = store.save(p, 0).unwrap();
+        p.workflows[0].graph["1"]["inputs"]["scale"] = serde_json::json!(1);
+        p.workflows[0].graph["1"]["inputs"]["seed"] = serde_json::json!(9007199254740992_u64);
+        p.workflows[0].name = "Renamed wrapper".into();
+        p.name = "Renamed movie".into();
+        p.characters[0].name = "Renamed character".into();
+        p.episodes[0].scenes[0].shots[0].frames[0].name = "Renamed frame".into();
+        assert!(store.save(p.clone(), p.revision).is_err());
+        let saved = store.save_metadata(p.clone(), p.revision).unwrap();
+        assert_eq!(saved.workflows[0].graph, w.graph);
+        assert_eq!(saved.workflows[0].editor_graph, w.editor_graph);
+        assert_eq!(saved.workflows[0].name, "Renamed wrapper");
+        assert_eq!(saved.characters[0].name, "Renamed character");
+        assert_eq!(
+            saved.episodes[0].scenes[0].shots[0].frames[0].name,
+            "Renamed frame"
+        );
+        assert!(store.save_metadata(p, 1).is_err());
+        let mut wrong_version = saved.clone();
+        wrong_version.workflows[0].version = "c".repeat(64);
+        assert!(store.save_metadata(wrong_version, saved.revision).is_err());
+        drop(store);
+        assert_eq!(
+            ProjectStore::open(tmp.path().join("film.mymovie"))
+                .unwrap()
+                .read()
+                .unwrap()
+                .workflows[0]
+                .graph,
+            w.graph
+        );
+    }
     #[test]
     fn clear_workflow_trash_preserves_active_graphs_and_history() {
         let tmp = tempfile::tempdir().unwrap();
