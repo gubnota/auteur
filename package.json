@@ -8,13 +8,13 @@
     "packages/schema"
   ],
   "scripts": {
-    "dev": "npm run dev -w @mymovie/desktop",
-    "build": "npm run build -w @mymovie/desktop",
-    "typecheck": "npm run typecheck -w @mymovie/desktop",
-    "lint": "npm run typecheck",
+    "dev": "bun run --filter @mymovie/desktop dev",
+    "build": "bun run --filter @mymovie/desktop build",
+    "typecheck": "bun run --filter @mymovie/desktop typecheck",
+    "lint": "bun run typecheck",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "tauri:dev": "cd apps/desktop && tauri dev",
+    "tauri:dev": "node scripts/tauri-dev.mjs",
     "tauri:build": "cd apps/desktop && tauri build"
   },
   "devDependencies": {

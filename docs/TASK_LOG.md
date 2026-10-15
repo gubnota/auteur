@@ -1,5 +1,10 @@
 # Task Log
 
+## 2026-10-15 — Bun workspace scripts
+
+- Root `dev`, `build`, and `typecheck` target `@mymovie/desktop` with Bun's `--filter` syntax. The previous `npm run … -w` form was interpreted as recursive watch arguments, causing unbounded root-script recursion.
+- Validation: plain `bun run build` completes the desktop TypeScript check and Vite production bundle successfully.
+
 ## 2026-10-15 — Global Studio and agent setup, 0.1.20
 
 - Implemented the approved GLOBAL_STUDIO_PLAN: global workflows, instances, generation, jobs and shared media work without a Movie. Movie migration preserves original documents and frozen history; movies reference shared resources. Global search, queue selection/status actions, shared render/library trash, instance monitoring and full-window interactive agent terminal are available.
