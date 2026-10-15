@@ -11,6 +11,7 @@ import { workflowForTarget } from "../lib/job-inputs";
 import { Field, Picker, Toggle } from "./Controls";
 import { WorkflowTarget } from "./WorkflowTarget";
 import { WorkflowForm } from "./WorkflowForm";
+import { AgentWorkflowSetup } from "./AgentWorkflowSetup";
 import { WorkflowSetup } from "./WorkflowSetup";
 import { WorkflowReadme } from "./WorkflowReadme";
 const defaults: WorkflowWrapper = {
@@ -42,7 +43,7 @@ export function WorkflowEditor({
   saveForm: (bindings: Binding[], layout: WorkflowLayout) => Promise<void>;
   notify: (s: string) => void;
 }) {
-  const [tab, setTab] = useState("Inputs"),
+  const [tab, setTab] = useState(w.wrapper?.exampleId ? "Guide" : "Inputs"),
     [editGuide, setEditGuide] = useState(false);
   const meta = { ...defaults, ...w.wrapper };
   const family = meta.familyId || w.id;
@@ -97,6 +98,11 @@ export function WorkflowEditor({
   };
   return (
     <div className="workflow-editor">
+      {meta.exampleId && (
+        <p className="example-label">
+          Example · editable movie copy · illustration preview
+        </p>
+      )}
       <Field
         label="Workflow name"
         value={w.name}
@@ -210,6 +216,11 @@ export function WorkflowEditor({
         )}
         {tab === "Setup" && (
           <>
+            <AgentWorkflowSetup
+              workflow={w}
+              connection={connection}
+              prepare={prepare}
+            />
             <div className="editor-grid">
               <Field
                 label="Variant name"
@@ -259,6 +270,19 @@ export function WorkflowEditor({
               family. Every variant keeps separate requirements and node
               preparations.
             </p>
+            <Field
+              label="Python dependencies (one package==version per line)"
+              multiline
+              value={(meta.pythonPackages ?? []).join("\n")}
+              onChange={(value) =>
+                metadata({
+                  pythonPackages: value
+                    .split("\n")
+                    .map((v) => v.trim())
+                    .filter(Boolean),
+                })
+              }
+            />
             <WorkflowSetup
               workflow={w}
               connectionId={connection?.id ?? ""}

@@ -1984,3 +1984,21 @@ dd {
   line-height: 1.5;
   white-space: pre;
 }
+
+/* Workflow examples and guided agent setup. */
+.example-section { display: grid; gap: 1rem; padding-block: 1rem 1.5rem; border-bottom: 1px solid var(--line, #deded2); }
+.example-section h2, .agent-workflow-setup h3 { margin: 0; }
+.example-section .workflow-card { align-items: stretch; text-align: left; gap: .85rem; }
+.example-section .workflow-card p { font-size: .875rem; line-height: 1.5; margin: 0; flex: 1; }
+.example-label { display: inline-flex; align-self: flex-start; padding: .35rem .65rem; border-radius: .5rem; background: #e5f6c1; color: #253b1c; font-size: .75rem; font-weight: 650; }
+.catalogue-choice { gap: 1rem; align-items: flex-start; padding: 1rem; }
+.catalogue-choice img { width: 8rem; aspect-ratio: 16/9; border-radius: .65rem; object-fit: cover; flex-shrink: 0; }
+.catalogue-choice > span { min-width: 0; display: grid; gap: .5rem; }
+.agent-workflow-setup { display: grid; gap: 1rem; padding: 1.25rem; margin-block: 1rem; }
+.setup-steps { display: flex; flex-wrap: wrap; gap: .75rem 2rem; padding-left: 1.25rem; font-size: .85rem; }
+.setup-guide-note { padding: 1rem; margin-block: 1rem; background: #f1f2e9; border-radius: .75rem; }
+.setup-download-list { display: grid; gap: .75rem; max-height: 26rem; overflow: auto; padding: .2rem; }
+.setup-download-list article { display: grid; gap: .5rem; padding: 1rem; }
+.setup-download-list code, .setup-download-list p { overflow-wrap: anywhere; white-space: normal; margin: 0; }
+.setup-result { border-left: .2rem solid #779b42; padding: .75rem 1rem; background: #f0f7e4; }
+.agent-workflow-setup pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .75rem; max-height: 18rem; overflow: auto; }

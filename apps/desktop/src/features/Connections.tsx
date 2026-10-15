@@ -147,7 +147,14 @@ export function Connections({
     },
     [],
   );
-  const [reviewed, setReviewed] = useState<string | null>(null);
+  const [reviewed, setReviewed] = useState<{ key: string; id: string } | null>(
+    null,
+  );
+  const reviewKey = (c: Connection) =>
+    JSON.stringify([
+      c,
+      project.workflows.filter((w) => selected.includes(w.id)),
+    ]);
   const action = async (
     c: Connection,
     command: string,
@@ -155,6 +162,8 @@ export function Connections({
   ) => {
     try {
       const generation = ++operation.current;
+      const key = reviewKey(c);
+      if (command === "plan_deployment") setReviewed(null);
       let data = await call<Record<string, unknown>>(command, {
         connectionId: c.id,
         ...args,
@@ -190,8 +199,11 @@ export function Connections({
           command === "plan_deployment" &&
           !args.apply &&
           data.state === "completed"
-        )
-          setReviewed(`${c.id}:${selected.join(",")}`);
+        ) {
+          const report = data.report as { reviewId?: string } | undefined;
+          if (report?.reviewId && operation.current === generation)
+            setReviewed({ key, id: report.reviewId });
+        }
       }
     } catch (e) {
       notify(String(e));
@@ -370,9 +382,11 @@ export function Connections({
                     }
                   />
                   <button
+                    disabled={!selected.length}
                     onClick={() =>
                       void action(c, "plan_deployment", {
                         workflowIds: selected,
+                        guided: true,
                       })
                     }
                   >
@@ -381,23 +395,35 @@ export function Connections({
                   <button
                     className="primary"
                     disabled={
-                      reviewed !== `${c.id}:${selected.join(",")}` ||
-                      !selected.length ||
-                      !settings.storage.provisionProfile
+                      reviewed?.key !== reviewKey(c) || !selected.length
                     }
                     onClick={() =>
                       void action(c, "plan_deployment", {
                         workflowIds: selected,
+                        guided: true,
+                        reviewId: reviewed?.id,
                         apply: true,
                       })
                     }
                   >
                     Initialize reviewed workflows
                   </button>
+                  <button
+                    onClick={() =>
+                      void action(c, "runner_action", {
+                        action: "runtime-restart",
+                      })
+                    }
+                  >
+                    Restart managed ComfyUI
+                  </button>
                   <p className="muted">
-                    Inspect Inventory, save a pinned profile in Settings → App
-                    Runner, then review before installing missing files. A
-                    successful canary marks this session ready.
+                    Select workflows and review exact downloads before
+                    installation. Restart only when requested, then prepare
+                    inputs in Workflows and review again. A successful
+                    weight-free canary marks this session ready. Getting started
+                    examples include complete instructions in their Guide and
+                    Setup tabs.
                   </p>
                 </>
               )}

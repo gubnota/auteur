@@ -1,5 +1,22 @@
 # Task Log
 
+## 2026-10-15 — Illustrated workflow examples and agent setup, 0.1.16
+
+- Approved implementation on main: three built-in examples (weight-free connection/collection, SD1.5 T4 and tiny background removal), original illustrated previews, guides, exact dependency metadata and reusable editable movie copies. Portable wrappers preserve example identity and package pins.
+- Setup now reviews the selected workflow against the live agent, resolves a verified compatible binary-wheel closure, downloads pinned models/plugins, applies only the reviewed setup, and reports readiness/restart/preparation requirements. Reviews are bound to the session, runtime and exact workflow set; external ComfyUI remains read-only.
+- Notebook supervisor restarts only managed idle ComfyUI workers while agent/relay/tunnel stay running. Kaggle workers share verified storage/locks; interrupted installs and pending restarts cannot report ready. Agent artifacts include example metadata and matching helper/guide files.
+- Validation: 55 Python, 52 Rust workspace and 27 frontend unit tests passed; 18 mocked browser cases passed, with both example cases rechecked after final UI changes. Typecheck, production build, release-version parity and Rust formatting passed. No live cloud/GPU generation or remote dependency download claimed.
+- Built, ad-hoc signed and installed 0.1.16 at /Applications/MyMovie Studio.app; strict signature and installed version verified. Native disposable movie acceptance: all three previews visible, SD1.5 pinned once, illustrated Guide and Setup opened, Welcome/reopen retained the same editable copy. No generation submitted or personal movie edited.
+- Native screenshots: docs/screenshots/workflow-examples-native-0.1.16.png and workflow-example-guide-native-0.1.16.png; mocked setup screenshot separately labelled. EN/RU/FR READMEs and compact project memory updated.
+- Previous app preserved at /private/tmp/MyMovie Studio-0.1.15-before-0.1.16.app; personal movie backup at /private/tmp/123-before-0.1.16.mymovie. Temporary verification movie is /private/tmp/Studio 0.1.16 Verification.mymovie.
+- Guided remote setup requires the matching 0.1.16 agent artifact and current supervisor; the last published release remains v0.1.15. No release/tag published by this implementation. Notarization and live Colab/Kaggle roundtrip remain pending.
+
+## 2026-10-15 — Desktop notebook connection diagnostic
+
+- User reports their desktop script received HTTP 200 and `comfy.connected: true` through the temporary Colab relay. This establishes user-reported connectivity, not dependency initialization or GPU generation acceptance.
+- Added a standalone standard-library Python diagnostic to WORKFLOW_SETUP, with predefined public desktop-token fallback, optional environment override, exact authenticated node route, temporary-polling setup and HTTP troubleshooting. Linked it from EN/RU/FR README and the node guide; corrected obsolete manual notebook Secrets/bootstrap instructions.
+- Verification: documentation snippet compiled and exercised against a local mock for success, rejected token and missing node; public token checked against deploy/node-auth.defaults.json. No live cloud job, model download or installed-app update.
+
 ## 2026-10-15 — Run-all notebook setup (approved node-bootstrap scope)
 
 - Goal: unmodified GPU notebook with existing shared test keys; automatically install pinned base ComfyUI, verified cloudflared, release agent/relay and browser compiler; no model or workflow-plugin downloads until app initialization.

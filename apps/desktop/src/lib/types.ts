@@ -75,6 +75,8 @@ export interface WorkflowInput {
   hidden?: boolean;
 }
 export interface WorkflowWrapper {
+  exampleId?: string | null;
+  pythonPackages?: string[];
   familyId: string; variantName: string; collection: string; description: string; readme: string; illustration?: string | null; os: string; architecture: string; precision: string;
 }
 export interface WorkflowLayout {

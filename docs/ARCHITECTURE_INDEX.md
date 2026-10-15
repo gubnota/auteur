@@ -112,3 +112,13 @@
 - service/catalogue.rs: portable catalogue import/export and reusable forms.
 - scripts/tests/setup-script.test.ts: shell syntax/data quoting and archive guards.
 - docs/WORKFLOW_WRAPPERS.md: approved behavior, setup order and validation limits.
+
+## Guided examples (0.1.16)
+- workflow-core/src/examples.rs: stable built-in catalogue, original editor graphs, illustrated guides and exact artifact metadata.
+- examples/catalogue/ and scripts/generate-example-catalogue.py: reproducible previews, plugin archive, pinned SD model metadata.
+- components/AgentWorkflowSetup.tsx: reviewed dependency/install/restart/prepare/recheck sequence.
+- apps/agent/src/provision.rs: session-bound review receipts, shared execution/install locks and restart requests.
+- scripts/notebook-bootstrap.py: managed idle-worker restart supervisor; agents/relay/tunnel remain running.
+- deploy/runner/mymovie_runtime.py: platform wheel closure, public metadata verification and offline installation.
+- e2e/workflow-examples.e2e.ts and scripts/tests/: guided mock acceptance, archive contents and supervisor/runtime regressions.
+- docs/WORKFLOW_EXAMPLES.md: exact example dependencies, paths, licenses, setup sequence and acceptance limits.

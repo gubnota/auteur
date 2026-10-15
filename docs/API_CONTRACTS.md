@@ -162,3 +162,14 @@
 - for_setup permits validated immutable pending editor sources for dependency review; for_target rejects unprepared execution. Agent returns needs-restart or needs-preparation before readiness/canary.
 - Settings migration converts the retired provider kind to retired, retaining IDs/names/vault references. No generation adapter handles retired destinations.
 - Schema v5 upgrade backs up existing package database and manifest before migration; older apps cannot edit v5.
+
+## Guided example initialization (0.1.16)
+- WorkflowWrapper adds optional exampleId and default-empty pythonPackages (bounded exact name==version pins); older movie JSON defaults remain readable.
+- Built-in examples use stable UUIDs ending 0101/0102/0103; pinning reuses an existing movie copy. Portable export preserves only the known built-in rembg sourceRef exception.
+- plan_deployment accepts guided=true and optional reviewId. Guided mode derives requirements from the selected workflows instead of a legacy manually saved profile.
+- Review returns reviewId, profile, inventory, plan, managedRuntime, restartSupported and restartRequired. Apply must match the exact review, workflow digest, session and runtime fingerprint.
+- Initialization may return needs-restart or needs-preparation; neither permits generation. Only a prepared graph plus verified dependencies and a current-session canary establishes readiness.
+- runtime-restart is an allowlisted control action. Agent --supervisor uses UUID file requests; notebook supervisor supports restart-comfyui only and refuses busy/shared or unmanaged workers.
+- restart-required.json is written before plugin/wheel mutations and removed only after all managed workers become ready. runtime-epoch.json invalidates earlier attestations after restart.
+- Python dependencies resolve to a full binary wheel closure: exact version, HTTPS files.pythonhosted.org URL, public PyPI verified SHA256/size/license and native architecture. No arbitrary remote shell or source builds.
+- Agent manifests advertise guidedSetupVersion=1 and managedRestartVersion=1. Matching 0.1.16 binaries are required; local implementation does not imply hosted release or live GPU acceptance.

@@ -104,28 +104,106 @@ SSH. It verifies archive bytes and OS/architecture before invoking the typed uti
 Export the setup/profile files first where requested; the preview command does not install.
 
 For Colab/Kaggle, the modal provides the notebook Configure/start cells; it intentionally
-excludes the Stop cell. Install pinned ComfyUI and dependencies first following the
-[notebook guide](../deploy/runpod/README.md), upload the checked agent archive, configure
-its checksum and reachable authenticated relay URL, and add separate tokens in notebook
-Secrets. Kaggle uses independent processes/ports per GPU, without pooled memory.
+excludes the Stop cell. Open the current notebook from the
+[notebook guide](../deploy/runpod/README.md) and Run all with a GPU runtime. Its defaults
+install pinned base ComfyUI, the verified agent/relay and compiler, and cloudflared;
+the predefined test keys require no Secrets configuration. Models and workflow plugins
+are installed later from Studio. Kaggle uses independent processes/ports per GPU,
+without pooled memory.
 
-1. Connect the agent and inspect Inventory. Direct ComfyUI is read-only for filesystem setup.
-2. Save reviewed model/LoRA/plugin/offline-wheel metadata and a runtime profile.
-3. Review initialization, then apply on an isolated managed runtime. Pending original
-   editor sources may install their dependencies before they can be compiled.
-4. If plugins/wheels changed, stop the idle managed runner, restart, inspect the new runtime
-   fingerprint and update its pin. Existing jobs are not interrupted automatically.
-5. Prepare inputs against that node to compile the original source. `needs-preparation`
-   is not ready and does not run the canary. Re-export/review the prepared setup.
-6. Initialize and verify the weight-free canary for this session. An on-disk receipt reuses
-   verified files, but a new session/profile/runtime always needs fresh readiness verification.
-7. Assign media in Generate and Add to queue; select only intended tasks in Jobs to start.
+1. Connect the managed agent; choose an example in **Workflows → Examples · start here**.
+2. Open **Setup → Check node & review**. Inspect exact dependency sources, sizes,
+   licenses and actual destination paths. Python pins resolve into compatible binary wheels.
+3. **Initialize reviewed setup** installs the reviewed set. Verified files are reused;
+   pending original editor sources can install their dependencies before compilation.
+4. If requested, **Restart managed ComfyUI**. The relay/agent stay connected; both
+   Kaggle workers must be idle. Check and review the changed runtime again.
+5. **Prepare inputs** compiles the original source via the utility. Then **Check node &
+   review → Initialize reviewed setup** verifies a weight-free canary and collected bytes.
+6. Assign media in Generate and Add to queue; select only intended tasks in Jobs to start.
+
+See [illustrated examples and complete setup](WORKFLOW_EXAMPLES.md), including the
+matching agent build requirement and model/license details. Legacy manually prepared
+profiles remain supported. Guided reviews bind the current session, runtime and exact
+workflow set; changed selections require reviewing again.
 
 The **HTTPS address** belongs to the authenticated relay, not the notebook's 127.0.0.1.
 Deploy the relay behind HTTPS or expose it with a configured named tunnel. Put its origin
 and allowlisted worker ID in Connections. Keep ComfyUI private. Temporary Quick Tunnels
 support polling only and require the notebook's explicit opt-in. See the relay guide for
 its launch/configuration; no new ngrok utility is required.
+
+## Test the notebook connection from your desktop
+
+Keep the notebook running. Copy its current **Relay URL** and **Node ID** into
+**Connections → Colab / Kaggle**. For a `trycloudflare.com` address, enable
+**Temporary Cloudflare tunnel · polling only** before connecting. The Relay URL
+field takes only the base address, without `/v1` or the node path. The desktop
+token must match **Settings → Node access → MYMOVIE_DESKTOP_TOKEN** and the relay's
+configuration; the agent token is not used for this test.
+
+To test independently of Studio, save the following as `test_colab.py` on your
+desktop computer. It uses Python 3's standard library and the same predefined
+public test token as the app/notebook, so no packages or notebook variables are
+needed. For a custom token, set `MYMOVIE_DESKTOP_TOKEN` in your local environment
+to the value from Settings → Node access. Tokens belong in the Authorization
+header, never the URL.
+
+```python
+import argparse
+import os
+import urllib.error
+import urllib.request
+
+parser = argparse.ArgumentParser(description="Test a MyMovie notebook relay")
+parser.add_argument("relay_url", help="Current HTTPS relay origin, without /v1")
+parser.add_argument("node_id", help="Node ID printed by the running notebook")
+args = parser.parse_args()
+
+# Public test default shared with Studio and the notebook.
+token = os.environ.get(
+    "MYMOVIE_DESKTOP_TOKEN",
+    "gkBVLSAztmflyUU5JtWMQc_3owNVKFvNa2XztixRqbg",
+)
+request = urllib.request.Request(
+    f"{args.relay_url.rstrip('/')}/v1/nodes/{args.node_id}",
+    headers={"Authorization": f"Bearer {token}"},
+)
+try:
+    with urllib.request.urlopen(request, timeout=30) as response:
+        print("HTTP:", response.status)
+        print(response.read().decode())
+except urllib.error.HTTPError as error:
+    print("HTTP:", error.code)
+    print(error.read().decode(errors="replace"))
+except (urllib.error.URLError, TimeoutError) as error:
+    print("Connection failed:", error)
+```
+
+Run from your Mac/Linux terminal (replace both values with the current notebook
+output; temporary URLs and node IDs change between sessions):
+
+```sh
+python3 test_colab.py 'https://YOUR-CURRENT-ADDRESS.trycloudflare.com' 'YOUR-NODE-ID'
+```
+
+| Result | Meaning / next step |
+| --- | --- |
+| HTTP 200, `comfy.connected: true` | Desktop → tunnel → relay → agent → ComfyUI connectivity succeeds. Continue with Inventory → Review initialization → Initialize workflow. |
+| HTTP 200, `connected: false` or `state: offline` | Relay authentication succeeds, but the agent heartbeat is missing/stale. Check the notebook's running processes and logs. |
+| HTTP 200, `comfy.connected: false` | Agent reports that ComfyUI is unavailable. Check the worker process and its local port. |
+| HTTP 401, `Invalid authentication` | Use the desktop token matching the running relay. Changing Settings alone does not reconfigure an already running relay. |
+| HTTP 404, `Node missing` | Copy the current node ID; it must be in the relay's allowlist. |
+| HTTP 502 or Cloudflare error page | Check that the tunnel and local relay are still running and use the latest printed URL. |
+| DNS failure / timeout | Check connectivity and whether this temporary session/address still exists. |
+
+Opening `/` or `/v1` in a browser returns 404 because neither route exists.
+The real test is **GET `/v1/nodes/<node-id>`** with
+**`Authorization: Bearer <desktop-token>`**; opening that endpoint without the
+header returns 401. A successful health response confirms connectivity, not
+workflow dependencies, successful initialization or a completed GPU generation.
+The nested `comfy.initialization` description is not an initialization receipt;
+use the agent's Inventory and reviewed setup actions for filesystem installation.
 
 ## Portable paths and activation
 

@@ -2,9 +2,11 @@
 
 **Colab quick start:** open the [current notebook](https://colab.research.google.com/github/gubnota/auteur/blob/main/deploy/colab/MyMovie_ComfyUI.ipynb), connect a GPU runtime, and **Run all** unchanged. Predefined test keys, verified agent/relay, pinned ComfyUI, browser importer and cloudflared are set up automatically. Copy the printed relay URL/node ID into Connections with temporary-tunnel polling enabled. Models and workflow plugins are installed later from Studio. Run all leaves the node running; Stop is manual. Existing Drive copies must be reopened from this link to get updates.
 
+[Test the connection from your desktop](docs/WORKFLOW_SETUP.md#test-the-notebook-connection-from-your-desktop): copyable Python script, matching desktop token and HTTP troubleshooting. The relay has no homepage; `/` and `/v1` return 404.
+
 A portable film studio for macOS: Finder `.mymovie` packages, scenes and keyframes, shared characters and media, reusable ComfyUI workflows and traceable jobs.
 
-Current source/app version: **0.1.15**. [Published v0.1.15 downloads](https://github.com/gubnota/auteur/releases/tag/v0.1.15) include the Linux agent and matching relay. Commit version changes before creating a matching tag; staging alone does not update a tag. Local macOS builds use an ad-hoc signature; notarization and foreign-platform launch acceptance remain pending.
+Current source/app version: **0.1.16**. [Published v0.1.15 downloads](https://github.com/gubnota/auteur/releases/tag/v0.1.15) include the Linux agent and matching relay. Commit version changes before creating a matching tag; staging alone does not update a tag. Local macOS builds use an ad-hoc signature; notarization and foreign-platform launch acceptance remain pending.
 
 ## One workflow, many jobs
 
@@ -51,3 +53,13 @@ npm run tauri:build -- --bundles app
 [CI/release guide](docs/CI_RELEASES.md): GitHub Actions and `.gitlab-ci.yml` build macOS Apple Silicon, Windows x64 and Linux x86_64 desktops, plus Linux x86_64/macOS Apple Silicon agents with matching relays. GitHub also builds Linux ARM64 desktop; GitLab keeps that entry disabled. macOS Intel desktop/agent and Linux ARM64 agent entries are commented out. Notebooks automatically resolve public releases (including prereleases) and verify the archive checksum; custom uploads still require SHA256. Local Cloudflare mode requires a current relay-inclusive archive. Tags must match the source version. Windows outbound agents are not shipped.
 
 Persistent project memory: [context](docs/PROJECT_CONTEXT.md), [architecture](docs/ARCHITECTURE_INDEX.md), [contracts](docs/API_CONTRACTS.md), [task log](docs/TASK_LOG.md). English / [Русский](README.ru.md) / [Français](README.fr.md). License: Apache-2.0 OR MIT.
+
+## Example workflows
+
+**Workflows → Examples · start here** includes an illustrated connection test, SD 1.5
+T4 starter, and tiny background removal. Open a movie copy, then **Setup → Check node
+& review → Initialize reviewed setup** to install verified models/plugins and complete
+Python wheel sets through the agent. Managed ComfyUI can restart without restarting
+the relay; prepare inputs, review again, then explicitly queue/start jobs.
+See [examples and Colab/Kaggle setup](docs/WORKFLOW_EXAMPLES.md). Guided setup needs
+the matching 0.1.16 agent artifact; updating the desktop alone does not update a notebook.

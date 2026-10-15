@@ -564,6 +564,7 @@ export function Workflows({
   settings,
   update,
   onImport,
+  pin,
   onGenerate,
   prepare,
   notify,
@@ -581,6 +582,7 @@ export function Workflows({
   settings: AppSettings;
   update: Update;
   onImport: () => void;
+  pin: (id: string) => Promise<void>;
   onGenerate: (frameId: string, workflowId: string) => void;
 }) {
   const [selected, setSelected] = useState(""),
@@ -590,6 +592,15 @@ export function Workflows({
     ),
     [frameId, setFrameId] = useState(""),
     [mediaKind, setMediaKind] = useState("all");
+  const [examples, setExamples] = useState<import("../lib/types").Workflow[]>(
+    [],
+  );
+  const [pinning, setPinning] = useState("");
+  useEffect(() => {
+    void call<import("../lib/types").Workflow[]>("list_workflows")
+      .then((all) => setExamples(all.filter((v) => !!v.wrapper?.exampleId)))
+      .catch(() => {});
+  }, []);
   const w = p.workflows.find((w) => w.id === selected);
   return (
     <div className="col">
@@ -625,6 +636,61 @@ export function Workflows({
           onChange={setMediaKind}
         />
       </div>
+      {!!examples.length && (
+        <section className="example-section">
+          <h2>Examples · start here</h2>
+          <p>
+            Original illustrations · reusable workflows with step-by-step agent
+            setup. Choose a movie copy to open its guide and initialization
+            controls.
+          </p>
+          <div className="asset-grid">
+            {examples
+              .filter((v) => mediaKind === "all" || v.mediaKind === mediaKind)
+              .map((example) => {
+                const existing = p.workflows.some((v) => v.id === example.id);
+                return (
+                  <article className="panel workflow-card" key={example.id}>
+                    <img
+                      className="workflow-card-cover"
+                      src={example.wrapper?.illustration ?? ""}
+                      alt={`${example.name} illustration`}
+                    />
+                    <span className="example-label">
+                      Example · Illustration
+                    </span>
+                    <strong>{example.name}</strong>
+                    <p>{example.wrapper?.description}</p>
+                    <span className="compatibility-badge">
+                      {compatibilityLabel(example)}
+                    </span>
+                    <button
+                      className="primary"
+                      disabled={!!pinning}
+                      onClick={() => {
+                        if (existing) {
+                          setSelected(example.id);
+                          return;
+                        }
+                        setPinning(example.id);
+                        void pin(example.id)
+                          .then(() => setSelected(example.id))
+                          .catch((e) => notify(String(e)))
+                          .finally(() => setPinning(""));
+                      }}
+                    >
+                      {existing
+                        ? "Open movie copy"
+                        : pinning === example.id
+                          ? "Adding…"
+                          : "Use example"}
+                    </button>
+                  </article>
+                );
+              })}
+          </div>
+        </section>
+      )}
       {p.workflows.length === 0 ? (
         <Empty
           title="Bring your workflow"
@@ -632,8 +698,8 @@ export function Workflows({
             <button onClick={onImport}>Choose or import a workflow</button>
           }
         >
-          LTX and MINIMAX exports can be imported here. Availability is checked
-          against the selected server before submission.
+          Use an example above or import an original ComfyUI workflow.
+          Availability is checked against the selected server before submission.
         </Empty>
       ) : (
         <div className="asset-grid">
@@ -656,6 +722,9 @@ export function Workflows({
                   />
                 ) : (
                   <WorkflowIcon size={28} />
+                )}
+                {w.wrapper?.exampleId && (
+                  <small className="example-label">Example · movie copy</small>
                 )}
                 <strong>{w.name}</strong>
                 {w.wrapper?.collection && (

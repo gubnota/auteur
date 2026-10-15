@@ -34,7 +34,7 @@ export function WorkflowCatalogue({
           .map((w) => (
             <button
               key={w.id}
-              className="choice"
+              className="choice catalogue-choice"
               disabled={busy}
               onClick={() => {
                 setBusy(true);
@@ -44,8 +44,17 @@ export function WorkflowCatalogue({
                   .finally(() => setBusy(false));
               }}
             >
+              {w.wrapper?.illustration && (
+                <img src={w.wrapper.illustration} alt="Illustration" />
+              )}
               <span>
+                {w.wrapper?.exampleId && (
+                  <small className="example-label">
+                    Example · Illustration
+                  </small>
+                )}
                 <strong>{w.name}</strong>
+                <small>{w.wrapper?.description}</small>
                 <small>
                   {w.editorGraph ? "Editor workflow" : "API workflow"} ·{" "}
                   {w.version.slice(0, 12)} · {w.profiles?.length ?? 0} prepared

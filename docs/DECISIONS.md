@@ -220,3 +220,13 @@ Context: Shared test keys were present, but fresh notebooks still required manua
 Decision: Embed immutable base runtime pins from deploy/notebook-runtime.defaults.json, install in a separate session checkout/environment, verify cloudflared bytes, install the released compiler/browser, reuse healthy sessions and disable automatic shutdown cells. The agent receives the isolated interpreter.
 Consequences: Fresh setup takes minutes with visible stages and private logs. No model/workflow-plugin downloads or generation at startup; reviewed app initialization still owns those. Existing unrelated checkouts are preserved. Saved Drive/release notebook copies need reopening to receive source changes.
 Related files: scripts/notebook-bootstrap.py, scripts/generate-notebooks.py, scripts/tests/test_notebook_runtime.py.
+
+# ADR-0023: Illustrated examples and reviewed managed setup
+
+Date: 2026-10-15
+Status: Accepted
+
+Context: New notebook users need reusable examples with complete dependencies and app-driven setup without editing notebook cells for each workflow.
+Decision: Merge stable built-in examples into the catalogue; pin editable movie copies. Derive exact reviewed dependencies from the selected workflow set, resolve binary wheel closure against the active environment, and bind apply to session/runtime/workflow review identity. Only the notebook supervisor may restart its managed idle ComfyUI workers; invalidate readiness and prepare/check again afterwards.
+Consequences: Old movies remain readable. External ComfyUI stays read-only. New setup requires matching agent/supervisor artifacts; live cloud acceptance remains separate.
+Related files: crates/workflow-core/src/examples.rs; apps/agent/src/provision.rs; deploy/runner/mymovie_runtime.py; scripts/notebook-bootstrap.py; docs/WORKFLOW_EXAMPLES.md.

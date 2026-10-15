@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import type { Project, AppSettings } from "../../apps/desktop/src/lib/types";
+import type { Project, AppSettings, Workflow } from "../../apps/desktop/src/lib/types";
 
 export const project: Project = {
   id: "movie",
@@ -87,6 +87,7 @@ export async function openFixture(
   page: Page,
   movie = project,
   connections = settings,
+  options: { catalogue?: Workflow[]; setupReports?: unknown[] } = {},
 ) {
   // Intercept only the UI bridge: no native filesystem, credentials or provider calls.
   await page.route("**/@tauri-apps_api_webview.js*", (route) =>
@@ -108,12 +109,15 @@ export async function openFixture(
     export const native = true;
     let project = ${JSON.stringify(movie)};
     let settings = JSON.parse(sessionStorage.getItem("fixture-settings") ?? "null") ?? ${JSON.stringify(connections)};
-    let catalogue = structuredClone(project.workflows);
+    let catalogue = ${JSON.stringify(options.catalogue ?? movie.workflows)};
+    let setupReports = ${JSON.stringify(options.setupReports ?? [])}; let setupOperations = {};
     let runnerTokens = { MYMOVIE_AGENT_TOKEN: 'fixture-agent-'.repeat(3), MYMOVIE_DESKTOP_TOKEN: 'fixture-desktop-'.repeat(3) };
     let runs = []; let jobs = JSON.parse(sessionStorage.getItem("fixture-jobs") ?? "[]");
     let recents = Array.from({length: 12}, (_, i) => ({name: "Recent movie " + i, path: "/tmp/movie-" + i + ".mymovie", opened: "2026-10-14T10:00:00Z"}));
-    window.fixture = { submissions: [], enqueued: [], installs: [], thumbnails: [], setResults: results => { jobs.forEach((job, i) => { job.results = results[i] ?? []; job.state = "succeeded"; }); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, setJobStates: states => { jobs.forEach((job, i) => job.state = states[i]); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, jobHistory: () => jobs };
+    window.fixture = { setupCalls: [], movie: () => project, submissions: [], enqueued: [], installs: [], thumbnails: [], setResults: results => { jobs.forEach((job, i) => { job.results = results[i] ?? []; job.state = "succeeded"; }); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, setJobStates: states => { jobs.forEach((job, i) => job.state = states[i]); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, jobHistory: () => jobs };
     export async function call(command, args = {}) {
+      if (command === 'plan_deployment' || command === 'runner_action') { window.fixture.setupCalls.push({command, ...args}); const id = 'setup-' + window.fixture.setupCalls.length; setupOperations[id] = setupReports.shift() ?? {state:'ready',ready:true}; return {id}; }
+      if (command === 'runner_operation') return {state:'completed',report:setupOperations[args.operationId]};
       if (command === 'get_runner_tokens') return structuredClone(runnerTokens);
       if (command === 'save_runner_tokens') { runnerTokens = structuredClone(args.tokens); return; }
       if (command === 'save_credential') { if (args.secret !== runnerTokens.MYMOVIE_DESKTOP_TOKEN) throw new Error('Wrong desktop token'); return 'connection:' + args.connectionId; }

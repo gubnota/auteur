@@ -72,3 +72,10 @@
 - Hardware variants are separate graphs with separate requirements/preparations; UI metadata never translates model architecture.
 - WorkflowBootstrap emits reviewed typed utility commands; it cannot submit arbitrary shell to a remote runner. Managed agent/provision-core own installation and session readiness.
 - job-core owns selected-task mutation transactions; desktop Jobs only selects IDs and routes exact receipt edits to Generate. Submitted receipts cannot be edited.
+
+## Guided example setup
+- workflow-core owns stable built-in example graphs/metadata; the native catalogue merges them without replacing saved movie copies.
+- The agent owns reviews bound to node session, runtime fingerprint and exact effective workflow set. UI operation results are scoped to the current selection.
+- Runtime helper resolves exact binary wheel dependencies against the active environment; verified public PyPI metadata supplies hash, size and license. It installs only reviewed cached wheels offline.
+- NotebookRunner alone restarts its recorded managed ComfyUI processes. It checks every shared worker is idle; the relay/agents/tunnel remain running. External ComfyUI is read-only.
+- Shared cache locks exclude generation while dependencies change or workers restart. Restart clears per-worker readiness; preparation and canary must pass again.

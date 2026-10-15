@@ -100,6 +100,11 @@ pod; a successful CI build alone does not establish runtime readiness.
 
 ## Where the HTTPS address comes from (Colab / Kaggle test)
 
+After notebook startup, use the [desktop connection test](../../docs/WORKFLOW_SETUP.md#test-the-notebook-connection-from-your-desktop)
+to verify the current relay URL/node ID with the desktop token. The guide includes
+a standalone Python script and explains expected 200/401/404 responses. The relay
+has no browser homepage: `/` and `/v1` return 404; use the authenticated node endpoint.
+
 `127.0.0.1:8188` inside a notebook is private to that notebook. It is the address
 for its agent, not the URL entered on the Mac. The Mac connects to the **relay**
 address: a domain/reverse-proxy you configure on a reachable host. Build the relay
@@ -136,3 +141,14 @@ installation remains an explicit, reviewed operation from the app.
 ### Editor workflow compilation
 
 The agent archive includes `mymovie_workflow_compiler.py` and `workflow-compiler-requirements.txt`. Install them in a dedicated Python environment with Playwright Chromium. Configure `serve --workflow-compiler` and `--python`; the app can then prepare ordinary editor graphs through that worker. See [compiler setup](../../docs/WORKFLOW_SETUP.md). Compilation registers a preserved source and exports through an isolated ComfyUI frontend; it does not replace the active canvas or submit a job.
+
+## Guided example initialization (0.1.16 agent)
+
+Studio **Workflows → Examples · start here** ships original editor sources for a
+weight-free connection test, SD 1.5 T4 and tiny background removal. Select the worker,
+then Setup → Check node & review → Initialize reviewed setup. All reviewed downloads
+and plugin/wheel installation run through the agent. Managed notebook restarts keep
+the relay online and require all GPU workers idle. Prepare inputs, review/init again
+to verify the canary, then explicitly start queued jobs. See
+[complete examples guide](../../docs/WORKFLOW_EXAMPLES.md). The matching agent and
+notebook supervisor are required; old released binaries cannot provide new controls.

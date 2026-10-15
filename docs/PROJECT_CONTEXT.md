@@ -9,8 +9,9 @@
 
 ## Current milestone
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
-- Native Generate/media setup implemented; live private cloud acceptance remains open.
-- Current source: 0.1.15; designer wrappers, platform families, portable collections and selective queued-task control. Installation evidence is in TASK_LOG.
+- Bundled illustrated workflow examples and guided agent initialization implemented; live private cloud acceptance remains open.
+- Example setup requires matching 0.1.16 agent/supervisor; the last published agent remains v0.1.15 until a new release is built.
+- Current source: 0.1.16; designer wrappers, platform families, portable collections and selective queued-task control. Installation evidence is in TASK_LOG.
 - Published v0.1.15 includes the matching Linux agent/relay. GPU notebooks support unchanged Run all with shared test keys, pinned base ComfyUI, isolated Python, browser compiler and verified cloudflared; models/plugins remain app-initialized. Evidence: TASK_LOG and CI_RELEASES.
 - Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.
@@ -99,7 +100,9 @@
 - Flags: unspecified, universal, Apple Silicon, CUDA, ROCm, CPU; providers validate live hardware where available. Separate OS/architecture/precision variants group into reusable families.
 - Complete script modal covers Mac/Linux/SSH/Colab/Kaggle; reviewed dependency setup accepts pending editor sources before preparation.
 - Guide supports safe Markdown/embedded raster illustrations; portable collections strip destination profiles and private vault references.
-- Setup instructions and artifact source/hash/size/license/category controls: docs/WORKFLOW_SETUP.md.
+- Workflows always offers three Example cards: weight-free connection test, SD 1.5 T4 and tiny background removal. Movie copies keep stable IDs and remain editable.
+- Guided setup reviews exact downloads/Python wheel closure, installs through the agent, restarts only managed idle workers, prepares original editor JSON and checks current-session readiness.
+- Setup instructions: docs/WORKFLOW_EXAMPLES.md and docs/WORKFLOW_SETUP.md.
 - Local real Rust pipeline acceptance: docs/GENERATION_ACCEPTANCE.md.
 
 ## Private runner and storage

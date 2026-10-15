@@ -957,6 +957,7 @@ export default function App() {
                   settings={settings}
                   update={update}
                   onImport={browseWorkflows}
+                  pin={async (workflowId) => { await mutateMedia("pin_workflow", { workflowId }, "Example added to this movie"); }}
                   prepare={prepareWorkflow}
                   notify={notify}
                   onGenerate={chooseJob}
