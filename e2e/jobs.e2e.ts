@@ -257,9 +257,23 @@ test("clear finished queue entries persists without removing history or active j
   await page.getByRole("button", { name: "Jobs", exact: true }).click();
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.locator(".queue-job")).toHaveCount(5);
+  const stale = await page.evaluate(() =>
+    (window as any).fixture.staleSettings(),
+  );
   await page
     .getByRole("button", { name: "Clear finished", exact: true })
     .click();
+  await expect(page.locator(".queue-job")).toHaveCount(2);
+  await page.evaluate(
+    (value) => (window as any).fixture.returnSettingsOnce(value),
+    stale,
+  );
+  await expect
+    .poll(
+      () => page.evaluate(() => (window as any).fixture.staleSettingsReturned),
+      { timeout: 8000 },
+    )
+    .toBe(true);
   await expect(page.locator(".queue-job")).toHaveCount(2);
   await expect(page.locator(".queue-job .state-unknown")).toBeVisible();
   await expect(page.locator(".queue-job .state-submitted")).toBeVisible();

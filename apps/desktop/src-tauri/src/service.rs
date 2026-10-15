@@ -291,7 +291,7 @@ pub async fn save_settings(state: S<'_>, mut settings: AppSettings) -> Reply<App
     settings.notifications = previous.notifications;
     settings.logs = previous.logs;
     i.settings.save(&settings).map_err(err)?;
-    Ok(settings)
+    i.settings.read().map_err(err)
 }
 #[tauri::command]
 pub async fn clear_diagnostics(state: S<'_>, kind: String) -> Reply<AppSettings> {

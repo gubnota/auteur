@@ -78,13 +78,24 @@ export default function App() {
     [root, setRoot] = useState(""),
     [route, setRoute] = useState("Keyframes"),
     [episodeId, setEpisodeId] = useState(""),
-    [settings, setSettings] = useState(initialSettings),
+    [settings, replaceSettings] = useState(initialSettings),
     [jobs, setJobs] = useState<Job[]>([]),
     [status, setStatus] = useState("Saved locally"),
     [modal, setModal] = useState<ReactNode>(null),
     [toasts, setToasts] = useState<{ id: string; message: string }[]>([]),
     [height, setHeight] = useState(180),
     [expanded, setExpanded] = useState(true);
+  const [clearingQueue, setClearingQueue] = useState(false);
+  const setSettings = (incoming: AppSettings) =>
+    replaceSettings((previous) => ({
+      ...incoming,
+      dismissedQueueJobIds: [
+        ...new Set([
+          ...(previous.dismissedQueueJobIds ?? []),
+          ...(incoming.dismissedQueueJobIds ?? []),
+        ]),
+      ],
+    }));
   const [frameNavigation, setFrameNavigation] = useState<{
     frameId: string;
     token: string;
@@ -288,15 +299,20 @@ export default function App() {
   );
   const clearFinished = () =>
     void run(async () => {
-      await saveSettings({
-        ...settings,
-        dismissedQueueJobIds: [
-          ...new Set([
-            ...(settings.dismissedQueueJobIds ?? []),
-            ...queueJobs.filter(finished).map((job) => job.id),
-          ]),
-        ],
-      });
+      setClearingQueue(true);
+      try {
+        await saveSettings({
+          ...settings,
+          dismissedQueueJobIds: [
+            ...new Set([
+              ...(settings.dismissedQueueJobIds ?? []),
+              ...queueJobs.filter(finished).map((job) => job.id),
+            ]),
+          ],
+        });
+      } finally {
+        setClearingQueue(false);
+      }
     });
   const open = () =>
     void run(async () => {
@@ -957,7 +973,13 @@ export default function App() {
                   settings={settings}
                   update={update}
                   onImport={browseWorkflows}
-                  pin={async (workflowId) => { await mutateMedia("pin_workflow", { workflowId }, "Example added to this movie"); }}
+                  pin={async (workflowId) => {
+                    await mutateMedia(
+                      "pin_workflow",
+                      { workflowId },
+                      "Example added to this movie",
+                    );
+                  }}
                   prepare={prepareWorkflow}
                   notify={notify}
                   onGenerate={chooseJob}
@@ -1146,8 +1168,8 @@ export default function App() {
                 <div className="row">
                   <button
                     className="text-button"
-                    disabled={!queueJobs.some(finished)}
-                    title="Clear finished entries here. Results and history stay in Jobs and Renders."
+                    disabled={clearingQueue || !queueJobs.some(finished)}
+                    title="Clear completed, failed and canceled entries. Results and history stay in Jobs and Renders."
                     onClick={clearFinished}
                   >
                     Clear finished

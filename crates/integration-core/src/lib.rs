@@ -107,9 +107,18 @@ impl SettingsStore {
         if s.storage.get("manifestUrl").is_some() {
             return Err("Transfer URLs must stay in Keychain".into());
         }
+        // Dismissal is monotonic: a stale Settings form must not restore finished jobs.
+        let mut saved = s.clone();
+        saved
+            .dismissed_queue_job_ids
+            .extend(self.read()?.dismissed_queue_job_ids);
+        let mut seen = std::collections::HashSet::new();
+        saved
+            .dismissed_queue_job_ids
+            .retain(|id| seen.insert(id.clone()));
         self.db.execute(
             "INSERT INTO settings VALUES(1,?1) ON CONFLICT(id) DO UPDATE SET json=excluded.json",
-            [serde_json::to_string(s)?],
+            [serde_json::to_string(&saved)?],
         )?;
         Ok(())
     }
@@ -149,5 +158,35 @@ impl SettingsStore {
     pub fn clear_recent(&self) -> Result<()> {
         self.db.execute("DELETE FROM recent", [])?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod settings_tests {
+    use super::*;
+    #[test]
+    fn dismissed_failures_survive_stale_settings_and_reopening() {
+        let root = std::env::temp_dir().join(format!("mymovie-settings-{}", project_core::id()));
+        let path = root.join("settings.sqlite");
+        {
+            let store = SettingsStore::open(&path).unwrap();
+            let stale = store.read().unwrap();
+            let mut cleared = stale.clone();
+            cleared.dismissed_queue_job_ids = vec![
+                "failed-job".into(),
+                "completed-job".into(),
+                "canceled-job".into(),
+            ];
+            store.save(&cleared).unwrap();
+            store.save(&stale).unwrap();
+            store.diagnostic("info", "Background refresh").unwrap();
+        }
+        let store = SettingsStore::open(&path).unwrap();
+        assert_eq!(
+            store.read().unwrap().dismissed_queue_job_ids,
+            ["failed-job", "completed-job", "canceled-job"]
+        );
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

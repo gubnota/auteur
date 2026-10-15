@@ -1,5 +1,9 @@
 import type { Page } from "@playwright/test";
-import type { Project, AppSettings, Workflow } from "../../apps/desktop/src/lib/types";
+import type {
+  Project,
+  AppSettings,
+  Workflow,
+} from "../../apps/desktop/src/lib/types";
 
 export const project: Project = {
   id: "movie",
@@ -110,18 +114,18 @@ export async function openFixture(
     let project = ${JSON.stringify(movie)};
     let settings = JSON.parse(sessionStorage.getItem("fixture-settings") ?? "null") ?? ${JSON.stringify(connections)};
     let catalogue = ${JSON.stringify(options.catalogue ?? movie.workflows)};
-    let setupReports = ${JSON.stringify(options.setupReports ?? [])}; let setupOperations = {};
+    let setupPending = false; let staleSettings = null; let setupReports = ${JSON.stringify(options.setupReports ?? [])}; let setupOperations = {};
     let runnerTokens = { MYMOVIE_AGENT_TOKEN: 'fixture-agent-'.repeat(3), MYMOVIE_DESKTOP_TOKEN: 'fixture-desktop-'.repeat(3) };
     let runs = []; let jobs = JSON.parse(sessionStorage.getItem("fixture-jobs") ?? "[]");
     let recents = Array.from({length: 12}, (_, i) => ({name: "Recent movie " + i, path: "/tmp/movie-" + i + ".mymovie", opened: "2026-10-14T10:00:00Z"}));
-    window.fixture = { setupCalls: [], movie: () => project, submissions: [], enqueued: [], installs: [], thumbnails: [], setResults: results => { jobs.forEach((job, i) => { job.results = results[i] ?? []; job.state = "succeeded"; }); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, setJobStates: states => { jobs.forEach((job, i) => job.state = states[i]); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, jobHistory: () => jobs };
+    window.fixture = { setupCalls: [], holdSetup: value => { setupPending = value; }, staleSettingsReturned: false, preparations: [], staleSettings: () => structuredClone(settings), returnSettingsOnce: value => { staleSettings = value; }, movie: () => project, submissions: [], enqueued: [], installs: [], thumbnails: [], setResults: results => { jobs.forEach((job, i) => { job.results = results[i] ?? []; job.state = "succeeded"; }); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, setJobStates: states => { jobs.forEach((job, i) => job.state = states[i]); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, jobHistory: () => jobs };
     export async function call(command, args = {}) {
       if (command === 'plan_deployment' || command === 'runner_action') { window.fixture.setupCalls.push({command, ...args}); const id = 'setup-' + window.fixture.setupCalls.length; setupOperations[id] = setupReports.shift() ?? {state:'ready',ready:true}; return {id}; }
-      if (command === 'runner_operation') return {state:'completed',report:setupOperations[args.operationId]};
+      if (command === 'runner_operation') return setupPending ? {state:'running',report:{}} : {state:'completed',report:setupOperations[args.operationId]};
       if (command === 'get_runner_tokens') return structuredClone(runnerTokens);
       if (command === 'save_runner_tokens') { runnerTokens = structuredClone(args.tokens); return; }
       if (command === 'save_credential') { if (args.secret !== runnerTokens.MYMOVIE_DESKTOP_TOKEN) throw new Error('Wrong desktop token'); return 'connection:' + args.connectionId; }
-      if (command === 'get_settings') return settings;
+      if (command === 'get_settings') { if (staleSettings) { const value = staleSettings; staleSettings = null; window.fixture.staleSettingsReturned = true; return value; } return settings; }
       if (command === 'save_settings') { settings = args.settings; sessionStorage.setItem("fixture-settings", JSON.stringify(settings)); return settings; }
       if (command === 'recent_projects') return recents;
       if (command === 'clear_recent_projects') { recents = []; return recents; }
@@ -150,6 +154,7 @@ export async function openFixture(
         project.revision++; window.fixture.saved = project; return project;
       }
       if (command === 'prepare_workflow') {
+        window.fixture.preparations.push(args);
         const w = project.workflows.find(w => w.id === args.workflowId);
         w.profiles = [...(w.profiles ?? []).filter(x => x.connectionId !== args.connectionId), {connectionId:args.connectionId, sourceHash:w.editorHash ?? w.version, apiHash:w.version, registryHash:'r', frontendHash:'f', compilerVersion:'fixture', graph:w.graph, inputs:w.inputs ?? [], outputs:w.outputs ?? []}];
         w.lastTarget = args.connectionId;

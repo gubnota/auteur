@@ -2,6 +2,22 @@ use super::*;
 use sha2::{Digest, Sha256};
 
 const LIMIT: usize = 16 * 1024 * 1024;
+fn access_error(base: &str, stage: &str, error: reqwest::Error) -> String {
+    if let Some(status) = error.status() {
+        format!(
+            "ComfyUI at {base}: HTTP {} while {stage}. Check this instance's Userdata API and access permissions.",
+            status.as_u16()
+        )
+    } else if error.is_timeout() {
+        format!(
+            "ComfyUI at {base} timed out while {stage}. Check the selected instance before retrying; publication may already have completed."
+        )
+    } else {
+        format!(
+            "Cannot reach ComfyUI at {base} while {stage}. Start this instance or select the correct connection. For a remote notebook, select its agent connection; localhost refers to the machine making this request."
+        )
+    }
+}
 fn publication(name: &str, source: &Value) -> Result<(String, String, Vec<u8>)> {
     if source["nodes"].as_array().is_none() || source["links"].as_array().is_none() {
         return Err("Install requires the original editor workflow, with nodes and links".into());
@@ -52,7 +68,12 @@ impl ComfyUi {
             .trim_start_matches("file=")
             .to_string();
         let url = format!("{}/userdata/{encoded}", self.url);
-        let existing = self.client.get(&url).send().await?;
+        let existing = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| access_error(&self.url, "checking the workflow library", e))?;
         let reused = if existing.status() == reqwest::StatusCode::NOT_FOUND {
             let result = self
                 .client
@@ -60,18 +81,37 @@ impl ComfyUi {
                 .header("Content-Type", "application/json")
                 .body(body)
                 .send()
-                .await?;
+                .await
+                .map_err(|e| access_error(&self.url, "saving the workflow", e))?;
             if result.status() != reqwest::StatusCode::CONFLICT {
-                result.error_for_status()?;
+                result
+                    .error_for_status()
+                    .map_err(|e| access_error(&self.url, "saving the workflow", e))?;
             }
             false
         } else {
-            if bounded(existing.error_for_status()?).await? != *source {
+            if bounded(
+                existing
+                    .error_for_status()
+                    .map_err(|e| access_error(&self.url, "reading the workflow library", e))?,
+            )
+            .await?
+                != *source
+            {
                 return Err("Saved workflow conflict; existing content was not overwritten".into());
             }
             true
         };
-        let readback = bounded(self.client.get(&url).send().await?.error_for_status()?).await?;
+        let readback = bounded(
+            self.client
+                .get(&url)
+                .send()
+                .await
+                .map_err(|e| access_error(&self.url, "verifying the saved workflow", e))?
+                .error_for_status()
+                .map_err(|e| access_error(&self.url, "verifying the saved workflow", e))?,
+        )
+        .await?;
         if readback != *source {
             return Err("Workflow publication readback differs; inspect the selected node".into());
         }
@@ -162,6 +202,34 @@ mod tests {
             assert!(requests[1].starts_with("POST "));
             assert!(requests[1].contains("overwrite=false"));
         }
+    }
+    #[tokio::test]
+    async fn unavailable_instance_names_the_endpoint_and_recovery() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        drop(listener);
+        let error = ComfyUi::new(&url)
+            .unwrap()
+            .install_workflow("Test", &json!({"nodes":[],"links":[]}))
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(&url));
+        assert!(error.contains("select the correct connection"));
+        assert!(error.contains("checking the workflow library"));
+    }
+    #[tokio::test]
+    async fn userdata_http_refusal_is_distinct_from_an_offline_instance() {
+        let (url, worker) = server(vec![(403, json!({"error":"forbidden"}))]);
+        let error = ComfyUi::new(&url)
+            .unwrap()
+            .install_workflow("Test", &json!({"nodes":[],"links":[]}))
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("HTTP 403"));
+        assert!(error.contains("Userdata API"));
+        assert_eq!(worker.join().unwrap().len(), 1);
     }
     #[test]
     fn publication_is_confined_and_versioned() {
