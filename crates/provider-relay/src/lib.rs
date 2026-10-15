@@ -37,8 +37,29 @@ impl Relay {
             .json()
             .await?)
     }
+    pub async fn post(&self, path: &str, payload: Value) -> Result<Value> {
+        let response = self
+            .client
+            .post(format!("{}{path}", self.url))
+            .bearer_auth(&self.token)
+            .json(&payload)
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(response
+                .text()
+                .await?
+                .chars()
+                .take(1000)
+                .collect::<String>()
+                .into());
+        }
+        Ok(response.json().await?)
+    }
     pub async fn command(&self, action: &str, payload: Value) -> Result<Value> {
         if ![
+            "initialize",
+            "runtime-restart",
             "doctor",
             "inventory",
             "drain",
@@ -53,16 +74,11 @@ impl Relay {
             return Err("Unknown runner action".into());
         }
         let attempt = project_core::id();
-        Ok(self
-            .client
-            .post(format!("{}/v1/jobs", self.url))
-            .bearer_auth(&self.token)
-            .json(&json!({"id":attempt,"nodeId":self.node,"kind":action,"payload":payload}))
-            .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await?)
+        self.post(
+            "/v1/jobs",
+            json!({"id":attempt,"nodeId":self.node,"kind":action,"payload":payload}),
+        )
+        .await
     }
     pub async fn events(&self, after: u64) -> Result<reqwest::Response> {
         Ok(self

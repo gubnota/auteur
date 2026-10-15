@@ -1,3 +1,5 @@
+mod console;
+mod initialization;
 mod provision;
 mod workflow;
 use clap::Parser;
@@ -6,7 +8,7 @@ use project_core::{Result, atomic_json};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[command(version)]
 struct Args {
     #[arg(value_parser=["doctor","inventory","bootstrap","provision","runtime-restart","workflow-inspect","workflow-install","workflow-compile","serve"])]
@@ -51,11 +53,15 @@ struct Args {
     workflows: Option<PathBuf>,
     #[arg(long)]
     apply: bool,
+    /// Enables private custom recipe scripts and interactive console.
+    #[arg(long, env = "MYMOVIE_ALLOW_CONSOLE", default_value_t = false)]
+    allow_console: bool,
     #[arg(skip)]
     session_id: String,
 }
 async fn post(c: &reqwest::Client, url: &str, token: &str, v: Value) -> Result<Value> {
     Ok(c.post(url)
+        .timeout(std::time::Duration::from_secs(10))
         .bearer_auth(token)
         .json(&v)
         .send()
@@ -147,12 +153,33 @@ async fn main() -> Result<()> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .build()?;
+    let console_args = args.clone();
+    let console_client = client.clone();
+    let console_relay = relay.to_string();
+    let console_token = token.clone();
+    tokio::spawn(async move {
+        console::serve(console_args, console_client, console_relay, console_token).await;
+    });
+    let heartbeat_args = args.clone();
+    let heartbeat_client = client.clone();
+    let heartbeat_relay = relay.to_owned();
+    let heartbeat_token = token.clone();
+    tokio::spawn(async move {
+        let comfy =
+            provider_comfyui::ComfyUi::new(&heartbeat_args.comfy_url).expect("validated URL");
+        loop {
+            let health = comfy.health().await.ok();
+            let private = initialization::private_execution(&heartbeat_args).is_ok();
+            let _ = post(&heartbeat_client, &format!("{heartbeat_relay}/v1/agent/heartbeat"), &heartbeat_token,
+                json!({"nodeId":heartbeat_args.node_id,"connected":health.is_some(),"transport":"outbound HTTPS","comfy":health,"capabilities":{"initialization":true,"console":private,"customScripts":private}})).await;
+            tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+        }
+    });
+    initialization::reconcile(&args, &client, relay, &token, true).await?;
     let mut last_heartbeat = std::time::Instant::now() - std::time::Duration::from_secs(15);
     loop {
         if last_heartbeat.elapsed().as_secs() >= 15 {
-            let health = comfy.health().await.ok();
-            let _ = post(&client, &format!("{relay}/v1/agent/heartbeat"), &token,
-                json!({"nodeId":args.node_id,"connected":health.is_some(),"transport":"outbound HTTPS","comfy":health})).await;
+            initialization::reconcile(&args, &client, relay, &token, false).await?;
             last_heartbeat = std::time::Instant::now();
         }
         let job = match post(
@@ -189,6 +216,62 @@ async fn main() -> Result<()> {
             receipt["report"] = json!({"drained":true});
             post(&client, &report_url, &token, receipt).await?;
             return Ok(());
+        }
+        if job["kind"] == "initialize" {
+            receipt["kind"] = json!("initialize");
+            let progress = initialization::fresh();
+            atomic_json(&receipt_path, &receipt)?;
+            let mut canceled = false;
+            let result = {
+                let work = initialization::PROGRESS.scope(
+                    progress.clone(),
+                    initialization::run(&args, &comfy, &job["payload"]),
+                );
+                tokio::pin!(work);
+                let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
+                loop {
+                    tokio::select! {
+                        result = &mut work => break result,
+                        _ = tick.tick() => {
+                            receipt["progress"] = progress.lock().unwrap().clone();
+                            atomic_json(&receipt_path,&receipt)?;
+                            if let Ok(status) = post(&client,&report_url,&token,receipt.clone()).await {
+                                if status["state"] == "cancel_requested" { canceled = true; break Err("Initialization canceled; verified files and partial downloads retained".into()); }
+                            }
+                        }
+                    }
+                }
+            };
+            // Dropping the operation stops downloads and helper children before reporting cancellation.
+            if canceled {
+                let path = args.data.join("canary-receipt.json");
+                if let Ok(raw) = std::fs::read(&path) {
+                    if let Ok(mut canary) = serde_json::from_slice::<Value>(&raw) {
+                        if canary["state"] == "unknown" {
+                            if let Some(remote) = canary["remoteId"].as_str() {
+                                if comfy.cancel(remote).await.is_ok() {
+                                    canary["state"] = json!("canceled");
+                                    atomic_json(&path, &canary)?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            receipt["progress"] = progress.lock().unwrap().clone();
+            match result {
+                Ok(report) => {
+                    receipt["state"] = json!("completed");
+                    receipt["report"] = report;
+                }
+                Err(e) => {
+                    receipt["state"] = json!(if canceled { "canceled" } else { "failed" });
+                    receipt["error"] = json!(e.to_string().chars().take(2000).collect::<String>());
+                }
+            }
+            atomic_json(&receipt_path, &receipt)?;
+            let _ = post(&client, &report_url, &token, receipt).await;
+            continue;
         }
         if job["kind"] != "generation" {
             match execute(

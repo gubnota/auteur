@@ -73,6 +73,9 @@ pub fn import_source(name: &str, source: Value) -> Result<Workflow> {
 }
 /// Dependency review accepts an unprepared editor source; execution never does.
 pub fn for_setup(w: &Workflow, connection: &str) -> Result<Workflow> {
+    if w.wrapper.archived_at.is_some() {
+        return Err("Restore this workflow from Trash before using it".into());
+    }
     if w.editor_graph.is_some()
         && w.graph.as_object().is_some_and(|g| g.is_empty())
         && !w.profiles.iter().any(|p| p.connection_id == connection)
@@ -87,6 +90,9 @@ pub fn for_setup(w: &Workflow, connection: &str) -> Result<Workflow> {
     for_target(w, connection)
 }
 pub fn for_target(w: &Workflow, connection: &str) -> Result<Workflow> {
+    if w.wrapper.archived_at.is_some() {
+        return Err("Restore this workflow from Trash before using it".into());
+    }
     let mut result = w.clone();
     if let Some(profile) = w.profiles.iter().find(|p| p.connection_id == connection) {
         if profile.source_hash != w.editor_hash.as_ref().unwrap_or(&w.version).as_str() {

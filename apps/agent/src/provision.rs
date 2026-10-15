@@ -34,7 +34,10 @@ async fn helper(args: &Args, payload: Value) -> Result<Value> {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .kill_on_drop(true);
+    #[cfg(unix)]
+    cmd.process_group(0);
     let mut child = cmd.spawn()?;
+    let _process_group = crate::initialization::ProcessGroup(child.id());
     let mut input = child.stdin.take().ok_or("Helper input unavailable")?;
     input.write_all(&serde_json::to_vec(&payload)?).await?;
     drop(input);
@@ -96,7 +99,7 @@ fn workflow_set(payload: &Value) -> Result<Vec<studio_contracts::Workflow>> {
     }
     Ok(workflows)
 }
-fn restart_pending(args: &Args) -> bool {
+pub(crate) fn restart_pending(args: &Args) -> bool {
     args.cache
         .clone()
         .unwrap_or(args.data.join("cache"))
@@ -337,9 +340,21 @@ pub async fn control(
         .read(true)
         .write(true)
         .open(cache.join("install.lock"))?;
-    fs2::FileExt::try_lock_exclusive(&lock).map_err(
-        |_| "Another worker is initializing shared dependencies; retry after its report completes",
-    )?;
+    loop {
+        match fs2::FileExt::try_lock_exclusive(&lock) {
+            Ok(()) => break,
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => (),
+            Err(e) => return Err(e.into()),
+        }
+        crate::initialization::progress(
+            "waiting",
+            "Waiting for another GPU worker’s shared dependency cache",
+            None,
+        );
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    // Another worker may have installed these files while we waited.
+    inventory = helper(args, json!({"artifacts":profile.artifacts})).await?;
     let sources = if let Ok(url) = std::env::var("MYMOVIE_TRANSFER_MANIFEST") {
         storage_s3::manifest(&url)
             .await
@@ -355,6 +370,11 @@ pub async fn control(
             .ok_or("Missing integrity inventory")?,
     ) {
         if row["state"] == "verified" {
+            crate::initialization::progress(
+                "reuse",
+                format!("{} · SHA256 verified; reused", a.target),
+                None,
+            );
             continue;
         }
         if row["state"] != "missing" {
@@ -387,13 +407,18 @@ pub async fn control(
         };
         // download() re-verifies resumed bytes; helper re-verifies an existing cache entry.
         if !dest.exists() {
-            storage_s3::download(&storage_s3::Object{name:a.target.clone(),sha256:a.sha256.clone(),size:a.size,url,architecture:Some(a.architecture.clone()),license:Some(a.license.clone())},&dest).await.map_err(|_|"Dependency transfer failed or integrity mismatch; inspect the source and retry")?;
+            storage_s3::download_with_progress(&storage_s3::Object{name:a.target.clone(),sha256:a.sha256.clone(),size:a.size,url,architecture:Some(a.architecture.clone()),license:Some(a.license.clone())},&dest, |done,total| crate::initialization::progress("download",format!("{} → {}/{}",a.target,a.category,a.target),Some((done,total)))).await.map_err(|_|"Dependency transfer failed or integrity mismatch; inspect the source and retry")?;
         }
         // Persist before mutation, including partially failed installs.
         if a.kind == "plugin" || a.kind == "wheel" {
             atomic_json(&restart_marker, &json!({"required":true}))?;
             restart = true;
         }
+        crate::initialization::progress(
+            "install",
+            format!("Installing and verifying {}/{}", a.category, a.target),
+            None,
+        );
         helper(args, json!({"action":"install","artifact":a,"source":dest})).await?;
     }
     let wheels: Vec<_> = profile
@@ -402,6 +427,11 @@ pub async fn control(
         .filter(|a| a.kind == "wheel")
         .collect();
     if !wheels.is_empty() {
+        crate::initialization::progress(
+            "packages",
+            "Installing the reviewed Python wheels offline",
+            None,
+        );
         helper(args, json!({"action":"wheels","artifacts":wheels})).await?;
     }
     for w in &workflows {
@@ -439,6 +469,11 @@ pub async fn control(
         return Ok(result);
     }
     // Job-specific media is validated at submission, after upload. Setup runs only its weight-free canary.
+    crate::initialization::progress(
+        "canary",
+        "Checking the weight-free runtime canary and collecting its output",
+        None,
+    );
     comfy.validate_job(&profile.canary).await?;
     let canary_path = args.data.join("canary-receipt.json");
     let previous = read(&canary_path);

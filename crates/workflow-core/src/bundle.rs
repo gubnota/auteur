@@ -11,6 +11,7 @@ pub fn export(workflows: &[Workflow]) -> Result<Value> {
     let mut portable = workflows.to_vec();
     for w in &mut portable {
         w.wrapper.validate()?;
+        w.wrapper.archived_at = None;
         w.profiles.clear();
         w.last_target = None;
         w.deployments.clear();
@@ -77,6 +78,7 @@ pub fn import(value: Value) -> Result<Vec<Workflow>> {
             }
         }
         // Never trust a foreign machine's preparations or deployment mappings.
+        w.wrapper.archived_at = None;
         w.profiles.clear();
         w.last_target = None;
         w.deployments.clear();
@@ -135,6 +137,40 @@ mod tests {
         let mut bad = export(&[a]).unwrap();
         bad["workflows"][0]["graph"]["7"]["inputs"]["enabled"] = json!(true);
         assert!(import(bad).is_err());
+    }
+    #[test]
+    fn portable_recipe_survives_export_while_trash_does_not() {
+        let mut w = crate::import(
+            "recipe",
+            json!({"1":{"class_type":"SaveImage","inputs":{}}}),
+        )
+        .unwrap();
+        w.wrapper.archived_at = Some("123".into());
+        assert!(
+            crate::for_setup(&w, "node")
+                .unwrap_err()
+                .to_string()
+                .contains("Trash")
+        );
+        assert!(
+            crate::for_target(&w, "node")
+                .unwrap_err()
+                .to_string()
+                .contains("Trash")
+        );
+        w.wrapper.initialization = vec![studio_contracts::InitializationStep {
+            name: "Check".into(),
+            script: "test -d models".into(),
+            directory: String::new(),
+            timeout_seconds: 30,
+            policy: "recipe".into(),
+        }];
+        let result = import(export(&[w]).unwrap()).unwrap();
+        assert!(result[0].wrapper.archived_at.is_none());
+        assert_eq!(result[0].wrapper.initialization[0].script, "test -d models");
+        let mut invalid = result[0].clone();
+        invalid.wrapper.initialization[0].directory = "../escape".into();
+        assert!(export(&[invalid]).is_err());
     }
     #[test]
     fn rejects_unsafe_illustration_and_future_format() {

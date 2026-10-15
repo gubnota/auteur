@@ -1,3 +1,5 @@
+mod console;
+mod operations;
 use axum::{
     Json, Router,
     body::Bytes,
@@ -156,6 +158,7 @@ async fn submit(
             v["kind"].as_str(),
             Some(
                 "generation"
+                    | "initialize"
                     | "doctor"
                     | "inventory"
                     | "drain"
@@ -169,6 +172,13 @@ async fn submit(
         )
     {
         return Err((StatusCode::BAD_REQUEST, "Invalid target or action".into()));
+    }
+    if v["kind"] == "initialize"
+        && v["payload"]["sourceWorkflow"]["wrapper"]["initialization"]
+            .as_array()
+            .is_some_and(|v| !v.is_empty())
+    {
+        console::private(&s)?;
     }
     if v["kind"] == "workflow-install"
         && (v["payload"]["name"].as_str().is_some_and(|n| n.len() > 200)
@@ -194,6 +204,10 @@ async fn submit(
         }
         return Ok(Json(old));
     }
+    if let Some(old) = operations::deduplicate(&tx, &v)? {
+        return Ok(Json(old));
+    }
+    v["createdAt"] = json!(now());
     v["state"] = json!("queued");
     v["outputs"] = json!([]);
     tx.execute(
@@ -325,12 +339,13 @@ async fn report(
     } else {
         v["state"].clone()
     };
-    for key in ["outputs", "error", "report", "remoteId"] {
+    for key in ["outputs", "error", "report", "remoteId", "progress"] {
         if v.get(key).is_some() {
             old[key] = v[key].clone();
         }
     }
     let now = now();
+    old["lastContact"] = json!(now);
     tx.execute(
         "UPDATE jobs SET json=?1,lease=?2 WHERE id=?3",
         rusqlite::params![
@@ -445,7 +460,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or_else(|_| std::env::var("MYMOVIE_NODE_ID").unwrap_or("local-cpu".into())),
         )?,
     });
-    let router=Router::new().route("/v1/nodes/{node}",get(health)).route("/v1/jobs",post(submit)).route("/v1/jobs/{id}",get(status)).route("/v1/jobs/{id}/cancel",post(cancel)).route("/v1/agent/claim",post(claim)).route("/v1/agent/jobs/{id}",post(report)).route("/v1/agent/heartbeat",post(heartbeat)).route("/v1/assets",post(upload)).route("/v1/assets/{id}",get(asset)).route("/v1/events",get(|State(s):State<Shared>,h:HeaderMap|async move{
+    console::schema(&s.db.lock().unwrap())?;
+    let router=Router::new().merge(console::routes()).route("/v1/nodes/{node}/operations",get(operations::list)).route("/v1/nodes/{node}",get(health)).route("/v1/jobs",post(submit)).route("/v1/jobs/{id}",get(status)).route("/v1/jobs/{id}/cancel",post(cancel)).route("/v1/agent/claim",post(claim)).route("/v1/agent/jobs/{id}",post(report)).route("/v1/agent/heartbeat",post(heartbeat)).route("/v1/assets",post(upload)).route("/v1/assets/{id}",get(asset)).route("/v1/events",get(|State(s):State<Shared>,h:HeaderMap|async move{
  auth(&s,&h,false)?;let mut cursor=h.get("last-event-id").and_then(|v|v.to_str().ok()).and_then(|v|v.parse::<i64>().ok()).unwrap_or(0);
  let stream=async_stream::stream!{loop{let rows={let db=s.db.lock().unwrap();let mut st=db.prepare("SELECT seq,json FROM events WHERE seq>?1 ORDER BY seq LIMIT 100").unwrap();st.query_map([cursor],|r|Ok((r.get::<_,i64>(0)?,r.get::<_,String>(1)?))).unwrap().collect::<Result<Vec<_>,_>>()};match rows{Ok(rows)=>for (seq,raw) in rows{cursor=seq;yield Ok::<_,std::convert::Infallible>(Event::default().id(seq.to_string()).event("job").data(raw));},Err(_)=>break}tokio::time::sleep(std::time::Duration::from_secs(1)).await;}};
  Ok::<_,(StatusCode,String)>(Sse::new(stream).keep_alive(KeepAlive::default()))
@@ -458,9 +474,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn state() -> Shared {
+    pub(super) fn state() -> Shared {
         let db = rusqlite::Connection::open_in_memory().unwrap();
         db.execute_batch("CREATE TABLE jobs(id TEXT PRIMARY KEY,node TEXT,json TEXT,lease INTEGER); CREATE TABLE events(seq INTEGER PRIMARY KEY AUTOINCREMENT,job TEXT,json TEXT); CREATE TABLE nodes(id TEXT PRIMARY KEY,json TEXT);").unwrap();
+        console::schema(&db).unwrap();
         Arc::new(Data {
             db: Mutex::new(db),
             root: PathBuf::new(),
@@ -469,7 +486,7 @@ mod tests {
             nodes: node_ids("kaggle-gpu0,kaggle-gpu1").unwrap(),
         })
     }
-    fn headers(token: &str) -> HeaderMap {
+    pub(super) fn headers(token: &str) -> HeaderMap {
         let mut h = HeaderMap::new();
         h.insert("authorization", format!("Bearer {token}").parse().unwrap());
         h

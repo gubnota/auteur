@@ -427,6 +427,10 @@ pub struct AppSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkflowWrapper {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<String>,
+    #[serde(default)]
+    pub initialization: Vec<InitializationStep>,
     /// Built-in example provenance survives pinning/export; absent on user workflows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub example_id: Option<String>,
@@ -451,8 +455,36 @@ pub struct WorkflowWrapper {
     #[serde(default)]
     pub precision: String,
 }
+/// Custom post-install steps. Typed artifacts remain the verified dependency manifest.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InitializationStep {
+    pub name: String,
+    pub script: String,
+    #[serde(default)]
+    pub directory: String,
+    pub timeout_seconds: u64,
+    /// recipe: reuse exact recipe/runtime receipt; session: once per runtime epoch.
+    pub policy: String,
+}
 impl WorkflowWrapper {
     pub fn validate(&self) -> Result<(), String> {
+        if self.initialization.len() > 32
+            || self.initialization.iter().any(|s| {
+                s.name.trim().is_empty()
+                    || s.name.len() > 200
+                    || s.script.len() > 64 * 1024
+                    || s.script.trim().is_empty()
+                    || s.timeout_seconds == 0
+                    || s.timeout_seconds > 3600
+                    || !["recipe", "session"].contains(&s.policy.as_str())
+                    || s.directory.starts_with('/')
+                    || s.directory.contains(['\\', ':'])
+                    || s.directory.split('/').any(|p| p == "..")
+            })
+        {
+            return Err("Invalid initialization step: use a name, script, relative working folder, 1–3600 second timeout and recipe/session policy".into());
+        }
         if self.python_packages.len() > 128
             || self.python_packages.iter().any(|p| {
                 let Some((name, version)) = p.split_once("==") else {

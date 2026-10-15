@@ -41,9 +41,16 @@ pub async fn manifest(url: &str) -> Result<Vec<Object>> {
         .await?)
 }
 pub async fn download(o: &Object, dest: &Path) -> Result<()> {
+    download_with_progress(o, dest, |_, _| {}).await
+}
+pub async fn download_with_progress(
+    o: &Object,
+    dest: &Path,
+    mut progress: impl FnMut(u64, u64),
+) -> Result<()> {
     if o.sha256.len() != 64
         || !o.sha256.bytes().all(|b| b.is_ascii_hexdigit())
-        || o.size > 4 * 1024 * 1024 * 1024
+        || o.size > 32 * 1024 * 1024 * 1024
     {
         return Err("Invalid object integrity metadata".into());
     }
@@ -60,6 +67,7 @@ pub async fn download(o: &Object, dest: &Path) -> Result<()> {
         tokio::fs::remove_file(&tmp).await?;
         offset = 0;
     }
+    progress(offset, o.size);
     if offset < o.size {
         let mut res = client()?
             .get(validate_url(&o.url)?)
@@ -94,6 +102,7 @@ pub async fn download(o: &Object, dest: &Path) -> Result<()> {
                 return Err("Object exceeds declared size".into());
             }
             f.write_all(&bytes).await?;
+            progress(offset, o.size);
         }
         f.sync_all().await?;
     }
