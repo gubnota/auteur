@@ -166,6 +166,15 @@ pub async fn console_request(
     }
 }
 #[tauri::command]
+pub async fn clear_workflow_trash(state: S<'_>) -> Reply<Project> {
+    let mut i = state.inner.lock().await;
+    i.project
+        .as_mut()
+        .ok_or("Movie closed")?
+        .clear_workflow_trash()
+        .map_err(err)
+}
+#[tauri::command]
 pub async fn archive_workflow(state: S<'_>, workflow_id: String, archived: bool) -> Reply<Project> {
     // Trash preserves the exact workflow and any operation receipts. An offline node
     // must not prevent removing a movie copy; results remain traceable by ID.

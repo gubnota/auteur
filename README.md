@@ -1,6 +1,8 @@
 # MyMovie Studio
 
-**Colab quick start:** open the [current notebook](https://colab.research.google.com/github/gubnota/auteur/blob/main/deploy/colab/MyMovie_ComfyUI.ipynb), connect a GPU runtime, and **Run all** unchanged. Predefined test keys, verified agent/relay, pinned ComfyUI, browser importer and cloudflared are set up automatically. Copy the printed relay URL/node ID into Connections with temporary-tunnel polling enabled. Models and workflow plugins are installed later from Studio. Run all leaves the node running; Stop is manual. Existing Drive copies must be reopened from this link to get updates.
+**Colab quick start:** open the [current notebook](https://colab.research.google.com/github/gubnota/auteur/blob/main/deploy/colab/MyMovie_ComfyUI.ipynb), connect a CPU or GPU runtime, and **Run all** unchanged. Predefined test keys, verified agent/relay, pinned ComfyUI, browser importer and cloudflared are set up automatically. Copy the printed relay URL/node ID into Connections with temporary-tunnel polling enabled. Models and workflow plugins are installed later from Studio. Run all leaves the node running; Stop is manual. Existing Drive copies must be reopened from this link to get updates.
+
+**CPU mode:** both Colab and Kaggle default to `DEVICE = "auto"`: use available CUDA GPUs or start one CPU worker. Choose `"cpu"` to force CPU or `"cuda"` to require the configured GPU count. Test connections/setup with the weight-free mask canary; model generation on CPU can be very slow. Reopen the updated notebook; saved notebook copies do not update themselves.
 
 [Test the connection from your desktop](docs/WORKFLOW_SETUP.md#test-the-notebook-connection-from-your-desktop): copyable Python script, matching desktop token and HTTP troubleshooting. The relay has no homepage; `/` and `/v1` return 404.
 
@@ -72,7 +74,7 @@ Jobs history and Library results remain available.
 **Activity** follows agent-owned initialization across tabs and Welcome, with stages,
 logs, transfer progress, Cancel and Reconnect. Independent nodes run concurrently;
 shared Kaggle runtimes serialize mutations and reuse verified files. Workflows now
-have **Move to Trash / Restore** and an editable ordered **Initialization recipe**.
-The agent terminal and custom scripts require private tokens and explicit opt-in.
+have **Move to Trash / Restore**, **Trash → Clear trash**, and an editable ordered **Initialization recipe**. Clearing removes catalogue entries while preserving source graphs and job history.
+The agent terminal fills the app window. It and custom scripts require private tokens and explicit opt-in.
 [Controls and setup guide](docs/NODE_ACTIVITY.md). These features require a matching
 **0.1.18 agent and relay**; the last published agent is still v0.1.15.

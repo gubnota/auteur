@@ -87,6 +87,7 @@ fn main() {
             apply_initialization,
             console_request,
             archive_workflow,
+            clear_workflow_trash,
             validate_profile,
             runner_action,
             sync_storage,

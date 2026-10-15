@@ -7,11 +7,13 @@ export function Modal({
   children,
   onClose,
   footer,
+  fullScreen = false,
 }: {
   title: string;
   children: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
+  fullScreen?: boolean;
 }) {
   return (
     <Dialog.Root
@@ -22,7 +24,10 @@ export function Modal({
     >
       <Dialog.Portal>
         <Dialog.Overlay className="overlay" />
-        <Dialog.Content className="modal" aria-describedby={undefined}>
+        <Dialog.Content
+          className={`modal${fullScreen ? " modal-fullscreen" : ""}`}
+          aria-describedby={undefined}
+        >
           <header>
             <Dialog.Title>{title}</Dialog.Title>
             <Dialog.Close className="icon-button" aria-label="Close dialog">

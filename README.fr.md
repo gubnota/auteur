@@ -1,6 +1,8 @@
 # MyMovie Studio
 
-**Démarrage Colab :** ouvrir le [notebook actuel](https://colab.research.google.com/github/gubnota/auteur/blob/main/deploy/colab/MyMovie_ComfyUI.ipynb), connecter un GPU et choisir **Run all**, sans modification. Clés de test préremplies, agent/relay vérifiés, version figée de ComfyUI, navigateur d’import et cloudflared sont installés automatiquement. Copier l’adresse relay et l’ID du nœud dans Connections avec le polling du tunnel temporaire. Installer ensuite les modèles/plugins du workflow depuis Studio. Run all laisse le nœud actif ; l’arrêt est manuel. Les anciennes copies Drive ne se mettent pas à jour : rouvrir ce lien.
+**Démarrage Colab :** ouvrir le [notebook actuel](https://colab.research.google.com/github/gubnota/auteur/blob/main/deploy/colab/MyMovie_ComfyUI.ipynb), connecter un CPU ou GPU et choisir **Run all**, sans modification. Clés de test préremplies, agent/relay vérifiés, version figée de ComfyUI, navigateur d’import et cloudflared sont installés automatiquement. Copier l’adresse relay et l’ID du nœud dans Connections avec le polling du tunnel temporaire. Installer ensuite les modèles/plugins du workflow depuis Studio. Run all laisse le nœud actif ; l’arrêt est manuel. Les anciennes copies Drive ne se mettent pas à jour : rouvrir ce lien.
+
+**Mode CPU :** Colab et Kaggle utilisent `DEVICE = "auto"` : GPU CUDA disponibles ou un seul worker CPU. `"cpu"` force le CPU ; `"cuda"` exige le nombre de GPU configuré. Tester la connexion et l’initialisation avec le mask canary sans poids ; la génération sur CPU peut être très lente. Rouvrir le notebook actuel : les copies enregistrées ne se mettent pas à jour.
 
 [Tester la connexion depuis votre ordinateur](docs/WORKFLOW_SETUP.md#test-the-notebook-connection-from-your-desktop) : script Python à copier, token desktop et diagnostic HTTP. Le relay n’a pas de page d’accueil : `/` et `/v1` renvoient 404.
 
@@ -58,7 +60,7 @@ l’historique Jobs et les résultats Library restent disponibles.
 **Activity** affiche étapes, journaux, téléchargements et commandes Cancel / Reconnect
 dans tous les onglets, y compris Welcome. Les nœuds indépendants travaillent en parallèle ;
 les workers Kaggle partagent les fichiers et sérialisent les modifications du runtime.
-**Move to Trash / Restore** retire et restaure un workflow avec ses réglages.
+**Move to Trash / Restore** retire et restaure un workflow avec ses réglages. **Trash → Clear trash** vide la liste en conservant les graphes sources et l’historique des jobs. Le terminal occupe toute la fenêtre.
 Setup propose un **Initialization recipe** ordonné et modifiable. Le terminal agent
 et les scripts libres exigent des tokens privés et une activation explicite.
 [Guide](docs/NODE_ACTIVITY.md). Agent et relay **0.1.18** requis ; le dernier agent

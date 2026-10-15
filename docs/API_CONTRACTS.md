@@ -71,7 +71,7 @@
 
 ## Notebook node contract
 - Agent node ID is allowlisted by relay; claims/reports/heartbeats are scoped to that node.
-- One agent per GPU worker, CUDA visibility and ComfyUI port isolated; receipt before remote submission.
+- Notebook DEVICE=auto selects available CUDA workers up to GPU_COUNT, or one CPU worker. DEVICE=cpu bypasses NVIDIA checks, uses --cpu and a cpu0 node ID; DEVICE=cuda requires GPU_COUNT devices. Per-worker agents/ports remain isolated; receipt before remote submission.
 - Runtime loss -> offline node/unknown attempt, never automatic replay.
 - Verified Linux x86_64 archive; current CI bundles mymovie-agent, mymovie-relay and runtime/compiler helpers. SHA256 required before extraction; bounded, architecture-validated binaries.
 - Notebook defaults to local authenticated relay on custom RELAY_PORT, agent → loopback relay and cloudflared → relay only. ComfyUI stays loopback. Stop owns relay/tunnel/agents/managed servers; Attach leaves an existing ComfyUI alive.
@@ -158,7 +158,7 @@
 - control_job_tasks({jobIds,action:resume|cancel}) validates all selected attempts before atomic mutation; started/unknown/terminal tasks are excluded.
 - notebook_setup_script({host:colab|kaggle}) returns configuration/start code, excluding the notebook Stop cell.
 - Notebook release_artifact(repository,tag,download_token,require_relay=True) returns {source,sha256,tag}; published prereleases are eligible. Source URLs are constructed GitHub asset API endpoints. Metadata target/checksum and available GitHub digest must agree; local relay mode requires relayBinarySha256 and an actual relay in the verified archive. Blank source/hash selects discovery; custom source requires an explicit SHA256.
-- Notebook prepare_runtime(binary,comfy_root,revision,work_dir,tunnel_source?,tunnel_sha256?) returns {python,cloudflared}. Existing conflicting checkouts are preserved; stage markers require live CUDA/browser validation. NotebookRunner.start(python=...) uses that interpreter for ComfyUI and agent runtime/compiler operations. Generated Run all reuses healthy workers and never invokes Stop or bounded shutdown by default.
+- Notebook prepare_runtime(binary,comfy_root,revision,work_dir,tunnel_source?,tunnel_sha256?,cpu=false) returns {python,cloudflared}. Existing conflicting checkouts are preserved; stage markers include CPU/CUDA mode and require live device/browser validation. NotebookRunner.start(python=...) uses that interpreter for ComfyUI and agent runtime/compiler operations. Generated Run all reuses healthy workers and never invokes Stop or bounded shutdown by default.
 - for_setup permits validated immutable pending editor sources for dependency review; for_target rejects unprepared execution. Agent returns needs-restart or needs-preparation before readiness/canary.
 - Settings migration converts the retired provider kind to retired, retaining IDs/names/vault references. No generation adapter handles retired destinations.
 - Schema v5 upgrade backs up existing package database and manifest before migration; older apps cannot edit v5.
@@ -181,6 +181,7 @@
 
 ## Durable initialization and private console (0.1.18)
 - WorkflowWrapper adds archivedAt?: string and initialization: [{name, script, directory, timeoutSeconds, policy}]. Defaults preserve existing documents. Max 32 steps; timeout 1–3600; policy recipe/session; working folders confined beneath canonical ComfyUI root. Portable exports carry recipes and clear archivedAt/profiles.
+- clear_workflow_trash() -> Project removes only archived movie workflow catalogue entries. Immutable source files, revisions and frozen job receipts remain; ordinary save still rejects source removal.
 - Native: start_initialization(connectionId,workflowId,reviewId), list_initializations(connectionId), cancel_initialization(connectionId,operationId), apply_initialization(connectionId,operationId), archive_workflow(workflowId,archived), console_request(connectionId,sessionId?,command?).
 - Relay command kind initialize snapshots workflows/sourceWorkflow/projectId/connectionId/reviewId. Identical active requests reuse the operation; different active initialization on the node returns 409. GET /v1/nodes/{node}/operations lists latest 100 initializations without payloads.
 - Agent reports progress {stage,detail,startedAt,updatedAt,bytes?,totalBytes?,log[]} (latest 128 rows), lastContact, terminal report/error through the existing lease. Cancellation stops helpers; completed files/step receipts remain. Agent restart reconciles local interrupted receipts as failed, never replays scripts automatically.

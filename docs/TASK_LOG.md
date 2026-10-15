@@ -1,5 +1,12 @@
 # Task Log
 
+## 2026-10-15 — CPU notebooks, workflow trash cleanup and full-window console
+
+- Approved continuation on main, including requested CPU instances. Colab/Kaggle DEVICE=auto chooses available CUDA workers or one CPU worker; explicit cpu/cuda modes supported. CPU runs ComfyUI with --cpu, skips NVIDIA checks and uses a cpu0 node identity. Runtime cache markers include device mode. Kaggle dual GPUs remain independent workers, without pooled memory.
+- Setup restores missing helpers from bundled reviewed source, preventing skipped bootstrap cells from producing gpu_indices/NotebookRunner NameErrors. Both generated notebooks keep predefined keys, reviewed dependency ownership in Studio and manual Stop. Existing saved notebook copies must be reimported.
+- Connections accepts and labels CPU notebook nodes; workflow Trash has Clear trash, preserving immutable graph files, revisions and frozen job history. The remote console fills the app window and keeps controls usable on smaller screens.
+- Validation: 62 Python, 27 frontend and 5 project-core tests passed. Nine workflow browser scenarios and two CPU/GPU connection scenarios passed with mocked bridge/network; no generation. Production/native Apple Silicon build and source-version parity passed at 0.1.18. Console screenshot: screenshots/remote-console-fullscreen.png (fixture). Rebuilt, ad-hoc signed and installed /Applications/MyMovie Studio.app 0.1.18; strict signature and binary hashes verified. Previous app: /private/tmp/auteur-app-backup.dZYQoa/MyMovie Studio.app. Relaunch is needed to load the updated app. No tag or publication created. EN/RU/FR and compact context updated. Live CPU Colab/Kaggle installation/generation remains unverified.
+
 ## 2026-10-15 — Background initialization, recipes, console and workflow Trash, 0.1.18
 
 - Approved continuation on main. Initialization is an agent-owned durable operation with detailed stage/log/download progress, cancellation, reconnect and duplicate prevention. The global Activity panel remains available across movie screens and Welcome. Independent nodes can initialize concurrently; workers sharing a runtime serialize mutations and reuse verified dependencies. Changed dependency plans require a fresh review.

@@ -126,6 +126,8 @@ export async function openFixture(
       if (command === 'apply_initialization') { window.fixture.setupCalls.push({command,...args}); return null; }
       if (command === 'cancel_initialization') { initializations.find(r => r.id === args.operationId).state='canceled'; return {}; }
       if (command === 'archive_workflow') { const w = project.workflows.find(w => w.id === args.workflowId); w.wrapper = {...w.wrapper, archivedAt: args.archived ? new Date().toISOString() : undefined}; project.revision++; return project; }
+      if (command === 'clear_workflow_trash') { project.workflows = project.workflows.filter(w => !w.wrapper?.archivedAt); project.revision++; return project; }
+      if (command === 'console_request') return { id:'fixture-console', state:args.command?.type === 'close' ? 'closed' : 'running', output:[{text:'CPU worker ready\\n$ '}] };
       if (command === 'runner_operation') return setupPending ? {state:'running',report:{}} : {state:'completed',report:setupOperations[args.operationId]};
       if (command === 'get_runner_tokens') return structuredClone(runnerTokens);
       if (command === 'save_runner_tokens') { runnerTokens = structuredClone(args.tokens); return; }

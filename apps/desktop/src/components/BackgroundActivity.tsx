@@ -400,7 +400,11 @@ function RemoteConsole({
       .join("")
       .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "") ?? "";
   return (
-    <Modal title={`Remote console · ${connection.name}`} onClose={onClose}>
+    <Modal
+      title={`Remote console · ${connection.name}`}
+      onClose={onClose}
+      fullScreen
+    >
       <p>
         Interactive agent terminal · {session?.state ?? "connecting"}. Requires
         private tokens and an agent started with <code>--allow-console</code>.

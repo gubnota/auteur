@@ -970,6 +970,7 @@ export default function App() {
               )}{" "}
               {route === "Workflows" && (
                 <Workflows
+                  clearTrash={async () => { await mutateMedia("clear_workflow_trash", {}, "Workflow trash cleared"); }}
                   archive={async (workflowId, archived) => { await mutateMedia("archive_workflow", {workflowId, archived}, archived ? "Workflow moved to Trash" : "Workflow restored"); }}
                   project={p}
                   settings={settings}

@@ -93,7 +93,7 @@ pair instead of the shared public test defaults:
    `MYMOVIE_ALLOW_CONSOLE=true`). Both the agent and relay must use the private pair.
 3. Connections → **Remote console**, or use the terminal button in Activity.
    A PTY shell opens in this node's ComfyUI folder. Output is plain text; command
-   input, Ctrl-C and terminal-size controls are supported.
+   input, Ctrl-C and terminal-size controls are supported. The console fills the app window, with a flexible output area and accessible controls on smaller screens.
 4. Closing the window detaches. Reopen to reconnect to the same live session;
    **End session** terminates it. Sessions last at most 30 minutes and retain up to
    256 KiB of output. An agent restart closes the old session without replaying commands.
@@ -108,6 +108,7 @@ receive a reduced environment without relay authentication tokens.
 Workflows → **Move to Trash** removes a movie copy from active workflow lists,
 variants and new-job choices. **Trash → Restore** restores the same identity,
 input form, guide and recipe. Source graphs, assets and previous job receipts remain.
+**Trash → Clear trash** removes all trashed movie catalogue entries. It preserves immutable source files and revision/job history; cleared entries no longer offer Restore.
 An existing initialization keeps running until explicitly canceled in Activity.
 Built-in example templates remain available to create or restore a movie copy.
 

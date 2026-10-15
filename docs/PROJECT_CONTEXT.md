@@ -9,11 +9,11 @@
 
 ## Current milestone
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
-- Durable agent initialization, global Activity/cancel/reconnect, editable recipes, private terminal and workflow Trash implemented; live private cloud acceptance remains open.
+- Durable agent initialization, global Activity/cancel/reconnect, editable recipes, full-window private terminal and workflow Trash/Clear implemented; live private cloud acceptance remains open.
 - Background setup/console require matching 0.1.18 agent and relay; see docs/NODE_ACTIVITY.md.
 - Example setup requires matching 0.1.16 agent/supervisor; the last published agent remains v0.1.15 until a new release is built.
 - Current source: 0.1.18; designer wrappers, platform families, portable collections and selective queued-task control. Installation evidence is in TASK_LOG.
-- Published v0.1.15 includes the matching Linux agent/relay. GPU notebooks support unchanged Run all with shared test keys, pinned base ComfyUI, isolated Python, browser compiler and verified cloudflared; models/plugins remain app-initialized. Evidence: TASK_LOG and CI_RELEASES.
+- Published v0.1.15 includes the matching Linux agent/relay. CPU/GPU notebooks support unchanged Run all with shared test keys, pinned base ComfyUI, isolated Python, browser compiler and verified cloudflared; models/plugins remain app-initialized. Evidence: TASK_LOG and CI_RELEASES.
 - Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.
 - Real SQLite package persistence; browser preview is memory-only.
@@ -110,7 +110,7 @@
 - RunPod ComfyUI is the primary execution target; Colab first for live cloud acceptance.
 - Authenticated node-scoped relay and outbound Linux/macOS x86_64/ARM64 agents are initial implementations.
 - Tag-only CI publishes checksummed ELF agent archive and deploy/runpod/README.md; no public pod IP needed.
-- Independent Kaggle workers isolate GPU/port/node identity; live deployment pending.
+- Notebook DEVICE=auto uses available CUDA workers or one --cpu worker; cpu/cuda overrides supported. Skipped bootstrap helpers restore from bundled source. Independent Kaggle workers isolate GPU/port/node identity; live deployment pending.
 - Agent exposes typed doctor/inventory/drain/bootstrap/provision operations.
 - Generation receipts precede ComfyUI submission; stale leases become unknown.
 - Storage transfer manifests support hash/size verification and resumed download.

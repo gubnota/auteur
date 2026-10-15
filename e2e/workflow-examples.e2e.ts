@@ -331,6 +331,80 @@ test("workflow Trash restores the same copy with its form intact", async ({
   ).toEqual(project.workflows[0].bindings);
 });
 
+test("clearing workflow trash leaves active workflows available", async ({
+  page,
+}) => {
+  const movie = structuredClone(project);
+  const active = structuredClone(movie.workflows[0]);
+  active.id = "keep-active";
+  active.name = "Keep active";
+  movie.workflows.push(active);
+  await openFixture(page, movie, settings);
+  await page
+    .getByRole("button", { name: "Move workflow to Trash", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Trash · 1", exact: true }).click();
+  await page.getByRole("button", { name: "Clear trash", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Clear trash", exact: true }),
+  ).toBeDisabled();
+  expect(
+    await page.evaluate(() =>
+      (window as any).fixture.movie().workflows.map((w: Workflow) => w.id),
+    ),
+  ).toEqual(["keep-active"]);
+  await page
+    .getByRole("button", { name: "Back to workflows", exact: true })
+    .click();
+  await expect(
+    page.locator(".asset-grid").getByText("Keep active", { exact: true }),
+  ).toBeVisible();
+});
+
+test("remote console fills the app window on smaller screens", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 700 });
+  const relay = structuredClone(settings);
+  relay.connections = [
+    {
+      ...relay.connections[0],
+      id: "relay",
+      kind: "relay",
+      name: "CPU notebook",
+      url: "https://fixture.invalid",
+      deploymentId: "cpu0",
+    },
+  ];
+  await openFixture(page, structuredClone(project), relay);
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await page.getByRole("button", { name: "Open background activity" }).click();
+  await page
+    .getByRole("button", { name: "Open remote console", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .last()
+    .getByRole("button", { name: "CPU notebook", exact: true })
+    .click();
+  const console = page.getByRole("dialog").last();
+  await expect(console.getByLabel("Remote terminal output")).toContainText(
+    "CPU worker ready",
+  );
+  const bounds = await console.boundingBox();
+  expect(bounds).toEqual({ x: 0, y: 0, width: 1024, height: 700 });
+  await expect(
+    console.getByRole("button", { name: "End session", exact: true }),
+  ).toBeInViewport();
+  await expect(console.getByLabel("Remote command")).toBeInViewport();
+  expect(
+    (await console.getByLabel("Remote terminal output").boundingBox())!.height,
+  ).toBeGreaterThan(200);
+  await page.screenshot({
+    path: "docs/screenshots/remote-console-fullscreen.png",
+  });
+});
+
 test("custom recipe steps can be saved, reordered and removed", async ({
   page,
 }) => {

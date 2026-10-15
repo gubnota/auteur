@@ -237,7 +237,25 @@ impl ProjectStore {
             .query_row("SELECT json FROM project WHERE id=1", [], |r| r.get(0))?;
         Ok(serde_json::from_str(&json)?)
     }
-    pub fn save(&mut self, mut project: Project, expected_revision: u64) -> Result<Project> {
+    /// Remove archived catalogue entries only. Immutable graph files, revision
+    /// history and frozen job receipts remain available for provenance.
+    pub fn clear_workflow_trash(&mut self) -> Result<Project> {
+        let mut project = self.read()?;
+        let revision = project.revision;
+        project
+            .workflows
+            .retain(|w| w.wrapper.archived_at.is_none());
+        self.save_inner(project, revision, true)
+    }
+    pub fn save(&mut self, project: Project, expected_revision: u64) -> Result<Project> {
+        self.save_inner(project, expected_revision, false)
+    }
+    fn save_inner(
+        &mut self,
+        mut project: Project,
+        expected_revision: u64,
+        clear_trash: bool,
+    ) -> Result<Project> {
         validate(&project)?;
         let tx = self.db.transaction()?;
         let (rev, json): (i64, String) =
@@ -261,6 +279,12 @@ impl ProjectStore {
             }
         }
         for w in &old.workflows {
+            if clear_trash
+                && w.wrapper.archived_at.is_some()
+                && !project.workflows.iter().any(|x| x.id == w.id)
+            {
+                continue;
+            }
             if !project.workflows.iter().any(|x| {
                 x.id == w.id
                     && x.version == w.version
@@ -477,6 +501,46 @@ pub fn validate(p: &Project) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn clear_workflow_trash_preserves_active_graphs_and_history() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut store =
+            ProjectStore::create(tmp.path().join("film.mymovie"), "Film", false).unwrap();
+        let mut p = store.read().unwrap();
+        let workflow = |name: &str, archived: bool| -> Workflow {
+            serde_json::from_value(serde_json::json!({
+                "id": id(), "name": name, "version": "a".repeat(64), "graph": {},
+                "bindings": [], "wrapper": {"archivedAt": if archived { Some("123") } else { None }}
+            }))
+            .unwrap()
+        };
+        p.workflows = vec![workflow("Active", false), workflow("Trashed", true)];
+        let p = store.save(p, 0).unwrap();
+        let trashed = &p.workflows[1];
+        let original = store.path().join(format!(
+            "workflows/{}/{}/definition.json",
+            trashed.id, trashed.version
+        ));
+        let mut invalid = p.clone();
+        invalid.workflows.clear();
+        assert!(store.save(invalid, p.revision).is_err());
+        let cleared = store.clear_workflow_trash().unwrap();
+        assert_eq!(cleared.workflows.len(), 1);
+        assert_eq!(cleared.workflows[0].id, p.workflows[0].id);
+        assert!(original.is_file());
+        let history: String = store
+            .connection()
+            .query_row(
+                "SELECT json FROM history WHERE revision=?1",
+                [p.revision as i64],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(history.contains(&trashed.id));
+        drop(store);
+        let reopened = ProjectStore::open(tmp.path().join("film.mymovie")).unwrap();
+        assert_eq!(reopened.read().unwrap().workflows.len(), 1);
+    }
     #[test]
     fn portable_revisioned_document_recovers_projection_and_locks() {
         let tmp = tempfile::tempdir().unwrap();

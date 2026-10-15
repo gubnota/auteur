@@ -570,7 +570,9 @@ export function Workflows({
   notify,
   saveForm,
   archive,
+  clearTrash,
 }: {
+  clearTrash: () => Promise<void>;
   archive: (workflowId: string, archived: boolean) => Promise<void>;
   saveForm: (
     id: string,
@@ -600,6 +602,7 @@ export function Workflows({
   );
   const [pinning, setPinning] = useState("");
   const [showTrash, setShowTrash] = useState(false);
+  const [clearingTrash, setClearingTrash] = useState(false);
   useEffect(() => {
     void call<import("../lib/types").Workflow[]>("list_workflows")
       .then((all) => setExamples(all.filter((v) => !!v.wrapper?.exampleId)))
@@ -645,6 +648,32 @@ export function Workflows({
           ? "Back to workflows"
           : `Trash · ${p.workflows.filter((w) => w.wrapper?.archivedAt).length}`}
       </button>
+      {showTrash && (
+        <div className="row">
+          <button
+            disabled={
+              clearingTrash || !p.workflows.some((w) => w.wrapper?.archivedAt)
+            }
+            onClick={async () => {
+              setClearingTrash(true);
+              try {
+                await clearTrash();
+                setSelected("");
+              } catch (e) {
+                notify(String(e));
+              } finally {
+                setClearingTrash(false);
+              }
+            }}
+          >
+            {clearingTrash ? "Clearing…" : "Clear trash"}
+          </button>
+          <small>
+            Removes trashed workflows from this movie’s catalogue. Job history
+            and original graph files are kept.
+          </small>
+        </div>
+      )}
       {!showTrash && !!examples.length && (
         <section className="example-section">
           <h2>Examples · start here</h2>
