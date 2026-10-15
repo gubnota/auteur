@@ -117,20 +117,25 @@ class BootstrapTests(unittest.TestCase):
             notebook = json.loads((ROOT / f'deploy/{host}/MyMovie_ComfyUI.ipynb').read_text())
             config = ''.join(notebook['cells'][3]['source'])
             setup = ''.join(notebook['cells'][5]['source'])
+            self.assertTrue(setup.startswith('import platform\n'))
             resolve = Mock(return_value={'source': 'https://example.com/agent', 'sha256': 'a'*64, 'tag': 'v0.1.13'})
             install = Mock(return_value=self.root / 'mymovie-agent')
             runner = Mock(); runner.configuration.return_value = {}
+            runtime_platform = types.ModuleType('platform')
+            runtime_platform.system = lambda: 'Linux'
+            runtime_platform.machine = lambda: 'x86_64'
             namespace = {'secret': b.secret, 'release_artifact': resolve, 'install_artifact': install,
                          'NotebookRunner': Mock(return_value=runner), 'SetupError': b.SetupError, 'json': json, 'print': Mock(),
-                         'platform': types.SimpleNamespace(system=lambda: 'Linux', machine=lambda: 'x86_64'),
                          'gpu_indices': lambda: [0, 1], 'prepare_runtime': Mock(return_value={'python': '/env/python', 'cloudflared': '/bin/cloudflared'})}
             exec(config, namespace)
-            exec(setup, namespace)
+            with patch.dict(sys.modules, {'platform': runtime_platform}):
+                exec(setup, namespace)
             resolve.assert_called_once_with('gubnota/auteur', '', None, require_relay=True)
             install.assert_called_once_with('https://example.com/agent', 'a'*64, namespace['WORK_DIR'] / 'artifacts', None, require_relay=True)
             namespace.pop('runner')
             namespace['ARTIFACT_SOURCE'] = '/uploaded/archive.tar.gz'
-            with self.assertRaisesRegex(b.SetupError, 'set both'): exec(setup, namespace)
+            with patch.dict(sys.modules, {'platform': runtime_platform}):
+                with self.assertRaisesRegex(b.SetupError, 'set both'): exec(setup, namespace)
     def test_secrets_and_missing_grants(self):
         value = "x" * 32
         google = types.ModuleType("google"); colab = types.ModuleType("google.colab")

@@ -340,3 +340,7 @@
 - Native acceptance in a disposable verification movie: imported the public weight-free mask API fixture, saved collection/name/Markdown guide, reopened it with the guide retained, and exported a portable wrapper. Export inspection confirmed schema/version and empty preparations/destinations. The Colab complete-script window loads through the registered native command. No workflow was executed.
 - Screenshots: workflow-wrapper-guide.png, workflow-wrapper-native-0.1.12.png, generate.png, jobs-queue-edit.png and workflow-catalogue.png. EN/RU/FR READMEs, compact project memory, wrapper/setup/release guides updated. Live cloud/GPU roundtrip remains unverified; no release tag published.
 - Implementation commits on main: 04ceed6 (contracts/native runner) and b88fcf9 (workflow/setup/queue UI). Root cpu-canary.png remains untracked and untouched.
+
+## 2026-10-15 — Notebook setup import fix
+
+- Kaggle setup referenced `platform` from a hidden bootstrap cell. The setup cell now imports it directly; regenerated Colab and Kaggle notebooks from the shared generator. Added a regression assertion for the generated setup cell.

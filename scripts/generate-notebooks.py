@@ -63,7 +63,9 @@ USE_PRIVATE_DOWNLOAD_SECRET = False
 # MYMOVIE_DESKTOP_TOKEN = secret(HOST, "MYMOVIE_DESKTOP_TOKEN")
 print("Default configuration loaded. No key or configuration edits are required.")
 '''
-    setup = '''if "runner" in globals() and runner.status()["state"] == "running":
+    setup = '''import platform
+
+if "runner" in globals() and runner.status()["state"] == "running":
     print("Healthy session already running; reusing its workers and connection address.")
 else:
     if "runner" in globals() and runner.status()["state"] == "attention":
