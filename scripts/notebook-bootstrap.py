@@ -1,4 +1,4 @@
-"""Verified Linux agent deployment and two independent notebook GPU workers.
+"""Verified Linux agent deployment with CPU or independent notebook GPU workers.
 
 Stdlib bootstrap; installs base runtime/tools, never weights or workflow plugins.
 """
@@ -31,10 +31,10 @@ class SetupError(RuntimeError):
     """Public messages are deliberately independent of network/secret exceptions."""
 
 
-def prepare_runtime(binary, comfy_root, revision, work_dir, *, tunnel_source=None, tunnel_sha256=None):
+def prepare_runtime(binary, comfy_root, revision, work_dir, *, tunnel_source=None, tunnel_sha256=None, cpu=False):
     """Provision a base install; reviewed workflow dependencies belong to Studio."""
     if platform.system() != "Linux" or platform.machine() != "x86_64":
-        raise SetupError("Automatic notebook setup requires a Linux x86_64 GPU runtime.")
+        raise SetupError("Automatic notebook setup requires a Linux x86_64 runtime.")
     if not re.fullmatch(r"[a-f0-9]{40}", revision or ""):
         raise SetupError("The notebook must contain a pinned ComfyUI revision.")
     root, work = Path(comfy_root).resolve(), Path(work_dir).resolve()
@@ -76,7 +76,7 @@ def prepare_runtime(binary, comfy_root, revision, work_dir, *, tunnel_source=Non
         raise SetupError("The agent archive must include workflow-compiler-requirements.txt.")
     python = work / "env/bin/python"
     marker = work / "base-runtime.json"
-    expected = {"schema": 1, "revision": revision, "python": sys.executable,
+    expected = {"schema": 1, "device": "cpu" if cpu else "cuda", "revision": revision, "python": sys.executable,
                 "pythonVersion": sys.version, "comfyRoot": str(root),
                 "requirements": hashlib.sha256((root / "requirements.txt").read_bytes() + requirements.read_bytes()).hexdigest()}
     try:
@@ -85,17 +85,18 @@ def prepare_runtime(binary, comfy_root, revision, work_dir, *, tunnel_source=Non
         cached = False
     if not cached:
         marker.unlink(missing_ok=True)
-        # Reuse the runtime's CUDA PyTorch without changing notebook packages.
+        # Reuse the runtime's PyTorch without changing notebook packages.
         # Colab may omit ensurepip; inherit its existing pip instead of requiring apt.
         command([sys.executable, "-m", "venv", "--without-pip", "--system-site-packages", work / "env"], "Creating isolated Python environment")
         command([python, "-m", "pip", "install", "-r", root / "requirements.txt", "-r", requirements], "Installing ComfyUI and workflow-import dependencies")
         command([python, "-m", "playwright", "install", "--with-deps", "chromium"], "Installing workflow-import browser")
-    # A marker alone is never readiness; validate CUDA and the browser's OS libraries.
+    # A marker alone is never readiness; validate the chosen device and the browser's OS libraries.
     try:
         command([python, "-c", "import sys; sys.path.insert(0, sys.argv[1]); sys.argv=sys.argv[:1]; import torch, aiohttp, folder_paths; "
-                 "from playwright.sync_api import sync_playwright; assert torch.cuda.is_available(), 'CUDA unavailable'; "
+                 "from playwright.sync_api import sync_playwright; " +
+                 ("assert torch.ones(1).device.type == 'cpu'; " if cpu else "assert torch.cuda.is_available(), 'CUDA unavailable'; ") +
                  "p=sync_playwright().start(); browser=p.chromium.launch(headless=True, args=['--no-sandbox']); browser.close(); p.stop()", root],
-                "Verifying CUDA and workflow-import browser", timeout=90)
+                f"Verifying {'CPU' if cpu else 'CUDA'} and workflow-import browser", timeout=90)
     except SetupError:
         marker.unlink(missing_ok=True)
         raise
@@ -324,6 +325,21 @@ def gpu_indices() -> list[int]:
         raise SetupError("No accessible NVIDIA GPU. Enable a GPU runtime and retry.") from None
 
 
+def execution_device(mode="auto", count=1):
+    """CPU uses one worker; auto uses up to the requested number of CUDA GPUs."""
+    if mode not in ("auto", "cpu", "cuda") or count not in (1, 2):
+        raise SetupError("Choose DEVICE auto, cpu or cuda and GPU_COUNT 1 or 2.")
+    if mode == "cpu":
+        return "cpu", 1
+    try:
+        devices = gpu_indices()
+    except SetupError:
+        devices = []
+    if mode == "cuda" and len(devices) < count:
+        raise SetupError("Enable the requested GPU runtime or select DEVICE = 'auto' for CPU fallback.")
+    return ("cuda", min(count, len(devices))) if devices else ("cpu", 1)
+
+
 def comfy_info(url: str) -> dict:
     try:
         with urllib.request.urlopen(f"{url}/system_stats", timeout=5) as response:
@@ -346,14 +362,17 @@ def plans(count: int, prefix: str, root: Path, first_port=8188) -> list[dict]:
 
 
 class NotebookRunner:
-    def __init__(self, binary: Path, relay: str, root: Path, count=1, prefix=None, first_port=8188, allow_quick_tunnel=False):
+    def __init__(self, binary: Path, relay: str, root: Path, count=1, prefix=None, first_port=8188, allow_quick_tunnel=False, cpu=False):
         self.binary = Path(binary).resolve()
         self.relay = private_url(relay, loopback=True, allow_quick_tunnel=allow_quick_tunnel)
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         # A fresh session gets a fresh node ID. Keep this object for stop/start with its receipts.
         self.prefix = prefix or f"notebook-{uuid.uuid4().hex[:10]}"
-        self.workers = plans(count, self.prefix, self.root, first_port)
+        self.cpu = cpu
+        self.workers = plans(1 if cpu else count, self.prefix, self.root, first_port)
+        if cpu:
+            self.workers[0].update(gpu=None, nodeId=f"{self.prefix}-cpu0", root=self.root / "cpu0")
         self.children = []
         self.comfy_processes = []
         self.supervisor = self.root / "supervisor"
@@ -452,7 +471,7 @@ class NotebookRunner:
             if not (repo / "folder_paths.py").is_file(): raise SetupError("Choose the actual ComfyUI root, including for Attach.")
             if desktop_token is not None:
                 self._start_relay(token, desktop_token, relay_port)
-            devices = gpu_indices()
+            devices = [None] if self.cpu else gpu_indices()
             if len(devices) < len(self.workers):
                 raise SetupError("Two GPUs were requested, but fewer than two are available. Select one GPU or change the runtime.")
             revision = None
@@ -478,7 +497,8 @@ class NotebookRunner:
                 for w, device in zip(self.workers, devices):
                     w["gpu"] = device
                     w["root"].mkdir(parents=True, exist_ok=True)
-                    args = [python or sys.executable, str(repo / "main.py"), "--listen", "127.0.0.1", "--port", str(w["port"]), "--cuda-device", str(device), "--disable-auto-launch"]
+                    args = [python or sys.executable, str(repo / "main.py"), "--listen", "127.0.0.1", "--port", str(w["port"]), "--disable-auto-launch"]
+                    args.extend(["--cpu"] if self.cpu else ["--cuda-device", str(device)])
                     for directory in ("input", "output", "temp", "user"):
                         path = w["root"] / directory; path.mkdir(exist_ok=True)
                         args.extend([f"--{directory}-directory", str(path)])
@@ -496,11 +516,12 @@ class NotebookRunner:
                         raise SetupError("A ComfyUI process exited before readiness. Inspect process-*.log in the session folder for the cause.")
                     try:
                         info = comfy_info(url)
-                        # Managed workers have explicitly assigned physical GPU indices.
-                        cuda = [d for d in info["stats"].get("devices", []) if d.get("type") == "cuda"]
-                        if len(cuda) != 1:
-                            raise SetupError("Each notebook ComfyUI must expose exactly one CUDA GPU.")
-                        w["deviceName"] = cuda[0].get("name", "")
+                        # Managed workers have an explicit CPU or physical GPU assignment.
+                        kind = "cpu" if self.cpu else "cuda"
+                        matched = [d for d in info["stats"].get("devices", []) if d.get("type") == kind]
+                        if len(matched) != 1:
+                            raise SetupError(f"Each notebook ComfyUI must expose exactly one {kind.upper()} device.")
+                        w["deviceName"] = matched[0].get("name", "")
                         w["readiness"] = info["nodeCount"]
                         break
                     except SetupError as e:

@@ -105,7 +105,7 @@ Export the setup/profile files first where requested; the preview command does n
 
 For Colab/Kaggle, the modal provides the notebook Configure/start cells; it intentionally
 excludes the Stop cell. Open the current notebook from the
-[notebook guide](../deploy/runpod/README.md) and Run all with a GPU runtime. Its defaults
+[notebook guide](../deploy/runpod/README.md) and Run all with a CPU or GPU runtime. DEVICE="auto" selects CUDA when available, otherwise one CPU worker; DEVICE="cpu" forces CPU and DEVICE="cuda" requires the requested GPUs. Use the weight-free mask canary for CPU smoke tests; model generation can be very slow. Its defaults
 install pinned base ComfyUI, the verified agent/relay and compiler, and cloudflared;
 the predefined test keys require no Secrets configuration. Models and workflow plugins
 are installed later from Studio. Kaggle uses independent processes/ports per GPU,

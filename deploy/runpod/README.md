@@ -119,9 +119,7 @@ required by default. Environment and Secrets overrides are commented out. For a
 private deployment replace both values consistently; the app stores overrides in
 the OS vault. Existing connection credentials are updated separately.
 
-Install `cloudflared` in the notebook environment, configure the verified current
-client archive/checksum, existing ComfyUI checkout and pinned revision, then run
-Install and Start. `START_LOCAL_RELAY = True` starts the bundled relay on
+Run all from the top: the notebook resolves the release checksum and installs its pinned ComfyUI, browser importer and cloudflared automatically. CPU and GPU runtimes are supported: `DEVICE = "auto"` falls back to one CPU worker without a GPU; `"cpu"` forces CPU; `"cuda"` requires the requested GPUs. Kaggle can run two independent CUDA workers, without pooled memory. For CPU, start with the weight-free mask canary; model generation may be very slow. `START_LOCAL_RELAY = True` starts the bundled relay on
 `http://127.0.0.1:RELAY_PORT` (8787 by default) and supplies its node allowlist.
 The agent connects locally; cloudflared exposes **only the authenticated relay**.
 ComfyUI remains on loopback. Start prints the public relay URL and node IDs, never

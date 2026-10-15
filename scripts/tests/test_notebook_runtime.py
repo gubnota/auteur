@@ -83,7 +83,7 @@ class RuntimePreparationTests(unittest.TestCase):
         notebook = json.loads((ROOT / 'deploy/colab/MyMovie_ComfyUI.ipynb').read_text())
         install = Mock(); resolve = Mock()
         namespace = {'platform': types.SimpleNamespace(system=lambda: 'Linux', machine=lambda: 'x86_64'),
-                     'gpu_indices': lambda: [], 'install_artifact': install, 'release_artifact': resolve,
+                     'execution_device': Mock(side_effect=b.SetupError('Enable the requested GPU')), 'gpu_indices': lambda: [], 'install_artifact': install, 'release_artifact': resolve,
                      'SetupError': b.SetupError, 'prepare_runtime': Mock(), 'NotebookRunner': Mock(),
                      'secret': Mock(), 'print': Mock()}
         exec(''.join(notebook['cells'][3]['source']), namespace)
@@ -95,12 +95,40 @@ class RuntimePreparationTests(unittest.TestCase):
                 exec(''.join(notebook['cells'][5]['source']), namespace)
         install.assert_not_called(); resolve.assert_not_called()
 
-    def test_setup_reports_skipped_bootstrap_without_name_error(self):
-        notebook = json.loads((ROOT / 'deploy/kaggle/MyMovie_ComfyUI.ipynb').read_text())
-        namespace = {}
-        exec(''.join(notebook['cells'][3]['source']), namespace)
-        with self.assertRaisesRegex(RuntimeError, 'Run all notebook cells from the top'):
-            exec(''.join(notebook['cells'][5]['source']), namespace)
+    def test_setup_restores_skipped_helpers_before_gpu_preflight(self):
+        for host in ('colab', 'kaggle'):
+            notebook = json.loads((ROOT / f'deploy/{host}/MyMovie_ComfyUI.ipynb').read_text())
+            namespace = {}
+            exec(''.join(notebook['cells'][3]['source']), namespace)
+            namespace['DEVICE'] = 'cuda'
+            with patch.multiple(b.platform, system=lambda: 'Linux', machine=lambda: 'x86_64'), patch.object(b.subprocess, 'run', return_value=types.SimpleNamespace(stdout='')), patch.object(b.urllib.request, 'urlopen') as network:
+                with self.assertRaisesRegex(RuntimeError, 'Enable the requested GPU'):
+                    exec(''.join(notebook['cells'][5]['source']), namespace)
+                self.assertTrue(callable(namespace['gpu_indices']))
+                self.assertTrue(callable(namespace['NotebookRunner']))
+                network.assert_not_called()
+
+    def test_cpu_selection_without_nvidia_and_explicit_modes(self):
+        with patch.object(b, 'gpu_indices', side_effect=b.SetupError('No GPU')) as detect:
+            self.assertEqual(b.execution_device('auto', 2), ('cpu', 1))
+            with self.assertRaisesRegex(b.SetupError, 'Enable the requested GPU'):
+                b.execution_device('cuda', 1)
+            detect.reset_mock()
+            self.assertEqual(b.execution_device('cpu', 2), ('cpu', 1))
+            detect.assert_not_called()
+        with patch.object(b, 'gpu_indices', return_value=[0]):
+            self.assertEqual(b.execution_device('auto', 2), ('cuda', 1))
+            with self.assertRaises(b.SetupError): b.execution_device('cuda', 2)
+        with patch.object(b, 'gpu_indices', return_value=[0, 1]):
+            self.assertEqual(b.execution_device('auto', 2), ('cuda', 2))
+
+    def test_cpu_install_health_check_does_not_require_cuda(self):
+        with self.fixture(), patch.object(b.subprocess, 'run', side_effect=self.command), patch.object(b.subprocess, 'check_output', side_effect=lambda args, **kw: self.revision if 'rev-parse' in args else ''):
+            b.prepare_runtime(self.binary, self.repo, self.revision, self.work, cpu=True)
+        health = self.commands[-1]
+        self.assertNotIn('torch.cuda.is_available()', health[2])
+        self.assertIn("torch.ones(1).device.type == 'cpu'", health[2])
+        self.assertEqual(json.loads((self.work / 'base-runtime.json').read_text())['device'], 'cpu')
 
     def test_failed_install_can_retry_without_a_false_marker_or_partial_checkout(self):
         with self.fixture(), patch.object(b.subprocess, 'run', side_effect=RuntimeError('private-test-secret')):
@@ -119,7 +147,7 @@ class RuntimePreparationTests(unittest.TestCase):
         self.assertFalse((self.work / 'cloudflared.part').exists())
 
     def test_run_all_starts_once_leaves_running_and_reuses_session_without_secret_lookup(self):
-        for host, count in [('colab', 1), ('kaggle', 2)]:
+        for host, count, device in [('colab', 1, 'cuda'), ('kaggle', 2, 'cuda'), ('colab', 1, 'cpu'), ('kaggle', 1, 'cpu')]:
             notebook = json.loads((ROOT / f'deploy/{host}/MyMovie_ComfyUI.ipynb').read_text())
             status = {'state': 'stopped', 'relay': 'https://fixture.trycloudflare.com', 'nodes': [{'nodeId': f'test-{i}'} for i in range(count)]}
             runner = Mock(); runner.status.side_effect = lambda: dict(status)
@@ -131,7 +159,7 @@ class RuntimePreparationTests(unittest.TestCase):
             runtime_platform.system = lambda: 'Linux'
             runtime_platform.machine = lambda: 'x86_64'
             namespace = {'platform': types.SimpleNamespace(system=lambda: 'Linux', machine=lambda: 'x86_64'),
-                         'gpu_indices': lambda: list(range(count)), 'prepare_runtime': prepare, 'release_artifact': resolve,
+                         'execution_device': lambda mode, requested: (device, count), 'gpu_indices': lambda: list(range(count)), 'prepare_runtime': prepare, 'release_artifact': resolve,
                          'install_artifact': Mock(return_value=self.binary), 'NotebookRunner': Mock(return_value=runner),
                          'SetupError': b.SetupError, 'json': json, 'print': Mock(), 'secret': secrets}
             for repeat in range(2):
@@ -144,6 +172,9 @@ class RuntimePreparationTests(unittest.TestCase):
             runner.start.assert_called_once()
             self.assertEqual(runner.start.call_args.kwargs['python'], '/fixture/env/bin/python')
             prepare.assert_called_once(); resolve.assert_called_once(); secrets.assert_not_called()
+            self.assertEqual(prepare.call_args.kwargs['cpu'], device == 'cpu')
+            self.assertEqual(namespace['NotebookRunner'].call_args.args[3], count)
+            self.assertEqual(namespace['NotebookRunner'].call_args.kwargs['cpu'], device == 'cpu')
             for cell in notebook['cells']:
                 if cell['cell_type'] == 'code': ast.parse(''.join(cell['source']), feature_version=(3, 10))
 

@@ -110,7 +110,7 @@ export function Connections({
         });
         connections.push({
           id,
-          name: `${host === "colab" ? "Colab" : "Kaggle"} · GPU ${i}`,
+          name: `${host === "colab" ? "Colab" : "Kaggle"} · ${nodeId.endsWith("-cpu0") ? "CPU" : `GPU ${i}`}`,
           kind: "relay",
           url,
           credentialRef,
@@ -126,7 +126,7 @@ export function Connections({
       });
       setNotebook(false);
       notify(
-        `Added ${connections.length} independent notebook GPU node${connections.length === 1 ? "" : "s"}. Check connection after starting the notebook client.`,
+        `Added ${connections.length} independent notebook node${connections.length === 1 ? "" : "s"}. Check connection after starting the notebook client.`,
       );
     } catch (e) {
       notify(String(e));
@@ -360,7 +360,9 @@ export function Connections({
                       Inventory
                     </button>
                     <button onClick={openActivity}>Activity</button>
-                    <button onClick={() => openConsole(c.id)}>Remote console</button>
+                    <button onClick={() => openConsole(c.id)}>
+                      Remote console
+                    </button>
                     <button
                       onClick={() =>
                         void action(c, "runner_action", { action: "drain" })
@@ -373,11 +375,13 @@ export function Connections({
                     title="Workflows to initialize"
                     multiple
                     value={selected}
-                    options={project.workflows.filter(w => !w.wrapper?.archivedAt).map((w) => ({
-                      id: w.id,
-                      label: w.name,
-                      description: w.version.slice(0, 12),
-                    }))}
+                    options={project.workflows
+                      .filter((w) => !w.wrapper?.archivedAt)
+                      .map((w) => ({
+                        id: w.id,
+                        label: w.name,
+                        description: w.version.slice(0, 12),
+                      }))}
                     onChange={(id) =>
                       setSelected((x) =>
                         x.includes(id) ? x.filter((v) => v !== id) : [...x, id],
@@ -460,7 +464,7 @@ export function Connections({
       </article>
       {notebook && (
         <Modal
-          title="Connect notebook GPUs"
+          title="Connect notebook nodes"
           onClose={() => {
             if (!savingNotebook) {
               setNotebook(false);
@@ -474,12 +478,12 @@ export function Connections({
               {
                 id: "colab",
                 label: "Google Colab",
-                description: "One GPU worker",
+                description: "One CPU or GPU worker",
               },
               {
                 id: "kaggle",
                 label: "Kaggle",
-                description: "One or two independent GPU workers",
+                description: "One CPU worker or up to two GPU workers",
               },
             ]}
             onChange={(v) => setHost(v as "colab" | "kaggle")}
@@ -487,9 +491,10 @@ export function Connections({
           <p>
             Open the bundled{" "}
             {host === "colab" ? "deploy/colab" : "deploy/kaggle"}
-            /MyMovie_ComfyUI.ipynb notebook. Install the verified Linux client
-            artifact, then Start. Copy the public relay address and generated
-            node IDs here. The notebook configures its local relay allowlist.
+            /MyMovie_ComfyUI.ipynb notebook and choose Run all with a CPU or GPU
+            runtime. The notebook installs its verified Linux client
+            automatically. Copy the public relay address and generated node IDs
+            here. The notebook configures its local relay allowlist.
           </p>
           <Field
             label="Authenticated HTTPS relay"
@@ -511,7 +516,7 @@ export function Connections({
           <Field
             label={
               host === "kaggle"
-                ? "Node IDs (comma separated · one per GPU)"
+                ? "Node IDs (comma separated · one per worker)"
                 : "Notebook node ID"
             }
             value={nodeIds}
@@ -536,9 +541,10 @@ export function Connections({
           <p className="muted">
             The notebook uses the same predefined pair unless you edit it. The
             app sends only MYMOVIE_DESKTOP_TOKEN; the agent uses
-            MYMOVIE_AGENT_TOKEN. ComfyUI stays on loopback. Two Kaggle nodes
-            have separate queues and concurrency 1; send one lightweight job to
-            each for parallel execution. Their GPU memory is not combined.
+            MYMOVIE_AGENT_TOKEN. ComfyUI stays on loopback. CPU mode starts one
+            worker. Two Kaggle GPU nodes have separate queues and concurrency 1;
+            send one lightweight job to each for parallel execution. Their GPU
+            memory is not combined.
           </p>
           <p className="muted">
             A fresh notebook session gets new node IDs. Collect results before
@@ -556,7 +562,7 @@ export function Connections({
             }
             onClick={() => void addNotebook()}
           >
-            {savingNotebook ? "Saving…" : "Add GPU connections"}
+            {savingNotebook ? "Saving…" : "Add notebook connections"}
           </button>
         </Modal>
       )}

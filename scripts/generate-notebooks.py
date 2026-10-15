@@ -16,21 +16,22 @@ def cell(kind, source, hidden=False):
 
 for host, root, count in [("colab", "/content", 1), ("kaggle", "/kaggle/working", 2)]:
     intro = f"""# MyMovie Studio · {host.title()} ComfyUI client
-**Enable a GPU runtime and Internet, then choose Run all. No edits, Secrets, copied hashes or manual installs are needed for the default test setup.**
+**Enable Internet, choose a CPU or GPU runtime, then choose Run all. No edits, Secrets, copied hashes or manual installs are needed for the default test setup.**
 
-The notebook installs pinned ComfyUI {RUNTIME['comfyRelease']} in its own session folder, reuses the runtime's CUDA PyTorch in an isolated Python environment, installs the workflow-import browser and checksum-verified cloudflared, and downloads a verified released Linux x86_64 agent + relay. **No model weights or workflow plugins are downloaded.** Install those later through Studio's workflow initialization.
+The notebook installs pinned ComfyUI {RUNTIME['comfyRelease']} in its own session folder, reuses the runtime's PyTorch in an isolated Python environment, installs the workflow-import browser and checksum-verified cloudflared, and downloads a verified released Linux x86_64 agent + relay. **No model weights or workflow plugins are downloaded.** Install those later through Studio's workflow initialization.
 
-The predefined public test keys match Studio → Settings → Node access. Optional environment/Secrets overrides are commented out. Use a private pair in both places for private deployments. Public agent releases require no GitHub token; optional custom release/archive settings are below. Run all cells from the top; do not skip the bootstrap helper cell (it is visible so Kaggle executes it).
+The predefined public test keys match Studio → Settings → Node access. Optional environment/Secrets overrides are commented out. Use a private pair in both places for private deployments. Public agent releases require no GitHub token; optional custom release/archive settings are below. Run all cells from the top. Setup can also restore bundled helpers if the helper cell was skipped.
 
 At the end copy the **public relay URL** and **node ID** into Studio → Connections → Colab / Kaggle; enable **Temporary Cloudflare tunnel · polling only**. ComfyUI stays on loopback. Quick Tunnels use polling, not SSE; their addresses change after a restart. Select Inventory, pin its native runtime fingerprint in Settings → App Runner, then Review initialization and Initialize your workflow. Collect results into `.mymovie` before ending the session.
 
-Kaggle defaults to two independent T4 workers (select T4 ×2, or optionally set `GPU_COUNT = 1`). GPU memory is not pooled. Colab defaults to one GPU. A healthy repeated Run all reuses the running session. The final Stop cell is disabled by default, so Run all leaves the node running. Runtime termination still ends the session; no keepalive is included.
+Automatic mode uses up to two independent CUDA workers on Kaggle and one on Colab; without a GPU it starts one CPU worker. Set `DEVICE = "cpu"` to force CPU, or `DEVICE = "cuda"` to require the requested GPUs. GPU memory is not pooled. CPU is suitable for connection, initialization and small mask tests; model generation can be very slow. A healthy repeated Run all reuses the running session. The final Stop cell is disabled by default, so Run all leaves the node running. Runtime termination still ends the session; no keepalive is included.
 
 {"Google's managed-runtime usage restrictions still apply; use an eligible runtime for externally controlled workers. See https://research.google.com/colaboratory/faq.html ." if host == "colab" else "Kaggle GPU/Internet access and notebook lifetime depend on your account. See https://www.kaggle.com/docs/notebooks ."}
 """
     config = f'''from pathlib import Path
 HOST = "{host}"
-GPU_COUNT = {count}  # Kaggle: T4 x2; Colab: one GPU
+DEVICE = "auto"  # auto: CUDA when available, otherwise CPU; or "cpu" / "cuda"
+GPU_COUNT = {count}  # maximum GPUs in auto; exact GPU count in cuda; ignored for CPU
 WORK_DIR = Path("{root}/mymovie-session")
 RELEASE_REPOSITORY = "gubnota/auteur"
 RELEASE_TAG = ""  # optional: pin a published version; blank resolves automatically
@@ -63,23 +64,23 @@ USE_PRIVATE_DOWNLOAD_SECRET = False
 # MYMOVIE_DESKTOP_TOKEN = secret(HOST, "MYMOVIE_DESKTOP_TOKEN")
 print("Default configuration loaded. No key or configuration edits are required.")
 '''
-    setup = '''import platform
+    bootstrap_loader = f'''import platform
 
-_required_bootstrap = ("SetupError", "gpu_indices", "release_artifact", "install_artifact", "prepare_runtime", "NotebookRunner", "secret")
+_required_bootstrap = ("SetupError", "gpu_indices", "release_artifact", "install_artifact", "prepare_runtime", "NotebookRunner", "secret", "execution_device")
 _missing_bootstrap = [name for name in _required_bootstrap if name not in globals()]
 if _missing_bootstrap:
-    raise RuntimeError("Run all notebook cells from the top. The bootstrap helper cell was skipped.")
-
+    exec(compile({HELPER!r}, "<mymovie-bootstrap>", "exec"), globals())
+'''
+    setup = bootstrap_loader + '''
 if "runner" in globals() and runner.status()["state"] == "running":
     print("Healthy session already running; reusing its workers and connection address.")
 else:
     if "runner" in globals() and runner.status()["state"] == "attention":
         raise SetupError("A session process exited. Inspect process-*.log, then use the Stop cell before retrying.")
     if platform.system() != "Linux" or platform.machine() != "x86_64":
-        raise SetupError("Select a Linux x86_64 GPU notebook runtime.")
-    if len(gpu_indices()) < GPU_COUNT:
-        raise SetupError("Enable the requested GPU runtime first (Colab: one GPU; Kaggle: T4 x2).")
-    print("GPU available. Resolving the verified agent release…", flush=True)
+        raise SetupError("Select a Linux x86_64 notebook runtime.")
+    selected_device, worker_count = execution_device(DEVICE, GPU_COUNT)
+    print(f"{selected_device.upper()} · {worker_count} worker(s). Resolving the verified agent release…", flush=True)
     download_token = secret(HOST, "MYMOVIE_DOWNLOAD_TOKEN") if USE_PRIVATE_DOWNLOAD_SECRET else None
     try:
         source, digest = ARTIFACT_SOURCE, ARTIFACT_SHA256
@@ -95,13 +96,13 @@ else:
     if not ATTACH_EXISTING:
         runtime = prepare_runtime(binary, COMFY_ROOT, COMFY_REVISION, WORK_DIR,
                                   tunnel_source=CLOUDFLARED_SOURCE if START_LOCAL_RELAY else None,
-                                  tunnel_sha256=CLOUDFLARED_SHA256)
+                                  tunnel_sha256=CLOUDFLARED_SHA256, cpu=selected_device == "cpu")
         COMFY_PYTHON = runtime["python"]
         CLOUDFLARED_BINARY = runtime["cloudflared"]
     else:
         COMFY_PYTHON = sys.executable
         CLOUDFLARED_BINARY = "cloudflared"  # advanced Attach requires an installed tunnel
-    runner = NotebookRunner(binary, RELAY_URL, WORK_DIR, GPU_COUNT, first_port=FIRST_PORT, allow_quick_tunnel=ALLOW_QUICK_TUNNEL_POLLING)
+    runner = NotebookRunner(binary, RELAY_URL, WORK_DIR, worker_count, first_port=FIRST_PORT, allow_quick_tunnel=ALLOW_QUICK_TUNNEL_POLLING, cpu=selected_device == "cpu")
     print("Installation complete. Starting the node in the next cell.", flush=True)
     if not START_LOCAL_RELAY:
         print("External relay: add these node IDs to MYMOVIE_NODE_IDS before Start:", runner.configuration()["relayAllowlist"])

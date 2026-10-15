@@ -127,7 +127,7 @@ class BootstrapTests(unittest.TestCase):
             runtime_platform.machine = lambda: 'x86_64'
             namespace = {'secret': b.secret, 'release_artifact': resolve, 'install_artifact': install,
                          'NotebookRunner': Mock(return_value=runner), 'SetupError': b.SetupError, 'json': json, 'print': Mock(),
-                         'gpu_indices': lambda: [0, 1], 'prepare_runtime': Mock(return_value={'python': '/env/python', 'cloudflared': '/bin/cloudflared'})}
+                         'execution_device': lambda mode, count: ('cuda', count), 'gpu_indices': lambda: [0, 1], 'prepare_runtime': Mock(return_value={'python': '/env/python', 'cloudflared': '/bin/cloudflared'})}
             exec(config, namespace)
             with patch.dict(sys.modules, {'platform': runtime_platform}):
                 exec(setup, namespace)
@@ -204,6 +204,27 @@ class BootstrapTests(unittest.TestCase):
             self.assertNotEqual(calls[0].args[0],calls[1].args[0])
             self.assertEqual(runner.status()["processesAlive"],4)
             runner.stop()
+    def test_managed_cpu_launches_one_worker_without_gpu_detection(self):
+        from unittest.mock import MagicMock
+        binary = self.root / "mymovie-agent"; binary.touch()
+        (self.root / "mymovie_runtime.py").touch()
+        repo = self.root / "ComfyUI"; repo.mkdir()
+        (repo / "folder_paths.py").touch(); (repo / "main.py").touch()
+        revision = "a" * 40
+        runner = b.NotebookRunner(binary, "https://example.com", self.root / "session", count=2, prefix="test", cpu=True)
+        fake = types.SimpleNamespace(pid=100, poll=lambda: None, wait=lambda timeout: None)
+        sock = MagicMock(); sock.__enter__.return_value.connect_ex.return_value = 1
+        with patch.object(b, "gpu_indices", side_effect=AssertionError("CPU must not require NVIDIA")), patch.object(b, "comfy_info", return_value={"stats": {"devices": [{"type": "cpu", "name": "cpu"}]}, "nodeCount": 3}), patch.object(b.subprocess, "check_output", side_effect=[revision, ""]), patch.object(b.subprocess, "run", return_value=types.SimpleNamespace(stdout="--supervisor")), patch.object(b.socket, "socket", return_value=sock), patch.object(b.subprocess, "Popen", return_value=fake) as spawn, patch.object(b.os, "killpg"):
+            runner.start("s" * 32, comfy_root=repo, expected_revision=revision)
+            self.assertEqual(spawn.call_count, 2)
+            command = spawn.call_args_list[0].args[0]
+            self.assertIn("--cpu", command)
+            self.assertNotIn("--cuda-device", command)
+            self.assertEqual(runner.configuration()["nodes"][0]["nodeId"], "test-cpu0")
+            self.assertIsNone(runner.configuration()["nodes"][0]["gpu"])
+            self.assertEqual(runner.status()["state"], "running")
+            runner.stop()
+
     def test_notebooks_embed_same_helper_without_outputs(self):
         for host in ["colab","kaggle"]:
             data = json.loads((ROOT / f"deploy/{host}/MyMovie_ComfyUI.ipynb").read_text())
