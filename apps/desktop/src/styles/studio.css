@@ -2094,3 +2094,33 @@ dd {
 .agent-workflow-setup li + li {
   margin-top: 0.5rem;
 }
+
+/* Background operations remain reachable from the studio and welcome screen. */
+.activity-launcher {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.25rem;
+  z-index: 45;
+  background: var(--card);
+  box-shadow: 0 0.25rem 1rem #17171524;
+}
+.activity-launcher.has-activity { background: var(--moss); }
+.activity-operation { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; min-width: 0; }
+.activity-operation p { margin: 0; overflow-wrap: anywhere; }
+.transfer-progress { display: grid; gap: 0.5rem; font-size: 0.875rem; }
+.transfer-progress progress { width: 100%; height: 0.625rem; accent-color: var(--ink); border: 0; border-radius: 1rem; overflow: hidden; background: var(--line); }
+.transfer-progress progress::-webkit-progress-bar { background: var(--line); }
+.transfer-progress progress::-webkit-progress-value { background: var(--moss); border-radius: 1rem; }
+.activity-log { max-height: 18rem; overflow: auto; padding: 0 0.5rem 0 1.5rem; font-size: 0.875rem; }
+.activity-log li { padding: 0.5rem 0; overflow-wrap: anywhere; }
+.activity-log time { display: block; color: var(--muted); font-size: 0.75rem; }
+.initialization-recipe { margin-top: 1.25rem; }
+.initialization-recipe > ol { padding-left: 1.5rem; }
+.recipe-step { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.75rem 0; }
+.recipe-step small { display: block; margin-top: 0.375rem; }
+.workflow-trash-actions { padding: 1rem; margin-bottom: 1rem; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
+.remote-terminal { width: 100%; height: min(24rem, 45vh); min-height: 12rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: #171b15; color: #e9f5d8; padding: 1rem; border-radius: var(--radius); font: 0.8125rem/1.5 ui-monospace, SFMono-Regular, monospace; }
+.remote-terminal:focus { outline: 0.125rem solid var(--moss); outline-offset: 0.125rem; }
+.console-input { display: flex; gap: 0.75rem; margin: 1rem 0; }
+.console-input input { flex: 1; min-width: 0; }
+@media (max-width: 50rem) { .activity-launcher { right: 0.75rem; bottom: 0.75rem; } }

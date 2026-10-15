@@ -569,7 +569,9 @@ export function Workflows({
   prepare,
   notify,
   saveForm,
+  archive,
 }: {
+  archive: (workflowId: string, archived: boolean) => Promise<void>;
   saveForm: (
     id: string,
     bindings: Binding[],
@@ -597,6 +599,7 @@ export function Workflows({
     [],
   );
   const [pinning, setPinning] = useState("");
+  const [showTrash, setShowTrash] = useState(false);
   useEffect(() => {
     void call<import("../lib/types").Workflow[]>("list_workflows")
       .then((all) => setExamples(all.filter((v) => !!v.wrapper?.exampleId)))
@@ -637,7 +640,12 @@ export function Workflows({
           onChange={setMediaKind}
         />
       </div>
-      {!!examples.length && (
+      <button aria-pressed={showTrash} onClick={() => setShowTrash((v) => !v)}>
+        {showTrash
+          ? "Back to workflows"
+          : `Trash · ${p.workflows.filter((w) => w.wrapper?.archivedAt).length}`}
+      </button>
+      {!showTrash && !!examples.length && (
         <section className="example-section">
           <h2>Examples · start here</h2>
           <p>
@@ -705,6 +713,7 @@ export function Workflows({
       ) : (
         <div className="asset-grid">
           {p.workflows
+            .filter((w) => !!w.wrapper?.archivedAt === showTrash)
             .filter(
               (w) =>
                 mediaKind === "all" || (w.mediaKind ?? "other") === mediaKind,
@@ -749,69 +758,92 @@ export function Workflows({
 
       {w && (
         <Modal title={w.name} onClose={() => setSelected("")}>
-          <Picker
-            title="Run and install on"
-            disabled={targetBusy}
-            value={targetId}
-            options={settings.connections
-              .filter((c) => ["comfyui", "relay"].includes(c.kind))
-              .map((c) => ({
-                id: c.id,
-                label: c.name,
-                description: `${c.url}${c.deploymentId ? ` · ${c.deploymentId}` : ""}`,
-              }))}
-            onChange={setTargetId}
-          />
-          <WorkflowEditor
-            key={`${w.id}:${targetId}`}
-            onBusyChange={setTargetBusy}
-            workflow={w}
-            workflows={p.workflows}
-            connection={settings.connections.find((c) => c.id === targetId)}
-            selectVariant={setSelected}
-            change={(fn) =>
-              update((p) => fn(p.workflows.find((x) => x.id === w.id)!))
-            }
-            prepare={prepare}
-            saveForm={(bindings, layout) =>
-              saveForm(w.id, bindings, layout, targetId)
-            }
-            notify={notify}
-          />
-          <details className="workflow-job-entry">
-            <summary>Create a job</summary>
-            <h3>Generate a keyframe</h3>
-            <Picker
-              title="Target keyframe"
-              value={frameId}
-              options={p.episodes.flatMap((e) =>
-                e.scenes.flatMap((s) =>
-                  s.shots.flatMap((sh) =>
-                    sh.frames.map((f) => ({
-                      id: f.id,
-                      label: `${e.name} / ${s.name} / ${f.name}`,
-                    })),
-                  ),
-                ),
-              )}
-              onChange={setFrameId}
-              onClear={() => setFrameId("")}
-            />
-            <button
-              className="primary"
-              disabled={false}
-              onClick={() => {
-                setSelected("");
-                onGenerate(frameId, w.id);
-              }}
-            >
-              Create generation job
-            </button>
-            <p className="muted">
-              Choose a keyframe, then review the account and job inputs before
-              submission.
+          <div className="workflow-trash-actions">
+            <p>
+              {w.wrapper?.archivedAt
+                ? "In Trash. Restore to edit, initialize or run. Results and job history are retained."
+                : "Removing a workflow moves this movie copy to Trash. Results and job history are retained. Active initialization continues; cancel it in Activity."}
             </p>
-          </details>
+            <button
+              disabled={targetBusy}
+              onClick={() =>
+                void archive(w.id, !w.wrapper?.archivedAt)
+                  .then(() => setSelected(""))
+                  .catch((e) => notify(String(e)))
+              }
+            >
+              {w.wrapper?.archivedAt
+                ? "Restore workflow"
+                : "Move workflow to Trash"}
+            </button>
+          </div>
+          {!w.wrapper?.archivedAt && (
+            <>
+              <Picker
+                title="Run and install on"
+                disabled={targetBusy}
+                value={targetId}
+                options={settings.connections
+                  .filter((c) => ["comfyui", "relay"].includes(c.kind))
+                  .map((c) => ({
+                    id: c.id,
+                    label: c.name,
+                    description: `${c.url}${c.deploymentId ? ` · ${c.deploymentId}` : ""}`,
+                  }))}
+                onChange={setTargetId}
+              />
+              <WorkflowEditor
+                key={`${w.id}:${targetId}`}
+                onBusyChange={setTargetBusy}
+                workflow={w}
+                workflows={p.workflows.filter((w) => !w.wrapper?.archivedAt)}
+                connection={settings.connections.find((c) => c.id === targetId)}
+                selectVariant={setSelected}
+                change={(fn) =>
+                  update((p) => fn(p.workflows.find((x) => x.id === w.id)!))
+                }
+                prepare={prepare}
+                saveForm={(bindings, layout) =>
+                  saveForm(w.id, bindings, layout, targetId)
+                }
+                notify={notify}
+              />
+              <details className="workflow-job-entry">
+                <summary>Create a job</summary>
+                <h3>Generate a keyframe</h3>
+                <Picker
+                  title="Target keyframe"
+                  value={frameId}
+                  options={p.episodes.flatMap((e) =>
+                    e.scenes.flatMap((s) =>
+                      s.shots.flatMap((sh) =>
+                        sh.frames.map((f) => ({
+                          id: f.id,
+                          label: `${e.name} / ${s.name} / ${f.name}`,
+                        })),
+                      ),
+                    ),
+                  )}
+                  onChange={setFrameId}
+                  onClear={() => setFrameId("")}
+                />
+                <button
+                  className="primary"
+                  disabled={false}
+                  onClick={() => {
+                    setSelected("");
+                    onGenerate(frameId, w.id);
+                  }}
+                >
+                  Create generation job
+                </button>
+                <p className="muted">
+                  Choose a keyframe, then review the account and job inputs
+                  before submission.
+                </p>
+              </details>
+            </>
+          )}
         </Modal>
       )}
     </div>

@@ -1,3 +1,4 @@
+import { openConsole, openActivity } from "../components/BackgroundActivity";
 import { AssistantDialog } from "./PromptAssistant";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -358,6 +359,8 @@ export function Connections({
                     >
                       Inventory
                     </button>
+                    <button onClick={openActivity}>Activity</button>
+                    <button onClick={() => openConsole(c.id)}>Remote console</button>
                     <button
                       onClick={() =>
                         void action(c, "runner_action", { action: "drain" })
@@ -370,7 +373,7 @@ export function Connections({
                     title="Workflows to initialize"
                     multiple
                     value={selected}
-                    options={project.workflows.map((w) => ({
+                    options={project.workflows.filter(w => !w.wrapper?.archivedAt).map((w) => ({
                       id: w.id,
                       label: w.name,
                       description: w.version.slice(0, 12),

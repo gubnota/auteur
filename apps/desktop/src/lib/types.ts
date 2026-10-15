@@ -74,7 +74,16 @@ export interface WorkflowInput {
   group?: string;
   hidden?: boolean;
 }
+export interface InitializationStep {
+  name: string;
+  script: string;
+  directory: string;
+  timeoutSeconds: number;
+  policy: "recipe" | "session";
+}
 export interface WorkflowWrapper {
+  archivedAt?: string | null;
+  initialization?: InitializationStep[];
   exampleId?: string | null;
   pythonPackages?: string[];
   familyId: string; variantName: string; collection: string; description: string; readme: string; illustration?: string | null; os: string; architecture: string; precision: string;

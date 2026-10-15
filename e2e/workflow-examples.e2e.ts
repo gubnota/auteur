@@ -66,7 +66,7 @@ test("bundled example opens its guide and reuses a single movie copy", async ({
   });
 });
 
-test("guided setup reviews pins, restarts managed ComfyUI and rechecks the prepared workflow", async ({
+test("guided setup hands ownership to the agent and cancellation survives closing its window", async ({
   page,
 }) => {
   const relay = structuredClone(settings);
@@ -134,21 +134,33 @@ test("guided setup reviews pins, restarts managed ComfyUI and rechecks the prepa
   await setup
     .getByRole("button", { name: "Install & prepare on Colab T4", exact: true })
     .click();
+  const activity = page.getByRole("dialog").last();
   await expect(
-    setup.getByText("Ready for this session", { exact: true }),
+    activity.getByRole("heading", { name: "Background activity" }),
   ).toBeVisible();
+  await expect(activity.getByRole("status")).toContainText("Downloading sd15");
   const calls = await page.evaluate(() => (window as any).fixture.setupCalls);
-  expect(
-    calls.filter((c: any) => c.apply === true).map((c: any) => c.reviewId),
-  ).toEqual(["review-1", "review-2"]);
+  expect(calls.map((c: any) => c.command)).toEqual([
+    "plan_deployment",
+    "start_initialization",
+  ]);
   expect(
     await page.evaluate(() => (window as any).fixture.submissions.length),
   ).toBe(0);
-  await setup.getByRole("heading").scrollIntoViewIfNeeded();
+  await activity.getByText("Steps & logs").click();
   await page.screenshot({
-    path: "docs/screenshots/workflow-agent-setup.png",
+    path: "docs/screenshots/workflow-background-activity.png",
     fullPage: true,
   });
+  await activity
+    .getByRole("button", { name: "Close dialog", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+  await page.getByRole("button", { name: "Open background activity" }).click();
+  await page
+    .getByRole("button", { name: "Cancel initialization", exact: true })
+    .click();
+  await expect(page.getByText("canceled", { exact: true })).toBeVisible();
 });
 
 test("the workflow modal installs and prepares on the instance selected inside it", async ({
@@ -238,7 +250,7 @@ test("setup keeps the instance fixed while checking and refuses an unmanaged run
   ).toHaveCount(0);
 });
 
-test("a refused restart stops guided initialization before compilation or generation", async ({
+test("agent initialization failures remain visible without starting generation", async ({
   page,
 }) => {
   const relay = structuredClone(settings);
@@ -265,8 +277,19 @@ test("a refused restart stops guided initialization before compilation or genera
   await page
     .getByRole("button", { name: "Install & prepare on Colab T4", exact: true })
     .click();
+  await page.evaluate(() => {
+    const f = (window as any).fixture;
+    f.setInitializations(
+      f.initializations().map((r: any) => ({
+        ...r,
+        state: "failed",
+        error: "Managed restart unavailable",
+      })),
+    );
+  });
+  await page.getByRole("button", { name: "Reconnect", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText(
-    "Colab T4: Error: Dependencies are installed",
+    "Managed restart unavailable",
   );
   expect(
     await page.evaluate(() => (window as any).fixture.preparations),
@@ -274,4 +297,84 @@ test("a refused restart stops guided initialization before compilation or genera
   expect(
     await page.evaluate(() => (window as any).fixture.submissions),
   ).toEqual([]);
+});
+
+test("workflow Trash restores the same copy with its form intact", async ({
+  page,
+}) => {
+  await openFixture(page, structuredClone(project), settings);
+  const name = project.workflows[0].name;
+  await page
+    .getByRole("button", { name: "Move workflow to Trash", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Trash · 1", exact: true }).click();
+  await page
+    .locator(".asset-grid")
+    .getByRole("button")
+    .filter({ hasText: name })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Create a job", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Restore workflow", exact: true })
+    .click();
+  expect(
+    await page.evaluate(
+      () => (window as any).fixture.movie().workflows[0].wrapper.archivedAt,
+    ),
+  ).toBeUndefined();
+  expect(
+    await page.evaluate(
+      () => (window as any).fixture.movie().workflows[0].bindings,
+    ),
+  ).toEqual(project.workflows[0].bindings);
+});
+
+test("custom recipe steps can be saved, reordered and removed", async ({
+  page,
+}) => {
+  await openFixture(page, structuredClone(project), settings);
+  await page.getByRole("tab", { name: "Setup", exact: true }).click();
+  for (const name of ["Prepare folders", "Check extras"]) {
+    await page
+      .getByRole("button", { name: "Add script step", exact: true })
+      .click();
+    const modal = page.getByRole("dialog").last();
+    await modal.getByLabel("Step name", { exact: true }).fill(name);
+    await modal
+      .getByLabel("Shell script", { exact: true })
+      .fill("test -d models");
+    await modal.getByRole("button", { name: "Save step", exact: true }).click();
+  }
+  await page
+    .getByRole("button", { name: "Move Check extras up", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window as any).fixture
+          .movie()
+          .workflows[0].wrapper.initialization.map((s: any) => s.name),
+      ),
+    )
+    .toEqual(["Check extras", "Prepare folders"]);
+  await page
+    .locator(".initialization-recipe li")
+    .first()
+    .getByRole("button", { name: "Remove step", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as any).fixture.movie().workflows[0].wrapper.initialization
+            .length,
+      ),
+    )
+    .toBe(1);
+  await page.screenshot({
+    path: "docs/screenshots/workflow-recipe.png",
+    fullPage: true,
+  });
 });

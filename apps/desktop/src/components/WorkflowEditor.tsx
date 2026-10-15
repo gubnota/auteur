@@ -1,3 +1,4 @@
+import { InitializationRecipe } from "./InitializationRecipe";
 import { useEffect, useState } from "react";
 import type {
   Binding,
@@ -298,6 +299,7 @@ export function WorkflowEditor({
                 })
               }
             />
+            <InitializationRecipe steps={meta.initialization ?? []} change={initialization => metadata({initialization})}/>
             <WorkflowSetup
               workflow={w}
               connectionId={connection?.id ?? ""}

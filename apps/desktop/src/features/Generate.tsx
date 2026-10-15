@@ -276,7 +276,7 @@ export function Generate({
                   <Picker
                     title="Workflow"
                     value={item.workflowId}
-                    options={p.workflows.map((w) => ({
+                    options={p.workflows.filter(w => !w.wrapper?.archivedAt).map((w) => ({
                       id: w.id,
                       label: w.name,
                       description: `${compatibilityLabel(w)} · ${w.mediaKind ?? "other"} · ${w.version.slice(0, 12)}`,

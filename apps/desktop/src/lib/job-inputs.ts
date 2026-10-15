@@ -163,6 +163,7 @@ export function resolveInputs(p: Project, draft: JobDraft, item: JobItem) {
     item.connectionId,
   );
   if (!w) throw new Error("Select a workflow");
+  if (w.wrapper?.archivedAt) throw new Error("Restore this workflow from Trash before using it");
   if (!Object.keys(w.graph).length)
     throw new Error("Prepare this workflow for the selected target first");
   const scene = p.episodes

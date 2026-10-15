@@ -1,3 +1,4 @@
+import { BackgroundActivity } from "./components/BackgroundActivity";
 import { useState, useEffect, useRef, type ReactNode } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listen } from "@tauri-apps/api/event";
@@ -969,6 +970,7 @@ export default function App() {
               )}{" "}
               {route === "Workflows" && (
                 <Workflows
+                  archive={async (workflowId, archived) => { await mutateMedia("archive_workflow", {workflowId, archived}, archived ? "Workflow moved to Trash" : "Workflow restored"); }}
                   project={p}
                   settings={settings}
                   update={update}
@@ -1270,6 +1272,16 @@ export default function App() {
           </section>
         </>
       )}
+      <BackgroundActivity connections={settings.connections} movieId={p?.id} apply={(connectionId,operationId) => {
+        const epoch = generation.current;
+        const operation = pending.current.then(async () => {
+          if (epoch !== generation.current) return;
+          const project = await call<Project | null>("apply_initialization",{connectionId,operationId});
+          if (project && epoch === generation.current) {revision.current=project.revision;current.current=project;setP(project);}
+        });
+        pending.current=operation.catch(() => {});
+        return operation;
+      }}/>
       {modal}
       <div className="toast-host" aria-live="polite">
         {toasts.map((t) => (

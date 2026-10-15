@@ -1,3 +1,4 @@
+import { openActivity } from "./BackgroundActivity";
 import { useEffect, useRef, useState } from "react";
 import type { Connection, InstallArtifact, Workflow } from "../lib/types";
 import { call } from "../lib/bridge";
@@ -24,7 +25,6 @@ export function AgentWorkflowSetup({
   onBusyChange,
   locked,
   connection,
-  prepare,
 }: {
   workflow: Workflow;
   onBusyChange: (busy: boolean) => void;
@@ -43,6 +43,7 @@ export function AgentWorkflowSetup({
     workflow.version,
     workflow.requirements,
     workflow.wrapper?.pythonPackages,
+    workflow.wrapper?.initialization,
   ]);
   useEffect(() => {
     onBusyChange(!!busy);
@@ -106,16 +107,6 @@ export function AgentWorkflowSetup({
       "Still running. Check Connections before starting another initialization.",
     );
   };
-  const checkSelection = (stamp: string) => {
-    if (!mounted.current || current.current !== stamp)
-      throw new Error(
-        "Selection changed. Check the operation in Connections before retrying.",
-      );
-  };
-  const step = (message: string) => {
-    setBusy(message);
-    setSteps((all) => [...all, message]);
-  };
   const inspect = async () => {
     setReview(null);
     const result = await operation("plan_deployment", {
@@ -133,80 +124,27 @@ export function AgentWorkflowSetup({
   };
   const initialize = () =>
     act("Checking node and resolving dependencies…", async () => {
-      const stamp = identity;
       if (!review) {
         setSteps(["Checking this instance and resolving exact dependencies…"]);
         setReview(await inspect());
         return;
       }
-      let checked = review;
-      let prepared = false;
+      if (review.managedRuntime !== true)
+        throw new Error(
+          "Connect an agent-managed notebook to install dependencies.",
+        );
+      if (review.plan?.incompatible?.length)
+        throw new Error(review.plan.incompatible.join("; "));
+      const queued = await call<{ id: string }>("start_initialization", {
+        connectionId: connection!.id,
+        workflowId: workflow.id,
+        reviewId: review.reviewId,
+      });
       setReview(null);
-      // A review is single-use. Restart/preparation changes its runtime or workflow identity.
-      for (let pass = 0; pass < 3; pass++) {
-        checkSelection(stamp);
-        if (checked.managedRuntime !== true)
-          throw new Error(
-            "This instance is read-only. Connect an agent-managed notebook to install dependencies.",
-          );
-        if (checked.plan?.incompatible?.length)
-          throw new Error(checked.plan.incompatible.join("; "));
-        step(
-          pass
-            ? "Verifying installed dependencies and session readiness…"
-            : "Installing reviewed models, LoRAs and plugins…",
-        );
-        const result = await operation("plan_deployment", {
-          connectionId: connection!.id,
-          workflowIds: [workflow.id],
-          guided: true,
-          apply: true,
-          reviewId: checked.reviewId,
-        });
-        setReport(result);
-        if (result.ready && !result.restartRequired && prepared) {
-          step("Ready for this session. Your workflow can now be queued.");
-          return;
-        }
-        if (result.state === "needs-restart" || result.restartRequired) {
-          if (checked.restartSupported !== true)
-            throw new Error(
-              "Dependencies are installed. Restart ComfyUI in its own environment, then initialize again. Update the agent/base notebook for automatic restarts.",
-            );
-          step("Restarting the idle, agent-managed ComfyUI instance…");
-          await operation("runner_action", {
-            connectionId: connection!.id,
-            action: "runtime-restart",
-          });
-        } else if (result.state !== "needs-preparation" && !result.ready) {
-          throw new Error(
-            result.note ||
-              `Initialization needs attention: ${result.state ?? "not ready"}. Expand readiness details.`,
-          );
-        }
-        checkSelection(stamp);
-        step(
-          "Preparing the original workflow and discovering inputs and outputs…",
-        );
-        await prepare(workflow.id, connection!.id);
-        checkSelection(stamp);
-        prepared = true;
-        if (workflow.editorGraph) {
-          step(
-            "Saving the original workflow in this instance’s ComfyUI library…",
-          );
-          await call("install_workflow", {
-            workflowId: workflow.id,
-            connectionId: connection!.id,
-          });
-          checkSelection(stamp);
-        }
-        step("Checking the prepared workflow against the current instance…");
-        checked = await inspect();
-      }
-      throw new Error(
-        "Initialization still requires attention. Review the latest report before retrying.",
-      );
+      setSteps([
+        `Initialization ${queued.id.slice(0, 8)} is running on the agent. You can close this window.`,
+      ]);
+      openActivity();
     });
   if (connection?.kind !== "relay")
     return (
@@ -236,6 +174,7 @@ export function AgentWorkflowSetup({
         </p>
       </div>
       <div className="jobs-toolbar">
+        <button onClick={openActivity}>View background activity</button>
         <button
           className="primary"
           disabled={

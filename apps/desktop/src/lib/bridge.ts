@@ -16,6 +16,7 @@ export async function call<T>(
   args: Record<string, unknown> = {},
 ): Promise<T> {
   if (native) return invoke<T>(command, args);
+  if (command === "list_initializations") return [] as T;
   if (command === "get_settings") return settings as T;
   if (command === "save_settings") {
     settings = args.settings as AppSettings;
