@@ -111,16 +111,20 @@ the predefined test keys require no Secrets configuration. Models and workflow p
 are installed later from Studio. Kaggle uses independent processes/ports per GPU,
 without pooled memory.
 
-1. Connect the managed agent; choose an example in **Workflows → Examples · start here**.
-2. Open **Setup → Check node & review**. Inspect exact dependency sources, sizes,
-   licenses and actual destination paths. Python pins resolve into compatible binary wheels.
-3. **Initialize reviewed setup** installs the reviewed set. Verified files are reused;
-   pending original editor sources can install their dependencies before compilation.
-4. If requested, **Restart managed ComfyUI**. The relay/agent stay connected; both
-   Kaggle workers must be idle. Check and review the changed runtime again.
-5. **Prepare inputs** compiles the original source via the utility. Then **Check node &
-   review → Initialize reviewed setup** verifies a weight-free canary and collected bytes.
-6. Assign media in Generate and Add to queue; select only intended tasks in Jobs to start.
+1. Connect the managed agent; open an example in **Workflows → Examples · start here**.
+2. Select **Run and install on** inside the workflow modal. Check its address/node ID.
+3. **Setup → Initialize on [instance]** reviews exact sources, sizes, licenses, destination
+   paths and compatible Python wheels. It does not install anything yet.
+4. **Install & prepare on [instance]** installs, restarts managed idle workers if required,
+   prepares the original graph via the utility, publishes it to this ComfyUI library,
+   and verifies the prepared workflow/session with a weight-free canary and collection.
+   Progress is shown in one place. Verified files are reused; failures stop the sequence.
+5. Assign media in Generate and Add to queue; select only intended tasks in Jobs to run.
+
+**Install in ComfyUI** and **Prepare inputs** also use the instance selected inside
+this modal. Connection errors name its URL: start that instance or select another.
+Notebook ComfyUI localhost addresses refer to the notebook, so use its agent connection
+from the desktop. HTTP Userdata permission errors are reported separately from offline nodes.
 
 See [illustrated examples and complete setup](WORKFLOW_EXAMPLES.md), including the
 matching agent build requirement and model/license details. Legacy manually prepared

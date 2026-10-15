@@ -64,7 +64,7 @@
 ## Queue, publication and derived media
 - job-core owns transactional unstarted-run replacement. Native service validates and freezes replacement inputs under the project lock; canceled historical snapshots remain immutable.
 - job-history restores editable UI drafts from receipts; it never rewrites historical attempts. queuedRunId blocks ordinary dispatch until replacement or explicit separation.
-- Bottom queue dismissal belongs to app settings; jobs/results stay in package-owned storage. Nonterminal jobs cannot be hidden by dismissal.
+- Bottom queue dismissal belongs to app settings; integration-core merges persisted IDs monotonically and React merges background refreshes; jobs/results stay in package-owned storage. Nonterminal jobs cannot be hidden by dismissal.
 - provider-comfyui owns bounded typed Userdata publication/readback; desktop, relay and agent coordinate it without arbitrary remote shell commands.
 - Native thumbnails own optional derived cache/process concurrency; originals remain asset-core-owned. project-usage selectors label available cast references separately from actual render provenance.
 
@@ -79,3 +79,6 @@
 - Runtime helper resolves exact binary wheel dependencies against the active environment; verified public PyPI metadata supplies hash, size and license. It installs only reviewed cached wheels offline.
 - NotebookRunner alone restarts its recorded managed ComfyUI processes. It checks every shared worker is idle; the relay/agents/tunnel remain running. External ComfyUI is read-only.
 - Shared cache locks exclude generation while dependencies change or workers restart. Restart clears per-worker readiness; preparation and canary must pass again.
+
+- WorkflowEditor coordinates preparation/setup busy state; its parent modal owns the selected connection and locks selection while operations run. AgentWorkflowSetup composes existing typed operations; it introduces no shell endpoint or protocol.
+- Version-tag release workflows own CI entry; reusable checks cannot independently trigger on branch commits or pull requests.

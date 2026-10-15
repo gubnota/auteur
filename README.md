@@ -6,7 +6,7 @@
 
 A portable film studio for macOS: Finder `.mymovie` packages, scenes and keyframes, shared characters and media, reusable ComfyUI workflows and traceable jobs.
 
-Current source/app version: **0.1.16**. [Published v0.1.15 downloads](https://github.com/gubnota/auteur/releases/tag/v0.1.15) include the Linux agent and matching relay. Commit version changes before creating a matching tag; staging alone does not update a tag. Local macOS builds use an ad-hoc signature; notarization and foreign-platform launch acceptance remain pending.
+Current source/app version: **0.1.17**. [Published v0.1.15 downloads](https://github.com/gubnota/auteur/releases/tag/v0.1.15) include the Linux agent and matching relay. Commit version changes before creating a matching tag; staging alone does not update a tag. Local macOS builds use an ad-hoc signature; notarization and foreign-platform launch acceptance remain pending.
 
 ## One workflow, many jobs
 
@@ -56,10 +56,13 @@ Persistent project memory: [context](docs/PROJECT_CONTEXT.md), [architecture](do
 
 ## Example workflows
 
-**Workflows → Examples · start here** includes an illustrated connection test, SD 1.5
-T4 starter, and tiny background removal. Open a movie copy, then **Setup → Check node
-& review → Initialize reviewed setup** to install verified models/plugins and complete
-Python wheel sets through the agent. Managed ComfyUI can restart without restarting
-the relay; prepare inputs, review again, then explicitly queue/start jobs.
-See [examples and Colab/Kaggle setup](docs/WORKFLOW_EXAMPLES.md). Guided setup needs
-the matching 0.1.16 agent artifact; updating the desktop alone does not update a notebook.
+**Workflows → Examples · start here** offers illustrated connection, SD 1.5 T4 and
+tiny background-removal examples. Open a movie copy, choose **Run and install on**
+inside the workflow modal, then **Setup → Initialize on [instance]**. Review downloads
+and choose **Install & prepare on [instance]**: the agent installs dependencies,
+restarts managed idle ComfyUI if needed, compiles/publishes the graph and verifies
+readiness. No extra notebook commands. [Complete guide](docs/WORKFLOW_EXAMPLES.md).
+Use a matching agent with guided setup (0.1.16 or newer); desktop updates do not
+update running notebooks. CI builds only on matching version-tag pushes.
+**Clear finished** hides completed, failed and canceled bottom-queue entries permanently;
+Jobs history and Library results remain available.

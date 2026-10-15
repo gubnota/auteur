@@ -1,19 +1,27 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Workflow, Connection, WorkflowLayout } from "../lib/types";
 import { call, exportDestination } from "../lib/bridge";
 export function WorkflowTarget({
   workflow,
+  onBusyChange,
+  locked = false,
   connection,
   prepare,
   notify,
 }: {
   workflow: Workflow;
+  onBusyChange?: (busy: boolean) => void;
+  locked?: boolean;
   connection?: Connection;
   prepare: (w: string, c: string, layout?: WorkflowLayout) => Promise<void>;
   notify: (s: string) => void;
 }) {
   const [busy, setBusy] = useState(false),
     [failure, setFailure] = useState("");
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
   const profile = workflow.profiles?.find(
     (p) => p.connectionId === connection?.id,
   );
@@ -23,7 +31,7 @@ export function WorkflowTarget({
     try {
       await fn();
     } catch (e) {
-      setFailure(String(e));
+      setFailure(`${connection?.name ?? "No instance selected"}: ${String(e)}`);
     } finally {
       setBusy(false);
     }
@@ -45,6 +53,12 @@ export function WorkflowTarget({
     });
   return (
     <section className="workflow-target">
+      {connection && (
+        <p className="workflow-destination">
+          <strong>{connection.name}</strong> · {connection.url}
+          {connection.deploymentId ? ` · ${connection.deploymentId}` : ""}
+        </p>
+      )}
       <p>
         {profile
           ? `Prepared for ${connection?.name} · ${profile.inputs.length} inputs · ${profile.outputs.length} outputs`
@@ -53,13 +67,13 @@ export function WorkflowTarget({
       <div className="jobs-toolbar">
         <button
           className="primary"
-          disabled={busy || !connection}
+          disabled={locked || busy || !connection}
           onClick={() => void act(() => prepare(workflow.id, connection!.id))}
         >
           {profile ? "Refresh inputs" : "Prepare inputs"}
         </button>
         <button
-          disabled={busy || !connection || !workflow.editorGraph}
+          disabled={locked || busy || !connection || !workflow.editorGraph}
           onClick={() =>
             void act(async () => {
               const receipt = await call<{ libraryPath?: string }>(
@@ -75,19 +89,21 @@ export function WorkflowTarget({
           Install in ComfyUI
         </button>
         <button
-          disabled={busy || !workflow.editorGraph}
+          disabled={locked || busy || !workflow.editorGraph}
           onClick={() => void download(true)}
         >
           Export editor JSON
         </button>
         <button
-          disabled={busy || (!Object.keys(workflow.graph).length && !profile)}
+          disabled={
+            locked || busy || (!Object.keys(workflow.graph).length && !profile)
+          }
           onClick={() => void download(false)}
         >
           Export API JSON
         </button>
         <button
-          disabled={busy}
+          disabled={locked || busy}
           onClick={() =>
             void act(async () => {
               await call("catalogue_workflow", { workflowId: workflow.id });

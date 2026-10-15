@@ -42,6 +42,7 @@ export function Picker({
   options,
   onChange,
   multiple = false,
+  disabled = false,
   onClear,
 }: {
   title: string;
@@ -49,6 +50,7 @@ export function Picker({
   options: { id: string; label: string; description?: string }[];
   onChange: (v: string) => void;
   multiple?: boolean;
+  disabled?: boolean;
   onClear?: () => void;
 }) {
   const [show, setShow] = useState(false);
@@ -58,6 +60,7 @@ export function Picker({
     <>
       <button
         className="picker"
+        disabled={disabled}
         onClick={() => {
           setQ("");
           setShow(true);
@@ -84,7 +87,16 @@ export function Picker({
               onChange={(e) => setQ(e.target.value)}
             />
           </label>
-          {onClear && <button onClick={() => {onClear();setShow(false);}}>Clear selection</button>}
+          {onClear && (
+            <button
+              onClick={() => {
+                onClear();
+                setShow(false);
+              }}
+            >
+              Clear selection
+            </button>
+          )}
           <div className="choices">
             {options
               .filter((o) =>
@@ -180,7 +192,9 @@ export function Empty({
 }) {
   return (
     <div className="empty">
-      <div className="empty-mark"><AppSymbol /></div>
+      <div className="empty-mark">
+        <AppSymbol />
+      </div>
       <h2>{title}</h2>
       <p>{children}</p>
       {action}

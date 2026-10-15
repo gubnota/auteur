@@ -34,8 +34,8 @@ requirements add their own downloads, all shown before installation.
    match on both sides. Settings → Node access edits these without putting them in
    movie files. See [desktop connection test](WORKFLOW_SETUP.md#test-the-notebook-connection-from-your-desktop)
    if you need to separate transport/authentication errors from workflow readiness.
-4. Choose the connected worker as **Preparation target** in Workflows. Open the
-   example movie copy and select **Setup**.
+4. Open the example movie copy. Choose the connected worker with **Run and install on**
+   inside its modal, check the displayed address/node ID, then select **Setup**.
 
 **Build requirement:** guided setup and in-app restart require the matching agent
 from source version **0.1.16** and its current notebook supervisor. An older published
@@ -47,31 +47,25 @@ a GitHub release automatically.
 
 ## Initialize entirely from Studio
 
-1. **Check node & review** inspects live hardware, Python/runtime identity, installed
-   node types, files and integrity. Exact `package==version` Python declarations are
-   resolved into a complete compatible wheel closure for this host. Existing ComfyUI
-   package versions constrain resolution. No package is installed during review.
-2. Inspect every dependency's destination, size, architecture, license and checksum.
-   A missing model is downloadable; conflicting files block setup instead of being
-   overwritten. Review the license before choosing **Initialize reviewed setup**.
-3. **Initialize reviewed setup** downloads verified artifacts and installs only the
-   reviewed typed dependencies. Existing verified bytes are reused. Arbitrary shell
-   commands and source-only Python builds are not executed. Unmanaged external
-   ComfyUI connections remain read-only for filesystem setup.
-4. If the result says **needs restart**, choose **Restart managed ComfyUI**. Only
-   supervised ComfyUI processes restart; the relay, agent and tunnel remain running.
-   Both Kaggle workers must be idle. A shared pending-restart marker blocks readiness
-   until all workers restart successfully. Interrupted installs can be reviewed/retried.
-5. **Check node & review** after a restart, then **Prepare inputs**. The utility imports
-   the original editor workflow and exports the API graph through the real frontend
-   compiler against this worker's registry. No ComfyUI interface interaction is needed.
-6. **Check node & review → Initialize reviewed setup** again for the prepared graph.
-   Initialization submits only a weight-free 64×64 canary and verifies collected bytes.
-   **Ready for this session** means this exact runtime/profile/workflow set passed.
-   Input media for your actual job is selected/uploaded later.
-7. **Create a job** opens Generate. Set the prompt or source image and choose a node,
-   then **Add to queue**. Select the intended tasks in Jobs and **Start selected**.
-   Results are pulled from the node and appear in Library as render-tagged media.
+1. **Initialize on [instance]** inspects this worker and resolves exact model/plugin
+   downloads and a compatible binary Python wheel closure. Nothing is installed yet.
+2. Review destinations, sizes, licenses and checksums. **Install & prepare on [instance]**
+   performs the sequence through the agent: install verified dependencies, restart its
+   managed idle ComfyUI if needed, compile the original workflow, save it in that
+   instance’s ComfyUI library, and verify current-session readiness with a weight-free
+   64×64 canary and collected bytes. Progress and failures stay visible here.
+3. Verified files are reused. Conflicting files, incompatible hardware, unresolved
+   dependencies or an unavailable managed restart stop the sequence with a reason.
+   Unmanaged external ComfyUI remains read-only for dependency installation. On Kaggle,
+   both workers must be idle for a shared-runtime restart; agent/relay/tunnel stay online.
+4. **Create a job** opens Generate. Set prompt/media, **Add to queue**, then select
+   the intended tasks in Jobs and **Run selected**. Actual results are pulled into
+   Library as render-tagged media. Initialization does not run your generation workflow.
+
+The selected instance is fixed while an operation runs. Changing it afterward clears
+its setup review and uses that instance’s own prepared inputs/outputs. For direct
+ComfyUI, **Install in ComfyUI** publishes the original editor graph only; it does not
+install models/plugins. A local address belongs to the machine making the request.
 
 A review belongs to a node session, runtime fingerprint and exact workflow set. A
 changed selection, workflow, dependency pin, runtime or restart requires a fresh

@@ -11,7 +11,7 @@
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
 - Bundled illustrated workflow examples and guided agent initialization implemented; live private cloud acceptance remains open.
 - Example setup requires matching 0.1.16 agent/supervisor; the last published agent remains v0.1.15 until a new release is built.
-- Current source: 0.1.16; designer wrappers, platform families, portable collections and selective queued-task control. Installation evidence is in TASK_LOG.
+- Current source: 0.1.17; designer wrappers, platform families, portable collections and selective queued-task control. Installation evidence is in TASK_LOG.
 - Published v0.1.15 includes the matching Linux agent/relay. GPU notebooks support unchanged Run all with shared test keys, pinned base ComfyUI, isolated Python, browser compiler and verified cloudflared; models/plugins remain app-initialized. Evidence: TASK_LOG and CI_RELEASES.
 - Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.
@@ -82,7 +82,7 @@
 - Saved independent batches, exact typed inputs and frozen run/item provenance.
 - Add to queue freezes idle work; explicit start required, including after reopening.
 - Queued edits replace unstarted batches or selected tasks atomically; original receipts remain canceled.
-- Bottom Clear finished hides terminal rows persistently without deleting history/results.
+- Bottom Clear finished hides completed/failed/canceled rows; monotonic settings merges prevent stale refreshes or saves restoring them. History/results remain intact.
 - v1–v4→v5 requires explicit backup/upgrade; SQLite and manifest backups retained.
 - Reopening unsent work pauses it; unknown submissions keep their lane occupied.
 - Desktop polls providers; relay offers authenticated replayable SSE.
@@ -101,14 +101,14 @@
 - Complete script modal covers Mac/Linux/SSH/Colab/Kaggle; reviewed dependency setup accepts pending editor sources before preparation.
 - Guide supports safe Markdown/embedded raster illustrations; portable collections strip destination profiles and private vault references.
 - Workflows always offers three Example cards: weight-free connection test, SD 1.5 T4 and tiny background removal. Movie copies keep stable IDs and remain editable.
-- Guided setup reviews exact downloads/Python wheel closure, installs through the agent, restarts only managed idle workers, prepares original editor JSON and checks current-session readiness.
+- The workflow modal selects one instance for installation/preparation/setup. Guided setup reviews exact downloads once, then installs, restarts only managed idle workers, prepares/publishes original editor JSON and checks readiness. Selection stays locked during operations.
 - Setup instructions: docs/WORKFLOW_EXAMPLES.md and docs/WORKFLOW_SETUP.md.
 - Local real Rust pipeline acceptance: docs/GENERATION_ACCEPTANCE.md.
 
 ## Private runner and storage
 - RunPod ComfyUI is the primary execution target; Colab first for live cloud acceptance.
 - Authenticated node-scoped relay and outbound Linux/macOS x86_64/ARM64 agents are initial implementations.
-- CI publishes checksummed ELF agent archive and deploy/runpod/README.md; no public pod IP needed.
+- Tag-only CI publishes checksummed ELF agent archive and deploy/runpod/README.md; no public pod IP needed.
 - Independent Kaggle workers isolate GPU/port/node identity; live deployment pending.
 - Agent exposes typed doctor/inventory/drain/bootstrap/provision operations.
 - Generation receipts precede ComfyUI submission; stale leases become unknown.

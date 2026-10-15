@@ -6,7 +6,7 @@
 
 Un studio de cinéma portable pour macOS : documents Finder `.mymovie`, épisodes et storyboard, personnages et médias partagés, workflows ComfyUI réutilisables et tâches traçables.
 
-Version des sources/de l’application : **0.1.16**. Les [téléchargements v0.1.15](https://github.com/gubnota/auteur/releases/tag/v0.1.15) incluent l’agent Linux et son relay correspondant. Commitez les versions avant de créer le tag correspondant ; git add prépare seulement les changements. La compilation locale macOS utilise une signature ad-hoc ; notarisation et validation sur les autres plateformes restent à faire.
+Version des sources/de l’application : **0.1.17**. Les [téléchargements v0.1.15](https://github.com/gubnota/auteur/releases/tag/v0.1.15) incluent l’agent Linux et son relay correspondant. Commitez les versions avant de créer le tag correspondant ; git add prépare seulement les changements. La compilation locale macOS utilise une signature ad-hoc ; notarisation et validation sur les autres plateformes restent à faire.
 
 ## Parcours unique
 
@@ -42,11 +42,13 @@ Commencer par le **mask canary 64 × 64**, sans poids/plugins/GPU. Le test u2net
 
 ## Exemples de workflows
 
-**Workflows → Examples · start here** propose un test sans modèle, SD 1.5 pour T4 et
-un détourage léger, avec illustrations et guides. Créez une copie dans le film, puis
-ouvrez **Setup → Check node & review → Initialize reviewed setup** : l’agent installe
-les modèles, plugins et dépendances Python vérifiés. Le redémarrage du ComfyUI géré
-conserve le relais. Préparez les entrées, vérifiez de nouveau, puis démarrez explicitement
-les tâches choisies dans la file. [Guide Colab/Kaggle](docs/WORKFLOW_EXAMPLES.md).
-Ces fonctions nécessitent l’artefact agent 0.1.16 correspondant ; mettre à jour
-l’application ne met pas à jour un agent déjà lancé dans un notebook.
+**Workflows → Examples · start here** propose des exemples illustrés : connexion,
+SD 1.5 T4 et détourage léger. Ouvrez une copie, choisissez **Run and install on**
+dans la fenêtre du workflow, puis **Setup → Initialize on [instance]**. Vérifiez les
+téléchargements et cliquez sur **Install & prepare on [instance]** : l’agent installe
+les dépendances, redémarre ComfyUI géré et libre si nécessaire, prépare/publie le
+workflow et vérifie la disponibilité. Aucune commande supplémentaire dans le notebook.
+[Guide](docs/WORKFLOW_EXAMPLES.md). Agent avec guided setup requis (0.1.16 ou ultérieur) ;
+une mise à jour du desktop ne met pas à jour le notebook. CI uniquement sur les tags de version.
+**Clear finished** masque les tâches terminées, échouées et annulées de la file inférieure ;
+l’historique Jobs et les résultats Library restent disponibles.

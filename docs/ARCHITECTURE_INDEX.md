@@ -116,9 +116,14 @@
 ## Guided examples (0.1.16)
 - workflow-core/src/examples.rs: stable built-in catalogue, original editor graphs, illustrated guides and exact artifact metadata.
 - examples/catalogue/ and scripts/generate-example-catalogue.py: reproducible previews, plugin archive, pinned SD model metadata.
-- components/AgentWorkflowSetup.tsx: reviewed dependency/install/restart/prepare/recheck sequence.
+- components/AgentWorkflowSetup.tsx: two-action review then dependency/install/restart/prepare/publish/recheck sequence; WorkflowEditor coordinates operation locks with the modal instance picker.
 - apps/agent/src/provision.rs: session-bound review receipts, shared execution/install locks and restart requests.
 - scripts/notebook-bootstrap.py: managed idle-worker restart supervisor; agents/relay/tunnel remain running.
 - deploy/runner/mymovie_runtime.py: platform wheel closure, public metadata verification and offline installation.
 - e2e/workflow-examples.e2e.ts and scripts/tests/: guided mock acceptance, archive contents and supervisor/runtime regressions.
 - docs/WORKFLOW_EXAMPLES.md: exact example dependencies, paths, licenses, setup sequence and acceptance limits.
+
+## Release/queue maintenance (0.1.17)
+- GitHub release.yml starts on v* tags and calls reusable checks.yml; GitLab workflow accepts version tags only.
+- integration-core SettingsStore owns monotonic terminal-queue dismissal merges; App.tsx protects against stale refreshes.
+- provider-comfyui/src/workflow.rs distinguishes unreachable instances, timeouts and Userdata HTTP refusals during verified publication.

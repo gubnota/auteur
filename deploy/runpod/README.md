@@ -146,9 +146,10 @@ The agent archive includes `mymovie_workflow_compiler.py` and `workflow-compiler
 
 Studio **Workflows → Examples · start here** ships original editor sources for a
 weight-free connection test, SD 1.5 T4 and tiny background removal. Select the worker,
-then Setup → Check node & review → Initialize reviewed setup. All reviewed downloads
-and plugin/wheel installation run through the agent. Managed notebook restarts keep
-the relay online and require all GPU workers idle. Prepare inputs, review/init again
-to verify the canary, then explicitly start queued jobs. See
+using **Run and install on** inside its workflow modal. Then **Setup → Initialize on
+[instance] → Install & prepare on [instance]** reviews and runs the complete agent
+sequence: dependencies, managed idle restart, compilation, publication and canary.
+The relay stays online; all GPU workers must be idle to restart. Then explicitly
+start selected queued jobs. See
 [complete examples guide](../../docs/WORKFLOW_EXAMPLES.md). The matching agent and
 notebook supervisor are required; old released binaries cannot provide new controls.

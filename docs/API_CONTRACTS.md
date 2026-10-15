@@ -138,7 +138,7 @@
 - install_workflow({workflowId,connectionId}) and agent workflow-install --publish-to-comfyui publish only normal editor sources to workflows/MyMovie/<slug>-<hash16>.json. Bounded Userdata GET/POST(overwrite=false)/readback; receipt installed/reused/libraryPath/sourceHash/loadedCanvas=false. Default agent install remains registry-only.
 - remove_recent_project({path}), clear_recent_projects(): history only; close_project flushes the frontend save queue before Welcome.
 - video_thumbnail({assetId}) generates optional bounded hash-identified JPEG; native poster protocol resolves registered asset IDs and confined derived paths.
-- AppSettings.dismissedQueueJobIds defaults []; Clear finished records only completed/failed/canceled IDs. Other states remain visible regardless of IDs. Stored outside movies; job history/results are untouched.
+- AppSettings.dismissedQueueJobIds defaults []; Clear finished records only completed/failed/canceled IDs. Other states remain visible regardless of IDs. Settings saves union persisted dismissal IDs, and native save_settings returns the merged value. UI refreshes preserve the same monotonic union. Stored outside movies; job history/results are untouched.
 
 ## Reusable forms (0.1.8)
 - save_workflow_form({workflowId,connectionId?,bindings,layout}) -> Project: validated base form and selected-profile layout, exact node/input identity; graph/source hash immutable.
@@ -173,3 +173,8 @@
 - restart-required.json is written before plugin/wheel mutations and removed only after all managed workers become ready. runtime-epoch.json invalidates earlier attestations after restart.
 - Python dependencies resolve to a full binary wheel closure: exact version, HTTPS files.pythonhosted.org URL, public PyPI verified SHA256/size/license and native architecture. No arbitrary remote shell or source builds.
 - Agent manifests advertise guidedSetupVersion=1 and managedRestartVersion=1. Matching 0.1.16 binaries are required; local implementation does not imply hosted release or live GPU acceptance.
+
+## Guided desktop orchestration (0.1.17)
+- No protocol change. Initialize inspects with guided=true/apply=false; Install & prepare consumes reviewId, applies, requests managed restart if required, prepares/publishes on that same connection, then obtains a fresh review and verifies readiness. Maximum three apply passes.
+- A changed selection invalidates the review. Busy operations lock the modal target and setup/editor tabs; identity/unmount guards stop subsequent steps after navigation.
+- Direct ComfyUI Userdata publication preserves immutable hashed names/readback and reports unreachable/timeout/HTTP refusal distinctly with the selected base URL.

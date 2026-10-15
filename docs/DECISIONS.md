@@ -230,3 +230,13 @@ Context: New notebook users need reusable examples with complete dependencies an
 Decision: Merge stable built-in examples into the catalogue; pin editable movie copies. Derive exact reviewed dependencies from the selected workflow set, resolve binary wheel closure against the active environment, and bind apply to session/runtime/workflow review identity. Only the notebook supervisor may restart its managed idle ComfyUI workers; invalidate readiness and prepare/check again afterwards.
 Consequences: Old movies remain readable. External ComfyUI stays read-only. New setup requires matching agent/supervisor artifacts; live cloud acceptance remains separate.
 Related files: crates/workflow-core/src/examples.rs; apps/agent/src/provision.rs; deploy/runner/mymovie_runtime.py; scripts/notebook-bootstrap.py; docs/WORKFLOW_EXAMPLES.md.
+
+# ADR-0024: Tag-only releases and one guided initialization flow
+
+Date: 2026-10-15
+Status: Accepted
+
+Context: User requested tag-only builds, simpler remote setup, explicit instance selection and persistent removal of failed queue rows.
+Decision: Run reusable GitHub checks only through tag-triggered releases; GitLab accepts semantic version tags only. The workflow modal owns one locked destination. After reviewing exact dependencies, one action composes existing agent install/restart/prepare/publish/readiness operations. Merge terminal queue dismissal IDs monotonically in native storage and frontend refreshes.
+Consequences: Branch commits do not start CI; existing review/session/hardware checks remain authoritative. Agent setup needs matching >=0.1.16 runtime support. Queue clearing changes presentation only; history/results persist. Publication errors distinguish offline, timeout and HTTP refusal without replacing original graphs.
+Related files: .github/workflows/checks.yml; .gitlab-ci.yml; AgentWorkflowSetup.tsx; WorkflowEditor.tsx; features/Library.tsx; integration-core/src/lib.rs; provider-comfyui/src/workflow.rs.

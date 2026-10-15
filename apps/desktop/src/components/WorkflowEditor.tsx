@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   Binding,
   Connection,
@@ -26,6 +26,7 @@ const defaults: WorkflowWrapper = {
 };
 export function WorkflowEditor({
   workflow: w,
+  onBusyChange,
   workflows,
   connection,
   selectVariant,
@@ -35,6 +36,7 @@ export function WorkflowEditor({
   notify,
 }: {
   workflow: Workflow;
+  onBusyChange: (busy: boolean) => void;
   workflows: Workflow[];
   connection?: Connection;
   selectVariant: (id: string) => void;
@@ -45,6 +47,13 @@ export function WorkflowEditor({
 }) {
   const [tab, setTab] = useState(w.wrapper?.exampleId ? "Guide" : "Inputs"),
     [editGuide, setEditGuide] = useState(false);
+  const [targetBusy, setTargetBusy] = useState(false);
+  const [setupBusy, setSetupBusy] = useState(false);
+  const busy = targetBusy || setupBusy;
+  useEffect(() => {
+    onBusyChange(busy);
+    return () => onBusyChange(false);
+  }, [busy, onBusyChange]);
   const meta = { ...defaults, ...w.wrapper };
   const family = meta.familyId || w.id;
   const variants = workflows.filter(
@@ -125,6 +134,7 @@ export function WorkflowEditor({
       {variants.length > 1 && (
         <Picker
           title="Platform variant"
+          disabled={busy}
           value={w.id}
           options={variants.map((v) => ({
             id: v.id,
@@ -135,6 +145,8 @@ export function WorkflowEditor({
         />
       )}
       <WorkflowTarget
+        locked={setupBusy}
+        onBusyChange={setTargetBusy}
         workflow={w}
         connection={connection}
         prepare={prepare}
@@ -145,6 +157,7 @@ export function WorkflowEditor({
           <button
             key={t}
             role="tab"
+            disabled={busy}
             aria-selected={tab === t}
             onClick={() => setTab(t)}
           >
@@ -217,6 +230,8 @@ export function WorkflowEditor({
         {tab === "Setup" && (
           <>
             <AgentWorkflowSetup
+              locked={targetBusy}
+              onBusyChange={setSetupBusy}
               workflow={w}
               connection={connection}
               prepare={prepare}

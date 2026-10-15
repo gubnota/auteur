@@ -586,6 +586,7 @@ export function Workflows({
   onGenerate: (frameId: string, workflowId: string) => void;
 }) {
   const [selected, setSelected] = useState(""),
+    [targetBusy, setTargetBusy] = useState(false),
     [targetId, setTargetId] = useState(
       settings.connections.find((c) => ["comfyui", "relay"].includes(c.kind))
         ?.id ?? "",
@@ -748,8 +749,22 @@ export function Workflows({
 
       {w && (
         <Modal title={w.name} onClose={() => setSelected("")}>
+          <Picker
+            title="Run and install on"
+            disabled={targetBusy}
+            value={targetId}
+            options={settings.connections
+              .filter((c) => ["comfyui", "relay"].includes(c.kind))
+              .map((c) => ({
+                id: c.id,
+                label: c.name,
+                description: `${c.url}${c.deploymentId ? ` · ${c.deploymentId}` : ""}`,
+              }))}
+            onChange={setTargetId}
+          />
           <WorkflowEditor
             key={`${w.id}:${targetId}`}
+            onBusyChange={setTargetBusy}
             workflow={w}
             workflows={p.workflows}
             connection={settings.connections.find((c) => c.id === targetId)}

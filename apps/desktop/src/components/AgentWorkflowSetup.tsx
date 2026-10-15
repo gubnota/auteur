@@ -21,24 +21,33 @@ type SetupReport = {
 };
 export function AgentWorkflowSetup({
   workflow,
+  onBusyChange,
+  locked,
   connection,
   prepare,
 }: {
   workflow: Workflow;
+  onBusyChange: (busy: boolean) => void;
+  locked: boolean;
   connection?: Connection;
   prepare: (w: string, c: string) => Promise<void>;
 }) {
   const [report, setReport] = useState<SetupReport | null>(null),
     [review, setReview] = useState<SetupReport | null>(null),
     [busy, setBusy] = useState(""),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [steps, setSteps] = useState<string[]>([]);
   const identity = JSON.stringify([
     connection,
+    workflow.id,
     workflow.version,
     workflow.requirements,
     workflow.wrapper?.pythonPackages,
-    workflow.profiles,
   ]);
+  useEffect(() => {
+    onBusyChange(!!busy);
+    return () => onBusyChange(false);
+  }, [busy, onBusyChange]);
   const current = useRef(identity);
   current.current = identity;
   const mounted = useRef(true);
@@ -52,6 +61,7 @@ export function AgentWorkflowSetup({
     setReport(null);
     setReview(null);
     setError("");
+    setSteps([]);
   }, [identity]);
   const act = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -96,21 +106,107 @@ export function AgentWorkflowSetup({
       "Still running. Check Connections before starting another initialization.",
     );
   };
-  const inspect = () =>
+  const checkSelection = (stamp: string) => {
+    if (!mounted.current || current.current !== stamp)
+      throw new Error(
+        "Selection changed. Check the operation in Connections before retrying.",
+      );
+  };
+  const step = (message: string) => {
+    setBusy(message);
+    setSteps((all) => [...all, message]);
+  };
+  const inspect = async () => {
+    setReview(null);
+    const result = await operation("plan_deployment", {
+      connectionId: connection!.id,
+      workflowIds: [workflow.id],
+      guided: true,
+      apply: false,
+    });
+    if (!result.reviewId)
+      throw new Error(
+        "Update the node agent: this version does not support guided setup.",
+      );
+    setReport(result);
+    return result;
+  };
+  const initialize = () =>
     act("Checking node and resolving dependencies…", async () => {
+      const stamp = identity;
+      if (!review) {
+        setSteps(["Checking this instance and resolving exact dependencies…"]);
+        setReview(await inspect());
+        return;
+      }
+      let checked = review;
+      let prepared = false;
       setReview(null);
-      const result = await operation("plan_deployment", {
-        connectionId: connection!.id,
-        workflowIds: [workflow.id],
-        guided: true,
-        apply: false,
-      });
-      if (!result.reviewId)
-        throw new Error(
-          "Update the node agent: this version does not support guided setup.",
+      // A review is single-use. Restart/preparation changes its runtime or workflow identity.
+      for (let pass = 0; pass < 3; pass++) {
+        checkSelection(stamp);
+        if (checked.managedRuntime !== true)
+          throw new Error(
+            "This instance is read-only. Connect an agent-managed notebook to install dependencies.",
+          );
+        if (checked.plan?.incompatible?.length)
+          throw new Error(checked.plan.incompatible.join("; "));
+        step(
+          pass
+            ? "Verifying installed dependencies and session readiness…"
+            : "Installing reviewed models, LoRAs and plugins…",
         );
-      setReport(result);
-      setReview(result);
+        const result = await operation("plan_deployment", {
+          connectionId: connection!.id,
+          workflowIds: [workflow.id],
+          guided: true,
+          apply: true,
+          reviewId: checked.reviewId,
+        });
+        setReport(result);
+        if (result.ready && !result.restartRequired && prepared) {
+          step("Ready for this session. Your workflow can now be queued.");
+          return;
+        }
+        if (result.state === "needs-restart" || result.restartRequired) {
+          if (checked.restartSupported !== true)
+            throw new Error(
+              "Dependencies are installed. Restart ComfyUI in its own environment, then initialize again. Update the agent/base notebook for automatic restarts.",
+            );
+          step("Restarting the idle, agent-managed ComfyUI instance…");
+          await operation("runner_action", {
+            connectionId: connection!.id,
+            action: "runtime-restart",
+          });
+        } else if (result.state !== "needs-preparation" && !result.ready) {
+          throw new Error(
+            result.note ||
+              `Initialization needs attention: ${result.state ?? "not ready"}. Expand readiness details.`,
+          );
+        }
+        checkSelection(stamp);
+        step(
+          "Preparing the original workflow and discovering inputs and outputs…",
+        );
+        await prepare(workflow.id, connection!.id);
+        checkSelection(stamp);
+        prepared = true;
+        if (workflow.editorGraph) {
+          step(
+            "Saving the original workflow in this instance’s ComfyUI library…",
+          );
+          await call("install_workflow", {
+            workflowId: workflow.id,
+            connectionId: connection!.id,
+          });
+          checkSelection(stamp);
+        }
+        step("Checking the prepared workflow against the current instance…");
+        checked = await inspect();
+      }
+      throw new Error(
+        "Initialization still requires attention. Review the latest report before retrying.",
+      );
     });
   if (connection?.kind !== "relay")
     return (
@@ -134,76 +230,46 @@ export function AgentWorkflowSetup({
         <span className="eyebrow">REMOTE INITIALIZATION</span>
         <h3>Set up on {connection.name}</h3>
         <p>
-          Check this session, review exact downloads, then initialize. Verified
-          files are reused. Creating a movie copy or preparing inputs does not
-          start a generation.
+          Review downloads once, then the agent installs missing dependencies,
+          restarts its managed instance if needed, prepares the workflow and
+          checks readiness. Verified files are reused on later runs.
         </p>
       </div>
-      <ol className="setup-steps">
-        <li>Check & review</li>
-        <li>Install dependencies</li>
-        <li>Restart if requested</li>
-        <li>Prepare inputs</li>
-        <li>Recheck & verify canary</li>
-      </ol>
       <div className="jobs-toolbar">
-        <button disabled={!!busy} onClick={() => void inspect()}>
-          Check node & review
-        </button>
         <button
           className="primary"
           disabled={
-            !!busy || !review?.reviewId || review.managedRuntime !== true
+            locked || !!busy || (!!review && review.managedRuntime !== true)
           }
-          onClick={() =>
-            void act("Initializing reviewed setup…", async () => {
-              const id = review!.reviewId;
-              setReview(null);
-              setReport(
-                await operation("plan_deployment", {
-                  connectionId: connection.id,
-                  workflowIds: [workflow.id],
-                  guided: true,
-                  apply: true,
-                  reviewId: id,
-                }),
-              );
-            })
-          }
+          onClick={() => void initialize()}
         >
-          Initialize reviewed setup
+          {review
+            ? `Install & prepare on ${connection.name}`
+            : `Initialize on ${connection.name}`}
         </button>
-        <button
-          disabled={
-            !!busy ||
-            (report?.state !== "needs-restart" && !report?.restartRequired)
-          }
-          onClick={() =>
-            void act("Restarting idle ComfyUI workers…", async () => {
-              setReview(null);
-              setReport(
-                await operation("runner_action", {
-                  connectionId: connection.id,
-                  action: "runtime-restart",
-                }),
-              );
-            })
-          }
-        >
-          Restart managed ComfyUI
-        </button>
-        <button
-          disabled={!!busy}
-          onClick={() =>
-            void act("Preparing original workflow…", async () => {
-              setReview(null);
-              await prepare(workflow.id, connection.id);
-            })
-          }
-        >
-          Prepare inputs
-        </button>
+        {review && (
+          <button disabled={locked || !!busy} onClick={() => setReview(null)}>
+            Discard review
+          </button>
+        )}
       </div>
+      {review && (
+        <p>
+          Review the files, sizes, destinations and licenses below. Install &
+          prepare runs the complete setup through your agent; no notebook
+          commands are needed.
+        </p>
+      )}
+      {!!steps.length && (
+        <details open={!!busy}>
+          <summary>Initialization progress</summary>
+          <ol>
+            {steps.map((message, i) => (
+              <li key={i}>{message}</li>
+            ))}
+          </ol>
+        </details>
+      )}
       {busy && <p role="status">{busy} Keep the notebook cell running.</p>}
       {report && (
         <div className="setup-result" role="status">
@@ -216,7 +282,10 @@ export function AgentWorkflowSetup({
           </strong>
           {report.note && <p>{report.note}</p>}
           {report.restartRequired && (
-            <p>A dependency change is waiting for a managed ComfyUI restart.</p>
+            <p>
+              A dependency change requires a managed ComfyUI restart. The guided
+              setup performs this when the instance is idle.
+            </p>
           )}
           {report.managedRuntime === false && (
             <p>
@@ -274,7 +343,11 @@ export function AgentWorkflowSetup({
           <pre>{JSON.stringify(report.plan, null, 2)}</pre>
         </details>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <p role="alert">
+          {connection.name}: {error}
+        </p>
+      )}
       <p className="muted">
         The last initialization verifies a weight-free 64×64 output and its
         collection. Next, Create a job → Add to queue → Start selected. Your

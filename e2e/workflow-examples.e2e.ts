@@ -77,7 +77,7 @@ test("guided setup reviews pins, restarts managed ComfyUI and rechecks the prepa
       kind: "relay",
       name: "Colab T4",
       url: "https://fixture.invalid",
-      nodeId: "gpu0",
+      deploymentId: "gpu0",
     },
   ];
   const artifacts = [
@@ -118,27 +118,21 @@ test("guided setup reviews pins, restarts managed ComfyUI and rechecks the prepa
     .click();
   await page.getByRole("tab", { name: "Setup", exact: true }).click();
   const setup = page.getByRole("region", { name: "Agent initialization" });
-  await expect(
-    setup.getByRole("button", { name: "Initialize reviewed setup" }),
-  ).toBeDisabled();
-  await setup.getByRole("button", { name: "Check node & review" }).click();
+  await setup
+    .getByRole("button", { name: "Initialize on Colab T4", exact: true })
+    .click();
   await expect(
     setup.getByText("CreativeML OpenRAIL-M", { exact: true }),
   ).toBeVisible();
   await expect(setup.getByText(/models\/checkpoints\//)).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).fixture.setupCalls.filter((c: any) => c.apply).length,
+    ),
+  ).toBe(0);
   await setup
-    .getByRole("button", { name: "Initialize reviewed setup" })
-    .click();
-  await expect(
-    setup.getByRole("button", { name: "Initialize reviewed setup" }),
-  ).toBeDisabled();
-  await setup.getByRole("button", { name: "Restart managed ComfyUI" }).click();
-  await setup
-    .getByRole("button", { name: "Prepare inputs", exact: true })
-    .click();
-  await setup.getByRole("button", { name: "Check node & review" }).click();
-  await setup
-    .getByRole("button", { name: "Initialize reviewed setup" })
+    .getByRole("button", { name: "Install & prepare on Colab T4", exact: true })
     .click();
   await expect(
     setup.getByText("Ready for this session", { exact: true }),
@@ -155,4 +149,129 @@ test("guided setup reviews pins, restarts managed ComfyUI and rechecks the prepa
     path: "docs/screenshots/workflow-agent-setup.png",
     fullPage: true,
   });
+});
+
+test("the workflow modal installs and prepares on the instance selected inside it", async ({
+  page,
+}) => {
+  const movie = structuredClone(project);
+  movie.workflows[0].editorGraph = {
+    nodes: [{ id: 1, type: "CLIPTextEncode" }],
+  };
+  await openFixture(page, movie, settings);
+  await page
+    .getByRole("button", { name: "Run and install on", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .last()
+    .getByRole("button", { name: "Second node", exact: false })
+    .click();
+  await page
+    .getByRole("button", { name: "Install in ComfyUI", exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).fixture.installs))
+    .toEqual([{ workflowId: "workflow", connectionId: "account-1" }]);
+  await page
+    .getByRole("button", { name: "Prepare inputs", exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).fixture.preparations))
+    .toEqual([{ workflowId: "workflow", connectionId: "account-1" }]);
+  await expect(page.getByText(/Prepared for Second node/)).toBeVisible();
+});
+
+test("setup keeps the instance fixed while checking and refuses an unmanaged runtime", async ({
+  page,
+}) => {
+  const relay = structuredClone(settings);
+  relay.connections[0] = {
+    ...relay.connections[0],
+    kind: "relay",
+    name: "Colab T4",
+    deploymentId: "gpu0",
+  };
+  await openFixture(page, structuredClone(project), relay, {
+    setupReports: [
+      { state: "review", reviewId: "external", managedRuntime: false },
+    ],
+  });
+  await page.getByRole("tab", { name: "Setup", exact: true }).click();
+  await page.evaluate(() => (window as any).fixture.holdSetup(true));
+  await page
+    .getByRole("button", { name: "Initialize on Colab T4", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Run and install on", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("tab", { name: "Inputs", exact: true }),
+  ).toBeDisabled();
+  await page.evaluate(() => (window as any).fixture.holdSetup(false));
+  await expect(
+    page.getByRole("button", {
+      name: "Install & prepare on Colab T4",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText(/This runtime is external and read-only/),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      (window as any).fixture.setupCalls.filter(
+        (c: any) => c.apply || c.command === "runner_action",
+      ),
+    ),
+  ).toEqual([]);
+  await page
+    .getByRole("button", { name: "Run and install on", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .last()
+    .getByRole("button", { name: "Second node", exact: false })
+    .click();
+  await expect(
+    page.getByRole("region", { name: "Agent initialization" }),
+  ).toHaveCount(0);
+});
+
+test("a refused restart stops guided initialization before compilation or generation", async ({
+  page,
+}) => {
+  const relay = structuredClone(settings);
+  relay.connections[0] = {
+    ...relay.connections[0],
+    kind: "relay",
+    name: "Colab T4",
+  };
+  await openFixture(page, structuredClone(project), relay, {
+    setupReports: [
+      {
+        state: "review",
+        reviewId: "one",
+        managedRuntime: true,
+        restartSupported: false,
+      },
+      { state: "needs-restart", restartRequired: true },
+    ],
+  });
+  await page.getByRole("tab", { name: "Setup", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Initialize on Colab T4", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Install & prepare on Colab T4", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Colab T4: Error: Dependencies are installed",
+  );
+  expect(
+    await page.evaluate(() => (window as any).fixture.preparations),
+  ).toEqual([]);
+  expect(
+    await page.evaluate(() => (window as any).fixture.submissions),
+  ).toEqual([]);
 });

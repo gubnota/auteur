@@ -1,5 +1,15 @@
 # Task Log
 
+## 2026-10-15 — Tag-only CI, guided initialization and queue cleanup, 0.1.17
+
+- Approved continuation on main. GitHub checks are reusable only and run through the tag-triggered release; GitLab accepts vX.Y.Z tags only. Source/package/native versions agree at 0.1.17. No tag or release published in this pass.
+- Workflow modal now selects the exact ComfyUI/agent instance for install, preparation and setup. Target/variant/tab changes are locked during operations; selection changes discard reviews. Destination and stage-specific errors distinguish an unreachable instance, timeout and Userdata HTTP refusal. The earlier localhost failure was not independently reproduced.
+- Initialize reviews dependencies; Install & prepare then applies the reviewed plan, restarts only a managed idle runtime if required, prepares/publishes the original workflow and rechecks session readiness. Existing typed agent protocol/safeguards remain; no arbitrary remote shell. Requires matching >=0.1.16 agent/supervisor.
+- Clear finished retains only nonterminal bottom-queue rows. Completed/failed/canceled dismissal IDs merge monotonically in native settings and frontend refreshes, preventing stale state from restoring rows. Jobs history/results are preserved.
+- Validation: 55 Rust workspace, 55 Python and 27 frontend unit tests passed; all 21 mocked browser cases passed. Typecheck, production/native Apple Silicon build, Rust formatting, release-version parity (including v0.1.17) and diff checks passed. Browser cases cover guided review/install/restart/readiness, selected instance, locked controls, refused restart and stale-refresh queue cleanup. No generation or live remote dependency installation performed.
+- Built, ad-hoc signed and installed /Applications/MyMovie Studio.app 0.1.17; strict signature/version verified. Native acceptance reopened the disposable 0.1.16 verification movie, selected its existing Colab connection in the modal and opened guided Setup without submitting an operation. Screenshot: screenshots/workflow-setup-native-0.1.17.png.
+- Previous app preserved at /private/tmp/MyMovie Studio-0.1.16-before-0.1.17.app. EN/RU/FR documentation, example guides and project memory updated. Existing editable movie-copy guides remain user-owned; newly pinned examples contain current steps. Live Colab/Kaggle installation/GPU roundtrip and hosted artifacts remain pending a new matching release.
+
 ## 2026-10-15 — Illustrated workflow examples and agent setup, 0.1.16
 
 - Approved implementation on main: three built-in examples (weight-free connection/collection, SD1.5 T4 and tiny background removal), original illustrated previews, guides, exact dependency metadata and reusable editable movie copies. Portable wrappers preserve example identity and package pins.
