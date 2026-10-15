@@ -127,3 +127,11 @@
 - GitHub release.yml starts on v* tags and calls reusable checks.yml; GitLab workflow accepts version tags only.
 - integration-core SettingsStore owns monotonic terminal-queue dismissal merges; App.tsx protects against stale refreshes.
 - provider-comfyui/src/workflow.rs distinguishes unreachable instances, timeouts and Userdata HTTP refusals during verified publication.
+
+## Durable initialization (0.1.18)
+- agent/src/initialization.rs: durable operation stages, recipe receipts, shared-runtime locks and interrupted-operation reconciliation.
+- agent/src/console.rs and deploy/runner/mymovie_{console,script}.py: private opted-in PTY, bounded output and child cleanup.
+- relay/src/operations.rs and console.rs: initialization listing/deduplication and authenticated terminal sessions.
+- desktop/src-tauri/src/service/initialization.rs: operation start/list/cancel/apply, console proxy and workflow archive.
+- components/BackgroundActivity.tsx / InitializationRecipe.tsx: app-wide status/terminal and portable ordered recipe editor.
+- docs/NODE_ACTIVITY.md: controls, versions, private-console activation and acceptance limits.

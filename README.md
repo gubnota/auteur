@@ -6,7 +6,7 @@
 
 A portable film studio for macOS: Finder `.mymovie` packages, scenes and keyframes, shared characters and media, reusable ComfyUI workflows and traceable jobs.
 
-Current source/app version: **0.1.17**. [Published v0.1.15 downloads](https://github.com/gubnota/auteur/releases/tag/v0.1.15) include the Linux agent and matching relay. Commit version changes before creating a matching tag; staging alone does not update a tag. Local macOS builds use an ad-hoc signature; notarization and foreign-platform launch acceptance remain pending.
+Current source/app version: **0.1.18**. [Published v0.1.15 downloads](https://github.com/gubnota/auteur/releases/tag/v0.1.15) include the Linux agent and matching relay. Commit version changes before creating a matching tag; staging alone does not update a tag. Local macOS builds use an ad-hoc signature; notarization and foreign-platform launch acceptance remain pending.
 
 ## One workflow, many jobs
 
@@ -66,3 +66,13 @@ Use a matching agent with guided setup (0.1.16 or newer); desktop updates do not
 update running notebooks. CI builds only on matching version-tag pushes.
 **Clear finished** hides completed, failed and canceled bottom-queue entries permanently;
 Jobs history and Library results remain available.
+
+## Background setup and workflow removal
+
+**Activity** follows agent-owned initialization across tabs and Welcome, with stages,
+logs, transfer progress, Cancel and Reconnect. Independent nodes run concurrently;
+shared Kaggle runtimes serialize mutations and reuse verified files. Workflows now
+have **Move to Trash / Restore** and an editable ordered **Initialization recipe**.
+The agent terminal and custom scripts require private tokens and explicit opt-in.
+[Controls and setup guide](docs/NODE_ACTIVITY.md). These features require a matching
+**0.1.18 agent and relay**; the last published agent is still v0.1.15.

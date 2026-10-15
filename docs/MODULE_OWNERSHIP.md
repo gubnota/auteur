@@ -34,7 +34,7 @@
 - Frontend save cannot create imported originals or change asset identity.
 - Scene cast is inherited; frame cast extends it; workflow-core owns resolution.
 - Cross-module filesystem access must use confined paths and validated identity.
-- Relay/agent control actions are allowlisted; arbitrary command execution forbidden.
+- Relay/agent standard control actions are allowlisted. Custom recipes/PTY require private token pairs and explicit agent opt-in; generation never executes arbitrary shell.
 - Reference repositories must not gain dependencies on this repo during this milestone.
 
 ## Testing ownership
@@ -70,7 +70,7 @@
 
 - WorkflowEditor owns public inputs/output collection and guide presentation; workflow-core/bundle owns immutable portable validation and removes destination profiles/vault references.
 - Hardware variants are separate graphs with separate requirements/preparations; UI metadata never translates model architecture.
-- WorkflowBootstrap emits reviewed typed utility commands; it cannot submit arbitrary shell to a remote runner. Managed agent/provision-core own installation and session readiness.
+- WorkflowBootstrap emits reviewed typed utility commands. InitializationRecipe owns portable script editing; private opted-in agent execution owns scripts. Managed agent/provision-core own installation and session readiness.
 - job-core owns selected-task mutation transactions; desktop Jobs only selects IDs and routes exact receipt edits to Generate. Submitted receipts cannot be edited.
 
 ## Guided example setup
@@ -80,5 +80,12 @@
 - NotebookRunner alone restarts its recorded managed ComfyUI processes. It checks every shared worker is idle; the relay/agents/tunnel remain running. External ComfyUI is read-only.
 - Shared cache locks exclude generation while dependencies change or workers restart. Restart clears per-worker readiness; preparation and canary must pass again.
 
-- WorkflowEditor coordinates preparation/setup busy state; its parent modal owns the selected connection and locks selection while operations run. AgentWorkflowSetup composes existing typed operations; it introduces no shell endpoint or protocol.
+- WorkflowEditor owns local review/preparation selection. AgentWorkflowSetup submits durable initialization; BackgroundActivity observes it independently. Private custom execution uses the dedicated agent recipe/console protocol.
 - Version-tag release workflows own CI entry; reusable checks cannot independently trigger on branch commits or pull requests.
+
+## Background ownership (0.1.18)
+- Agent initialization owns installation through readiness; the UI submits once and observes durable relay state. Navigation never owns/cancels the operation.
+- Relay owns deduplication per node and leased operation state; agent local receipts reconcile interruptions without replaying mutations.
+- BackgroundActivity observes/apply results through native project/connection/version checks; it never overwrites changed forms.
+- Shared-runtime locks serialize mutations; independent instances remain parallel. Recipe receipts never replace verified readiness.
+- Console transport is separate from generation jobs, private and opted-in; helpers terminate descendants on lost parent pipes. Workflow Trash belongs to wrapper metadata and preserves receipts/assets.

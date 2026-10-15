@@ -50,7 +50,7 @@
 - Legacy workflow create + v2 AI App run use typed nodeInfoList; usePersonalQueue is JSON boolean. Both use /task/openapi/upload (apiKey/fileType=input/file multipart, bearer authentication), returning data.fileName for ComfyUI loader overrides; standard-model v2 download URLs are not interchangeable. Image-only staging is bounded to 30 MB.
 - Desktop refresh polls every five seconds; ComfyUI transport also exposes WS support.
 - Relay /v1/events: authenticated SSE, monotonic id and Last-Event-ID replay.
-- Relay typed operations: doctor/inventory/drain/bootstrap/provision; no remote shell.
+- Relay typed operations: doctor/inventory/drain/bootstrap/provision/initialize. Remote console is separate, private and explicitly opted-in (0.1.18).
 - Runtime lock: schemaVersion/runtime fingerprint or image digest/nodeTypes/artifacts/canary. Managed readiness requires verified installed dependencies and a successful current-session canary.
 - Transfer manifest objects: name/sha256/size/url/architecture?/license?.
 - Signed manifest URL stored in Keychain; no secrets in .mymovie/settings JSON.
@@ -178,3 +178,13 @@
 - No protocol change. Initialize inspects with guided=true/apply=false; Install & prepare consumes reviewId, applies, requests managed restart if required, prepares/publishes on that same connection, then obtains a fresh review and verifies readiness. Maximum three apply passes.
 - A changed selection invalidates the review. Busy operations lock the modal target and setup/editor tabs; identity/unmount guards stop subsequent steps after navigation.
 - Direct ComfyUI Userdata publication preserves immutable hashed names/readback and reports unreachable/timeout/HTTP refusal distinctly with the selected base URL.
+
+## Durable initialization and private console (0.1.18)
+- WorkflowWrapper adds archivedAt?: string and initialization: [{name, script, directory, timeoutSeconds, policy}]. Defaults preserve existing documents. Max 32 steps; timeout 1–3600; policy recipe/session; working folders confined beneath canonical ComfyUI root. Portable exports carry recipes and clear archivedAt/profiles.
+- Native: start_initialization(connectionId,workflowId,reviewId), list_initializations(connectionId), cancel_initialization(connectionId,operationId), apply_initialization(connectionId,operationId), archive_workflow(workflowId,archived), console_request(connectionId,sessionId?,command?).
+- Relay command kind initialize snapshots workflows/sourceWorkflow/projectId/connectionId/reviewId. Identical active requests reuse the operation; different active initialization on the node returns 409. GET /v1/nodes/{node}/operations lists latest 100 initializations without payloads.
+- Agent reports progress {stage,detail,startedAt,updatedAt,bytes?,totalBytes?,log[]} (latest 128 rows), lastContact, terminal report/error through the existing lease. Cancellation stops helpers; completed files/step receipts remain. Agent restart reconciles local interrupted receipts as failed, never replays scripts automatically.
+- Shared workers may rebind after waiting only if reviewed artifacts/nodeTypes/canary remain identical; changed resolution needs user review. Readiness remains full runtime/session-bound; recipe success keys exclude Python dependencyHash to avoid self-invalidating scripts.
+- POST /v1/nodes/{node}/console; GET /v1/consoles/{id}; POST /v1/consoles/{id}/input; POST /v1/agent/nodes/{node}/console. Input/output sequence ACKs are monotonic, repeated output is idempotent. Commands input/resize/close; max 128 queued, output 256 KiB, session 30 min.
+- Console/custom scripts require non-default tokens at relay and agent plus --allow-console. Agent heartbeat advertises initialization/console/customScripts capabilities. Console opening invalidates attestation/requires restart; tokens excluded from child environments.
+- Agent release metadata adds initializationVersion=1 and consoleVersion=1. Matching 0.1.18 agent/relay required; a desktop build alone is insufficient.

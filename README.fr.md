@@ -6,7 +6,7 @@
 
 Un studio de cinéma portable pour macOS : documents Finder `.mymovie`, épisodes et storyboard, personnages et médias partagés, workflows ComfyUI réutilisables et tâches traçables.
 
-Version des sources/de l’application : **0.1.17**. Les [téléchargements v0.1.15](https://github.com/gubnota/auteur/releases/tag/v0.1.15) incluent l’agent Linux et son relay correspondant. Commitez les versions avant de créer le tag correspondant ; git add prépare seulement les changements. La compilation locale macOS utilise une signature ad-hoc ; notarisation et validation sur les autres plateformes restent à faire.
+Version des sources/de l’application : **0.1.18**. Les [téléchargements v0.1.15](https://github.com/gubnota/auteur/releases/tag/v0.1.15) incluent l’agent Linux et son relay correspondant. Commitez les versions avant de créer le tag correspondant ; git add prépare seulement les changements. La compilation locale macOS utilise une signature ad-hoc ; notarisation et validation sur les autres plateformes restent à faire.
 
 ## Parcours unique
 
@@ -52,3 +52,14 @@ workflow et vérifie la disponibilité. Aucune commande supplémentaire dans le 
 une mise à jour du desktop ne met pas à jour le notebook. CI uniquement sur les tags de version.
 **Clear finished** masque les tâches terminées, échouées et annulées de la file inférieure ;
 l’historique Jobs et les résultats Library restent disponibles.
+
+## Initialisation en arrière-plan et suppression des workflows
+
+**Activity** affiche étapes, journaux, téléchargements et commandes Cancel / Reconnect
+dans tous les onglets, y compris Welcome. Les nœuds indépendants travaillent en parallèle ;
+les workers Kaggle partagent les fichiers et sérialisent les modifications du runtime.
+**Move to Trash / Restore** retire et restaure un workflow avec ses réglages.
+Setup propose un **Initialization recipe** ordonné et modifiable. Le terminal agent
+et les scripts libres exigent des tokens privés et une activation explicite.
+[Guide](docs/NODE_ACTIVITY.md). Agent et relay **0.1.18** requis ; le dernier agent
+publié reste v0.1.15. Mettre à jour le desktop ne met pas à jour le notebook.

@@ -1,5 +1,14 @@
 # Task Log
 
+## 2026-10-15 — Background initialization, recipes, console and workflow Trash, 0.1.18
+
+- Approved continuation on main. Initialization is an agent-owned durable operation with detailed stage/log/download progress, cancellation, reconnect and duplicate prevention. The global Activity panel remains available across movie screens and Welcome. Independent nodes can initialize concurrently; workers sharing a runtime serialize mutations and reuse verified dependencies. Changed dependency plans require a fresh review.
+- Workflow Setup now edits ordered portable script steps with timeout, relative working directory and once-per-recipe/runtime or agent-session receipts. Custom scripts and the interactive PTY console require explicit agent opt-in and private agent/desktop tokens. Console execution has bounded output, reconnect, close and process cleanup; predefined shared test keys continue to support typed setup only.
+- Workflow deletion moves the movie copy to recoverable Trash, hides it from active workflow/job selectors, and preserves inputs, guide, recipe, results and history. Restore returns the same copy. Removing a workflow does not cancel an active initialization; Activity owns cancellation.
+- Validation: 63 Rust workspace, 58 Python and 27 frontend unit tests passed; all 23 mocked browser scenarios passed. Agent/relay tests were rerun after warning cleanup. Typecheck, production/native Apple Silicon build, Rust formatting, source-version parity and diff checks passed. Browser coverage includes background status/cancel, failed operations, workflow restore and ordered recipe editing; local process/PTY tests exercise script/terminal cleanup. No generation or live remote dependency installation performed.
+- Built, ad-hoc signed and installed /Applications/MyMovie Studio.app 0.1.18; strict signature/version verified. Native acceptance used only /private/tmp/Studio 0.1.16 Verification.mymovie: workflow moved to Trash, disappeared from active list, restored with its guide/settings, Setup recipe controls and global Activity opened. Screenshot: screenshots/workflow-trash-native-0.1.18.png. Mocked progress/recipe screenshots are separately recorded.
+- Previous app preserved at /private/tmp/MyMovie Studio-0.1.17-before-0.1.18.app. EN/RU/FR documentation and compact project memory updated; detailed operating guide: NODE_ACTIVITY.md. New remote features require matching 0.1.18 agent/relay and current notebook supervisor; last published release remains v0.1.15. No tag/push/publication in this pass. Live Colab/Kaggle setup, cancellation/reconnect and GPU roundtrip remain unverified.
+
 ## 2026-10-15 — Tag-only CI, guided initialization and queue cleanup, 0.1.17
 
 - Approved continuation on main. GitHub checks are reusable only and run through the tag-triggered release; GitLab accepts vX.Y.Z tags only. Source/package/native versions agree at 0.1.17. No tag or release published in this pass.

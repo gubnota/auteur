@@ -9,9 +9,10 @@
 
 ## Current milestone
 - Revised Phases 0–3 approved by user `go` on 2026-10-13.
-- Bundled illustrated workflow examples and guided agent initialization implemented; live private cloud acceptance remains open.
+- Durable agent initialization, global Activity/cancel/reconnect, editable recipes, private terminal and workflow Trash implemented; live private cloud acceptance remains open.
+- Background setup/console require matching 0.1.18 agent and relay; see docs/NODE_ACTIVITY.md.
 - Example setup requires matching 0.1.16 agent/supervisor; the last published agent remains v0.1.15 until a new release is built.
-- Current source: 0.1.17; designer wrappers, platform families, portable collections and selective queued-task control. Installation evidence is in TASK_LOG.
+- Current source: 0.1.18; designer wrappers, platform families, portable collections and selective queued-task control. Installation evidence is in TASK_LOG.
 - Published v0.1.15 includes the matching Linux agent/relay. GPU notebooks support unchanged Run all with shared test keys, pinned base ComfyUI, isolated Python, browser compiler and verified cloudflared; models/plugins remain app-initialized. Evidence: TASK_LOG and CI_RELEASES.
 - Installed release: see latest TASK_LOG entry; /Applications/MyMovie Studio.app uses a local ad-hoc signature.
 - Cold Finder opening and warm saved-project opening verified; startup abort fixed.

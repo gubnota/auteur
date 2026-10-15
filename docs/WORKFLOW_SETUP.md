@@ -314,3 +314,9 @@ Use a disposable document and inspect the returned image/mask and result hashes.
 References: [ComfyUI examples](https://github.com/comfyanonymous/ComfyUI_examples),
 [rembg u2netp source](https://github.com/danielgatis/rembg/blob/main/rembg/sessions/u2netp.py),
 [U-2-Net license](https://github.com/xuebinqin/U-2-Net/blob/master/LICENSE).
+
+## Durable initialization and remote console
+
+See [Background setup, recipes and remote console](NODE_ACTIVITY.md) for global
+progress, cancel/reconnect, shared-GPU scheduling, editable initialization steps
+and private agent terminal setup. These require a matching 0.1.18 agent and relay.

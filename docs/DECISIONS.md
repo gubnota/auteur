@@ -240,3 +240,13 @@ Context: User requested tag-only builds, simpler remote setup, explicit instance
 Decision: Run reusable GitHub checks only through tag-triggered releases; GitLab accepts semantic version tags only. The workflow modal owns one locked destination. After reviewing exact dependencies, one action composes existing agent install/restart/prepare/publish/readiness operations. Merge terminal queue dismissal IDs monotonically in native storage and frontend refreshes.
 Consequences: Branch commits do not start CI; existing review/session/hardware checks remain authoritative. Agent setup needs matching >=0.1.16 runtime support. Queue clearing changes presentation only; history/results persist. Publication errors distinguish offline, timeout and HTTP refusal without replacing original graphs.
 Related files: .github/workflows/checks.yml; .gitlab-ci.yml; AgentWorkflowSetup.tsx; WorkflowEditor.tsx; features/Library.tsx; integration-core/src/lib.rs; provider-comfyui/src/workflow.rs.
+
+# ADR-0025: Agent-owned initialization and explicitly private custom execution
+
+Date: 2026-10-15
+Status: Accepted
+
+Context: Initialization lost its UI progress on navigation, lacked cancellation/reconnect and user-authored steps; workflows could not be removed.
+Decision: Persist one initialization operation per node in the existing relay lease protocol. Agent owns full install/restart/prepare/verify lifecycle and local interruption receipts. Shared runtimes serialize mutations and reuse verified files. Store portable ordered recipes with exact success identities. Add a separate private opted-in PTY transport; shared test keys retain typed setup only. Archive movie workflows with recoverable Trash metadata.
+Consequences: Activity works across navigation/Welcome and reconnects without replay. Completed downloads survive cancellation; arbitrary scripts are not rolled back. Script/terminal users must replace both default keys and enable agent execution. Matching 0.1.18 remote builds are required. Live GPU validation remains separate.
+Related files: agent/src/initialization.rs; agent/src/console.rs; relay/src/operations.rs; relay/src/console.rs; BackgroundActivity.tsx; InitializationRecipe.tsx; docs/NODE_ACTIVITY.md.

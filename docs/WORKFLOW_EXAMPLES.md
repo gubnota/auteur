@@ -53,7 +53,8 @@ a GitHub release automatically.
    performs the sequence through the agent: install verified dependencies, restart its
    managed idle ComfyUI if needed, compile the original workflow, save it in that
    instance’s ComfyUI library, and verify current-session readiness with a weight-free
-   64×64 canary and collected bytes. Progress and failures stay visible here.
+   64×64 canary and collected bytes. Progress and failures stay in global **Activity**,
+   even after this window closes. Use Cancel or Reconnect there.
 3. Verified files are reused. Conflicting files, incompatible hardware, unresolved
    dependencies or an unavailable managed restart stop the sequence with a reason.
    Unmanaged external ComfyUI remains read-only for dependency installation. On Kaggle,
@@ -62,7 +63,7 @@ a GitHub release automatically.
    the intended tasks in Jobs and **Run selected**. Actual results are pulled into
    Library as render-tagged media. Initialization does not run your generation workflow.
 
-The selected instance is fixed while an operation runs. Changing it afterward clears
+The submitted operation retains its exact instance. Changing the editor target clears
 its setup review and uses that instance’s own prepared inputs/outputs. For direct
 ComfyUI, **Install in ComfyUI** publishes the original editor graph only; it does not
 install models/plugins. A local address belongs to the machine making the request.
@@ -98,3 +99,6 @@ an actionable report. Private transfer credentials do not belong in exported wra
 Source graphs: `examples/workflows/{cpu-canary,sd15-t4,rembg-u2netp}_editor.json`.
 API fixtures exist alongside them for automated checks; the shipped examples begin
 with the original editor source and are prepared for each selected node.
+
+Background operations, editable recipes, parallel workers, Trash and the private
+agent terminal require matching 0.1.18 binaries: [full guide](NODE_ACTIVITY.md).
