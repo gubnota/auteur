@@ -135,6 +135,7 @@
 - desktop/src-tauri/src/service/initialization.rs: operation start/list/cancel/apply, console proxy and workflow archive.
 - components/BackgroundActivity.tsx / InitializationRecipe.tsx: app-wide status/terminal and portable ordered recipe editor.
 - docs/NODE_ACTIVITY.md: controls, versions, private-console activation and acceptance limits.
+- docs/LOCAL_COMFYUI_TEST.md: isolated OrbStack CPU and Mac MPS ComfyUI ports, direct workflow checks, local agent/relay setup and limits.
 
 ## Desktop fixes (0.1.19)
 - project-core `save_metadata`: authoritative native graphs/profiles retained across JavaScript metadata saves.

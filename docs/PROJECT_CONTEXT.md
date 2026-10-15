@@ -22,6 +22,7 @@
 - Scrollable/removable recents, Welcome navigation, filename ellipsis, posters and cast/asset usage links implemented.
 - Linux ARM64 utility ran in OrbStack Debian: immutable workflow publish/reuse and frontend API compilation passed against local CPU ComfyUI.
 - Weight-free local Docker ComfyUI HTTP/history/result canary passed.
+- Local two-instance setup guide covers OrbStack CPU on 8192 and fresh Apple Silicon MPS on 8191, plus direct and agent-backed checks: docs/LOCAL_COMFYUI_TEST.md.
 - Automated Finder file-drop acceptance remains unverified.
 - Full approval scope: docs/IMPLEMENTATION_PLAN.md.
 - Design sources: ignored drafts/index.html, index-alt.html and studio.html.

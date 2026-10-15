@@ -366,3 +366,9 @@
 - Validation: 65 Rust tests plus doc tests, 27 frontend unit tests, 62 Python tests, 29 fixture browser tests, production frontend/native ARM64 build, version parity, strict ad-hoc signature and diff checks passed.
 - Installed /Applications/MyMovie Studio.app 0.1.19; previous 0.1.18 app preserved at /private/tmp/MyMovie Studio-0.1.18-before-0.1.19.app. Running app was not stopped; reopen to load new version.
 - EN/RU/FR READMEs and compact memory updated. Personal projects/drafts/credentials untouched; no cloud generation, tags or published releases. Matching current remote artifact is still needed for new background initialization/console capabilities.
+
+## 2026-10-15 — Local OrbStack CPU and Apple Silicon MPS guide
+
+- Added docs/LOCAL_COMFYUI_TEST.md: isolated CPU canary on loopback port 8192 using OrbStack Docker, fresh M2 Max/MPS install on port 8191, direct workflow test steps, agent CLI workflow actions, and private relay-backed Studio initialization/console setup.
+- Clarifies that direct ComfyUI preparation/job execution does not install remote filesystem dependencies; OrbStack full dependency installation needs a Linux agent inside that runtime. Agent setup on fresh MPS can use the local macOS utility and custom HTTPS relay tunnel without exposing ComfyUI.
+- Linked from the README and architecture index. Installation commands follow the ComfyUI upstream Apple Silicon notes and OrbStack's published Docker networking instructions. No installs or model downloads performed.
