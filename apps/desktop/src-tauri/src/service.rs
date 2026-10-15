@@ -589,6 +589,8 @@ pub async fn plan_deployment(
     connection_id: String,
     workflow_ids: Vec<String>,
     apply: Option<bool>,
+    guided: Option<bool>,
+    review_id: Option<String>,
 ) -> Reply<Value> {
     let (c, workflows, settings) = {
         let i = state.inner.lock().await;
@@ -603,7 +605,10 @@ pub async fn plan_deployment(
             .map_err(err)?;
         (c, workflows, i.settings.read().map_err(err)?)
     };
-    relay(&c).map_err(err)?.command("provision",json!({"workflows":workflows,"runtimeLock":settings.storage["runtimeLock"],"profile":settings.storage["provisionProfile"],"apply":apply.unwrap_or(false)})).await.map_err(err)
+    if workflows.is_empty() {
+        return Err("Select at least one workflow from this movie".into());
+    }
+    relay(&c).map_err(err)?.command("provision",json!({"workflows":workflows,"runtimeLock":settings.storage["runtimeLock"],"profile":if guided==Some(true){Value::Null}else{settings.storage["provisionProfile"].clone()},"apply":apply.unwrap_or(false),"guided":guided.unwrap_or(false),"reviewId":review_id})).await.map_err(err)
 }
 #[tauri::command]
 pub async fn runner_operation(

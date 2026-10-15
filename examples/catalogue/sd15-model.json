@@ -1,0 +1,10 @@
+{
+  "kind": "model",
+  "category": "checkpoints",
+  "target": "v1-5-pruned-emaonly.safetensors",
+  "sha256": "6ce0161689b3853acaa03779ec93eafe75a02f4ced659bee03f50797806fa2fa",
+  "size": 4265146304,
+  "license": "CreativeML OpenRAIL-M",
+  "architecture": "any",
+  "source": "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/v1-5-pruned-emaonly.safetensors"
+}

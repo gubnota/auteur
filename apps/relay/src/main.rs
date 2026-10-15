@@ -161,6 +161,7 @@ async fn submit(
                     | "drain"
                     | "bootstrap"
                     | "provision"
+                    | "runtime-restart"
                     | "workflow-inspect"
                     | "workflow-install"
                     | "workflow-compile"

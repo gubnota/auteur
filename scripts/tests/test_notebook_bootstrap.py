@@ -180,7 +180,7 @@ class BootstrapTests(unittest.TestCase):
         # MagicMock provides socket's context-manager methods.
         from unittest.mock import MagicMock
         sock = MagicMock(); sock.__enter__.return_value.connect_ex.return_value = 1
-        with patch.object(b,"gpu_indices",return_value=[0,1]), patch.object(b,"comfy_info",return_value={"stats":{"devices":[{"type":"cuda","name":"T4"}]},"nodeCount":3}), patch.object(b.subprocess,"check_output",side_effect=[revision,""]), patch.object(b.socket,"socket",return_value=sock), patch.object(b.subprocess,"Popen",return_value=fake) as spawn, patch.object(b.os,"killpg"):
+        with patch.object(b,"gpu_indices",return_value=[0,1]), patch.object(b,"comfy_info",return_value={"stats":{"devices":[{"type":"cuda","name":"T4"}]},"nodeCount":3}), patch.object(b.subprocess,"check_output",side_effect=[revision,""]), patch.object(b.subprocess,"run",return_value=types.SimpleNamespace(stdout="--supervisor")), patch.object(b.socket,"socket",return_value=sock), patch.object(b.subprocess,"Popen",return_value=fake) as spawn, patch.object(b.os,"killpg"):
             runner.start("s"*32,comfy_root=repo,expected_revision=revision,python="/fixture/env/bin/python")
             self.assertEqual(spawn.call_count,4)
             calls = spawn.call_args_list
@@ -194,6 +194,7 @@ class BootstrapTests(unittest.TestCase):
                 self.assertNotIn("MYMOVIE_AGENT_TOKEN",server.kwargs["env"])
                 self.assertEqual(agent.kwargs["env"]["MYMOVIE_AGENT_TOKEN"],"s"*32)
                 self.assertIn(f"test-gpu{i}",agent.args[0])
+                self.assertIn("--supervisor",agent.args[0])
             self.assertNotEqual(calls[0].args[0],calls[1].args[0])
             self.assertEqual(runner.status()["processesAlive"],4)
             runner.stop()
@@ -285,3 +286,42 @@ class BootstrapTests(unittest.TestCase):
 
 
 if __name__ == "__main__": unittest.main()
+
+
+class ManagedRestartTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory(); self.root=Path(self.tmp.name)
+        self.runner=object.__new__(b.NotebookRunner)
+        self.runner.root=self.root
+        self.runner.supervisor=self.root/'supervisor'; self.runner.supervisor.mkdir()
+        self.runner.workers=[{'port':8188+i,'root':self.root/str(i)} for i in range(2)]
+        for w in self.runner.workers:
+            data=w['root']/'agent';data.mkdir(parents=True);(data/'attestation.json').write_text('{}')
+        from unittest.mock import Mock
+        self.children=[Mock(pid=100+i) for i in range(3)]
+        for p in self.children:p.poll.return_value=None
+        self.runner.children=list(self.children)
+        self.runner.comfy_processes=[(p,['python','main.py'],{},self.root) for p in self.children[:2]]
+        self.request=self.runner.supervisor/'00000000-0000-4000-8000-000000000001.request.json'
+        self.request.write_text(json.dumps({'id':self.request.name.split('.')[0],'action':'restart-comfyui'}))
+        cache=self.root/'dependency-cache';cache.mkdir();(cache/'restart-required.json').write_text('{}')
+    def tearDown(self):self.tmp.cleanup()
+    def reply(self):return json.loads(self.request.with_name(self.request.name.replace('request','response')).read_text())
+    def test_busy_second_gpu_stops_neither_worker(self):
+        with patch.object(b.urllib.request,'urlopen',side_effect=[io.BytesIO(b'{"queue_running":[],"queue_pending":[]}'),io.BytesIO(b'{"queue_pending":[1]}')]),patch.object(b.os,'killpg') as kill:
+            self.runner._service_requests()
+        kill.assert_not_called();self.assertFalse(self.reply()['ok'])
+        self.assertEqual(self.runner.children,self.children)
+    def test_restart_only_comfy_preserves_relay_and_invalidates_both_attestations(self):
+        from unittest.mock import Mock
+        replacements=[Mock(),Mock()]
+        def spawn(*args,**kwargs):
+            child=replacements.pop(0);self.runner.children.append(child);return child
+        with patch.object(b.urllib.request,'urlopen',side_effect=lambda *a,**k:io.BytesIO(b'{"queue_running":[],"queue_pending":[]}')),patch.object(b.os,'killpg') as kill,patch.object(b,'comfy_info',return_value={}),patch.object(self.runner,'_spawn',side_effect=spawn):
+            self.runner._service_requests()
+        self.assertTrue(self.reply()['ok']);self.assertEqual(kill.call_count,2)
+        self.assertIn(self.children[2],self.runner.children)
+        self.assertFalse((self.root/'dependency-cache/restart-required.json').exists())
+        for w in self.runner.workers:
+            self.assertFalse((w['root']/'agent/attestation.json').exists())
+            self.assertTrue((w['root']/'agent/runtime-epoch.json').exists())

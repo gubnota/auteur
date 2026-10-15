@@ -1,0 +1,13 @@
+{
+  "kind": "plugin",
+  "category": "custom_nodes",
+  "target": "mymovie_rembg",
+  "sha256": "736d6428d00ab056652748eea7a0f1c9a11dc07ecda2b0322f2ae024f785d70f",
+  "size": 1343,
+  "license": "MIT OR Apache-2.0",
+  "architecture": "any",
+  "revision": "b0a3c77a7d8c3fd37a854cef7b30ee493f50678b5e3e685a59ef5ef2c79822fc",
+  "sourceRef": "builtin-mymovie-rembg-v1",
+  "source": "",
+  "stripPrefix": ""
+}

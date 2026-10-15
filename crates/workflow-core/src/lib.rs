@@ -1,4 +1,5 @@
 pub mod bundle;
+pub mod examples;
 pub mod schema;
 use project_core::{Result, id};
 use serde_json::Value;

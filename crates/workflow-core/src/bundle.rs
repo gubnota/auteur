@@ -16,7 +16,8 @@ pub fn export(workflows: &[Workflow]) -> Result<Value> {
         w.deployments.clear();
         for artifact in &mut w.requirements.artifacts {
             artifact.validate()?;
-            if !artifact.source_ref.is_empty() {
+            if !artifact.source_ref.is_empty() && artifact.source_ref != "builtin-mymovie-rembg-v1"
+            {
                 artifact.source_ref = "configure-private-source".into();
             }
         }

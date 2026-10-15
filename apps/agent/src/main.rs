@@ -9,7 +9,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(version)]
 struct Args {
-    #[arg(value_parser=["doctor","inventory","bootstrap","provision","workflow-inspect","workflow-install","workflow-compile","serve"])]
+    #[arg(value_parser=["doctor","inventory","bootstrap","provision","runtime-restart","workflow-inspect","workflow-install","workflow-compile","serve"])]
     command: String,
     #[arg(long, default_value = "http://127.0.0.1:8188")]
     comfy_url: String,
@@ -39,6 +39,8 @@ struct Args {
     runtime_helper: Option<PathBuf>,
     #[arg(long)]
     managed_runtime: bool,
+    #[arg(long)]
+    supervisor: Option<PathBuf>,
     #[arg(long)]
     model_paths: Option<PathBuf>,
     #[arg(long)]
@@ -90,6 +92,14 @@ async fn execute(
     kind: &str,
     payload: &Value,
 ) -> Result<Value> {
+    let _guard = if kind == "runtime-restart" {
+        None
+    } else {
+        Some(provision::execution_lock(
+            args,
+            kind == "provision" && payload["apply"] == true,
+        )?)
+    };
     if kind.starts_with("workflow-") {
         workflow::control(args, kind, payload).await
     } else {
@@ -195,10 +205,9 @@ async fn main() -> Result<()> {
                 }
                 Err(error) => {
                     receipt["state"] = json!("failed");
-                    receipt["error"] = if job["kind"]
-                        .as_str()
-                        .is_some_and(|k| k.starts_with("workflow-"))
-                    {
+                    receipt["error"] = if job["kind"].as_str().is_some_and(|k| {
+                        k.starts_with("workflow-") || k == "provision" || k == "runtime-restart"
+                    }) {
                         json!(error.to_string().chars().take(2000).collect::<String>())
                     } else {
                         json!(
@@ -211,6 +220,17 @@ async fn main() -> Result<()> {
             let _ = post(&client, &report_url, &token, receipt).await;
             continue;
         }
+        let _execution = match provision::execution_lock(&args, false) {
+            Ok(guard) => guard,
+            Err(_) => {
+                receipt["state"] = json!("failed");
+                receipt["error"] =
+                    json!("Node is initializing or restarting. Retry after setup completes.");
+                atomic_json(&receipt_path, &receipt)?;
+                let _ = post(&client, &report_url, &token, receipt).await;
+                continue;
+            }
+        };
         // A receipt written before ComfyUI POST prevents blind resubmit after any crash.
         if receipt_path.exists() {
             receipt["state"] = json!("unknown");

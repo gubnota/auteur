@@ -427,6 +427,11 @@ pub struct AppSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkflowWrapper {
+    /// Built-in example provenance survives pinning/export; absent on user workflows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub example_id: Option<String>,
+    #[serde(default)]
+    pub python_packages: Vec<String>,
     #[serde(default)]
     pub family_id: String,
     #[serde(default)]
@@ -448,6 +453,23 @@ pub struct WorkflowWrapper {
 }
 impl WorkflowWrapper {
     pub fn validate(&self) -> Result<(), String> {
+        if self.python_packages.len() > 128
+            || self.python_packages.iter().any(|p| {
+                let Some((name, version)) = p.split_once("==") else {
+                    return true;
+                };
+                name.is_empty()
+                    || version.is_empty()
+                    || !name
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+                    || !version
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b"._+-".contains(&b))
+            })
+        {
+            return Err("Use exact Python package pins, for example onnxruntime==1.23.2".into());
+        }
         if !self.family_id.is_empty() && uuid::Uuid::parse_str(&self.family_id).is_err() {
             return Err("Invalid workflow family identity".into());
         }

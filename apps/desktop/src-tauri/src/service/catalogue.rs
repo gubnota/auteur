@@ -58,16 +58,23 @@ pub async fn install_workflow(
 fn hash(v: &Value) -> Result<String> {
     Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(v)?)))
 }
+fn catalogue_versions(i: &Inner) -> Result<Vec<Workflow>> {
+    let mut saved = i.settings.catalogue()?;
+    for example in workflow_core::examples::catalogue()? {
+        if !saved.iter().any(|w| w.id == example.id) {
+            saved.push(example);
+        }
+    }
+    Ok(saved)
+}
 #[tauri::command]
 pub async fn list_workflows(state: S<'_>) -> Reply<Vec<Workflow>> {
-    state.inner.lock().await.settings.catalogue().map_err(err)
+    catalogue_versions(&*state.inner.lock().await).map_err(err)
 }
 #[tauri::command]
 pub async fn pin_workflow(state: S<'_>, workflow_id: String) -> Reply<Project> {
     let mut i = state.inner.lock().await;
-    let w = i
-        .settings
-        .catalogue()
+    let w = catalogue_versions(&i)
         .map_err(err)?
         .into_iter()
         .find(|w| w.id == workflow_id)

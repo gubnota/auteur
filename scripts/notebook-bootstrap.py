@@ -278,7 +278,7 @@ def install_artifact(source: str, digest: str, destination: Path, download_token
                     seen.add(member.name)
                     if member.name == "mymovie-agent" and member.isfile():
                         binaries.append(member)
-                    elif member.isfile() and (member.name in {"mymovie-relay", "mymovie_workflow_compiler.py", "workflow-compiler-requirements.txt", "mymovie_runtime.py", "prepare-workflow-profile.py", "mask-canary.template.json", "rembg-u2netp.model.json", "mymovie-rembg.plugin.json", "mask-canary_api.json", "mask-canary_editor.json", "rembg-u2netp_api.json", "rembg-u2netp_editor.json"} or re.fullmatch(r"mymovie-rembg-[a-f0-9]{40,64}\.tar\.gz", member.name)):
+                    elif member.isfile() and (member.name in {"mymovie-relay", "mymovie_workflow_compiler.py", "workflow-compiler-requirements.txt", "mymovie_runtime.py", "prepare-workflow-profile.py", "WORKFLOW_EXAMPLES.md", "sd15-model.json", "rembg-plugin.json", "sd15-t4_api.json", "sd15-t4_editor.json", "mask-canary.template.json", "rembg-u2netp.model.json", "mymovie-rembg.plugin.json", "mask-canary_api.json", "mask-canary_editor.json", "rembg-u2netp_api.json", "rembg-u2netp_editor.json"} or re.fullmatch(r"mymovie-rembg-[a-f0-9]{40,64}\.tar\.gz", member.name)):
                         if member.name in auxiliary: raise SetupError("Duplicate runtime helper.")
                         auxiliary[member.name] = tar.extractfile(member).read(MAX_BINARY+1)
                 if len(binaries) != 1:
@@ -355,6 +355,8 @@ class NotebookRunner:
         self.prefix = prefix or f"notebook-{uuid.uuid4().hex[:10]}"
         self.workers = plans(count, self.prefix, self.root, first_port)
         self.children = []
+        self.comfy_processes = []
+        self.supervisor = self.root / "supervisor"
         self.lock = None
         self.started = None
         self.public_relay = None
@@ -484,7 +486,8 @@ class NotebookRunner:
                         args.extend(["--extra-model-paths-config", str(Path(model_paths).resolve())])
                     # Only agent processes inherit the relay Secret.
                     env = {k: v for k, v in os.environ.items() if k not in ("MYMOVIE_AGENT_TOKEN","MYMOVIE_DESKTOP_TOKEN","MYMOVIE_TRANSFER_MANIFEST")}
-                    self._spawn(args, env, cwd=repo)
+                    child = self._spawn(args, env, cwd=repo)
+                    self.comfy_processes.append((child, args, env, repo))
             deadline = time.monotonic() + timeout
             for w in self.workers:
                 url = f'http://127.0.0.1:{w["port"]}'
@@ -508,7 +511,16 @@ class NotebookRunner:
                 data = w["root"] / "agent"; data.mkdir(parents=True, exist_ok=True)
                 env = {k: v for k, v in os.environ.items() if k != "MYMOVIE_DESKTOP_TOKEN"}; env["MYMOVIE_AGENT_TOKEN"] = token
                 agent_args = [str(self.binary), "serve", "--comfy-url", f'http://127.0.0.1:{w["port"]}', "--relay", self.relay, "--node-id", w["nodeId"], "--data", str(data), "--comfy-root", str(repo), "--python", python or sys.executable, "--runtime-helper", str(helper), "--cache", str(self.root / "dependency-cache")]
-                if not attach: agent_args.append("--managed-runtime")
+                if not attach:
+                    self.supervisor.mkdir(parents=True, exist_ok=True)
+                    self.supervisor.chmod(0o700)
+                    for stale in self.supervisor.glob("*.request.json"): stale.unlink()
+                    agent_args.append("--managed-runtime")
+                    capabilities = subprocess.run([str(self.binary), "serve", "--help"], capture_output=True, text=True, timeout=10)
+                    if "--supervisor" in capabilities.stdout:
+                        agent_args.extend(["--supervisor", str(self.supervisor)])
+                    else:
+                        print("This agent predates guided setup. Publish/install the matching current release for in-app dependency setup and restarts.", flush=True)
                 if model_paths: agent_args.extend(["--model-paths",str(Path(model_paths).resolve())])
                 compiler = self.binary.parent / "mymovie_workflow_compiler.py"
                 if compiler.is_file(): agent_args.extend(["--workflow-compiler", str(compiler)])
@@ -523,6 +535,52 @@ class NotebookRunner:
             raise SetupError("Runner setup failed; check the installation and working directory.") from None
         return self.status()
 
+    def _service_requests(self):
+        if not self.supervisor.is_dir(): return
+        for path in sorted(self.supervisor.glob("*.request.json")):
+            reply = {"ok": False, "error": "Managed restart failed; inspect process logs."}
+            try:
+                request = json.loads(path.read_text())
+                if request.get("action") != "restart-comfyui" or path.name != f'{request.get("id")}.request.json' or not re.fullmatch(r'[a-f0-9-]{36}', request.get("id", "")):
+                    raise SetupError("Invalid supervisor request")
+                # Check both workers before stopping either; never interrupt a queued/running job.
+                for w in self.workers:
+                    with urllib.request.urlopen(f'http://127.0.0.1:{w["port"]}/queue', timeout=10) as response:
+                        queue = json.load(response)
+                    if queue.get("queue_running") or queue.get("queue_pending"):
+                        raise SetupError("ComfyUI has running or queued jobs; finish them before restart.")
+                for child, _, _, _ in self.comfy_processes:
+                    if child.poll() is None:
+                        os.killpg(child.pid, signal.SIGTERM)
+                        try: child.wait(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            os.killpg(child.pid, signal.SIGKILL); child.wait(timeout=5)
+                    self.children.remove(child)
+                records = self.comfy_processes; self.comfy_processes = []
+                for _, args, env, repo in records:
+                    child = self._spawn(args, env, cwd=repo)
+                    self.comfy_processes.append((child, args, env, repo))
+                deadline = time.monotonic()+120
+                for w in self.workers:
+                    while True:
+                        try: comfy_info(f'http://127.0.0.1:{w["port"]}'); break
+                        except SetupError:
+                            if time.monotonic()>deadline: raise
+                            time.sleep(1)
+                    data=w["root"]/"agent"
+                    (data/"attestation.json").unlink(missing_ok=True)
+                    (data/"runtime-epoch.json").write_text(json.dumps(time.time_ns()))
+                (self.root/"dependency-cache"/"restart-required.json").unlink(missing_ok=True)
+                reply={"ok": True}
+            except SetupError as error:
+                reply["error"]=str(error)
+            except Exception:
+                pass
+            finally:
+                path.unlink(missing_ok=True)
+                dest=path.with_name(path.name.replace(".request.json", ".response.json"))
+                temporary=dest.with_suffix(".writing"); temporary.write_text(json.dumps(reply)); temporary.replace(dest)
+
     def status(self) -> dict:
         alive = sum(p.poll() is None for p in self.children)
         return {**self.configuration(), "processesAlive": alive, "processesStarted": len(self.children), "state": "running" if alive and alive == len(self.children) else "stopped" if not self.children else "attention"}
@@ -533,6 +591,7 @@ class NotebookRunner:
         try:
             end = time.monotonic() + minutes * 60
             while time.monotonic() < end:
+                self._service_requests()
                 if self.status()["state"] != "running":
                     raise SetupError("A worker exited. Keep receipts and inspect connection status before restarting.")
                 time.sleep(2)
@@ -552,6 +611,7 @@ class NotebookRunner:
                     except ProcessLookupError: pass
                     p.wait(timeout=5)
         self.children.clear()
+        self.comfy_processes.clear()
         self.public_relay = None
         if self.lock:
             fcntl.flock(self.lock, fcntl.LOCK_UN); self.lock.close(); self.lock = None

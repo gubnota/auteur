@@ -46,12 +46,17 @@ class AgentPackageTests(unittest.TestCase):
                 self.assertIn("workflow-compiler-requirements.txt", tar.getnames())
                 self.assertIn("mask-canary_api.json", tar.getnames())
                 self.assertIn("mymovie-rembg.plugin.json", tar.getnames())
-                self.assertLessEqual(len(tar.getnames()), 18)
+                for name in ['sd15-t4_editor.json', 'sd15-t4_api.json',
+                             'sd15-model.json', 'rembg-plugin.json', 'WORKFLOW_EXAMPLES.md']:
+                    self.assertIn(name, tar.getnames())
+                self.assertEqual(len(tar.getnames()), 20)
                 self.assertEqual(tar.extractfile("mymovie-agent").read(), binary.read_bytes())
                 self.assertTrue(tar.getmember("mymovie-agent").mode & 0o111)
             metadata = json.loads((dest / "mymovie-agent-linux-x86_64.json").read_text())
             self.assertEqual(metadata["sha256"], hashlib.sha256(archive.read_bytes()).hexdigest())
             self.assertEqual(metadata["binarySha256"], hashlib.sha256(binary.read_bytes()).hexdigest())
+            self.assertEqual(metadata['guidedSetupVersion'], 1)
+            self.assertEqual(metadata['managedRestartVersion'], 1)
             for line in (dest / "SHA256SUMS-agent.txt").read_text().splitlines():
                 digest, name = line.split("  ")
                 self.assertEqual(digest, hashlib.sha256((dest / name).read_bytes()).hexdigest())

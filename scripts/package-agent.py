@@ -45,8 +45,13 @@ plugin_metadata.write_text(json.dumps(dict(kind='plugin',category='custom_nodes'
     sha256=hashlib.sha256(plugin.read_bytes()).hexdigest(),size=plugin.stat().st_size,
     license='Apache-2.0 OR MIT',architecture='any',revision=commit,stripPrefix='',source='',sourceRef=plugin.name),indent=2)+'\n')
 extras = [plugin, plugin_metadata]
+for name in ['sd15-model.json', 'rembg-plugin.json']:
+    source = root / 'examples/catalogue' / name
+    target = a.destination / name; target.write_bytes(source.read_bytes()); extras.append(target)
+guide_examples = a.destination / 'WORKFLOW_EXAMPLES.md'
+guide_examples.write_bytes((root / 'docs/WORKFLOW_EXAMPLES.md').read_bytes()); extras.append(guide_examples)
 for source in [root / 'scripts/prepare-workflow-profile.py', *sorted((root / 'examples/provision').glob('*.json')),
-               *sorted((root / 'examples/workflows').glob('mask-canary_*.json')), *sorted((root / 'examples/workflows').glob('rembg-u2netp_*.json'))]:
+               *sorted((root / 'examples/workflows').glob('sd15-t4_*.json')), *sorted((root / 'examples/workflows').glob('mask-canary_*.json')), *sorted((root / 'examples/workflows').glob('rembg-u2netp_*.json'))]:
     target = a.destination / source.name; target.write_bytes(source.read_bytes()); extras.append(target)
 with tarfile.open(archive, "w:gz") as tar:
     tar.add(a.binary, arcname="mymovie-agent", recursive=False)
@@ -65,7 +70,7 @@ for host in ["colab", "kaggle"]:
     dest = a.destination / f"MyMovie_ComfyUI_{host}.ipynb"
     dest.write_bytes((root / f"deploy/{host}/MyMovie_ComfyUI.ipynb").read_bytes()); files.append(dest)
 helper = a.destination / "notebook-bootstrap.py"; helper.write_bytes((root / "scripts/notebook-bootstrap.py").read_bytes()); files.append(helper)
-manifest = {"target":f"{a.architecture}-{'unknown-linux-gnu' if a.platform == 'linux' else 'apple-darwin'}", "compilerVersion":"frontend-export-v1", "compilerSha256":hashlib.sha256((root / "deploy/runner/mymovie_workflow_compiler.py").read_bytes()).hexdigest(), "compilerRequirementsSha256":hashlib.sha256((root / "deploy/runner/workflow-compiler-requirements.txt").read_bytes()).hexdigest(), "browserInstall":"python -m playwright install chromium", "buildOS":a.build_os, "commit":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(), "sha256":hashlib.sha256(archive.read_bytes()).hexdigest(), "binarySha256":hashlib.sha256(a.binary.read_bytes()).hexdigest(), "bootstrapSha256":hashlib.sha256(helper.read_bytes()).hexdigest(), "runtimeHelperSha256":hashlib.sha256((root / "deploy/runner/mymovie_runtime.py").read_bytes()).hexdigest()}
+manifest = {"target":f"{a.architecture}-{'unknown-linux-gnu' if a.platform == 'linux' else 'apple-darwin'}", "guidedSetupVersion":1, "managedRestartVersion":1, "compilerVersion":"frontend-export-v1", "compilerSha256":hashlib.sha256((root / "deploy/runner/mymovie_workflow_compiler.py").read_bytes()).hexdigest(), "compilerRequirementsSha256":hashlib.sha256((root / "deploy/runner/workflow-compiler-requirements.txt").read_bytes()).hexdigest(), "browserInstall":"python -m playwright install chromium", "buildOS":a.build_os, "commit":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(), "sha256":hashlib.sha256(archive.read_bytes()).hexdigest(), "binarySha256":hashlib.sha256(a.binary.read_bytes()).hexdigest(), "bootstrapSha256":hashlib.sha256(helper.read_bytes()).hexdigest(), "runtimeHelperSha256":hashlib.sha256((root / "deploy/runner/mymovie_runtime.py").read_bytes()).hexdigest()}
 if relay.is_file(): manifest["relayBinarySha256"] = hashlib.sha256(relay.read_bytes()).hexdigest()
 metadata = a.destination / f"mymovie-agent-{a.platform}-{a.architecture}.json"; metadata.write_text(json.dumps(manifest,indent=2)+"\n"); files.append(metadata)
 checksums = f"SHA256SUMS-agent-macos-{a.architecture}.txt" if a.platform == "macos" else "SHA256SUMS-agent.txt" if a.architecture == "x86_64" else f"SHA256SUMS-agent-{a.architecture}.txt"

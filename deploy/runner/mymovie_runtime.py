@@ -10,6 +10,9 @@ import platform
 import shutil
 import subprocess
 import sys
+import re
+import tempfile
+from urllib.parse import urlsplit, unquote
 import tarfile
 
 
@@ -59,6 +62,7 @@ def paths(root):
         with contextlib.redirect_stdout(sys.stderr):
             load_extra_path_config(str(config))
     result = {k: [str(Path(p).resolve()) for p in v[0]] for k, v in folder_paths.folder_names_and_paths.items()}
+    result.setdefault('background_removal', [str((root / 'models/background_removal').resolve())])
     result.setdefault('custom_nodes', [str((root / 'custom_nodes').resolve())])
     result['wheels'] = [str((root / '.mymovie-wheels').resolve())]
     return result
@@ -155,6 +159,32 @@ def install(root, artifact, source, managed):
     return {'target': a['target'], 'state': 'installed'}
 
 
+def resolve_wheels(packages):
+    """Read-only host-specific binary resolution. No shell, index override or source builds."""
+    if len(packages)>128 or any(not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*==[A-Za-z0-9][A-Za-z0-9_.+-]*',p) for p in packages):
+        raise ValueError('Declare exact Python package==version pins')
+    if not packages: return []
+    with tempfile.TemporaryDirectory(prefix='mymovie-resolve-') as tmp:
+        report=Path(tmp)/'report.json'; constraints=Path(tmp)/'constraints.txt'
+        # Preserve the working ComfyUI environment. A conflict is actionable, not an implicit upgrade.
+        names={re.sub(r'[-_.]+','-',d.metadata['Name']).lower() for d in importlib.metadata.distributions() if d.metadata.get('Name')}
+        constraints.write_text('\n'.join(sorted(f'{name}=={importlib.metadata.version(name)}' for name in names)))
+        subprocess.run([sys.executable,'-m','pip','--isolated','install','--dry-run','--ignore-installed','--only-binary=:all:','--index-url','https://pypi.org/simple','--disable-pip-version-check','--constraint',str(constraints),'--report',str(report),*packages],check=True,stdout=sys.stderr,stderr=sys.stderr,timeout=600)
+        result=[]
+        for item in json.loads(report.read_text())['install']:
+            d=item['download_info'];url=d['url'];parsed=urlsplit(url);name=unquote(parsed.path.rsplit('/',1)[-1]);digest=d.get('archive_info',{}).get('hashes',{}).get('sha256','')
+            if parsed.scheme!='https' or parsed.hostname!='files.pythonhosted.org' or parsed.query or not name.endswith('.whl') or not re.fullmatch('[a-f0-9]{64}',digest):
+                raise ValueError('Resolution requires verified PyPI binary wheels')
+            # PyPI supplies size and license independently of pip's report.
+            import urllib.request
+            meta=item['metadata']; req=urllib.request.Request(f'https://pypi.org/pypi/{meta["name"]}/{meta["version"]}/json')
+            with urllib.request.urlopen(req,timeout=30) as response: release=json.load(response)
+            match=next((f for f in release['urls'] if f['filename']==name and f['digests']['sha256']==digest and f['url']==url),None)
+            if match is None: raise ValueError('Wheel metadata does not match PyPI')
+            license=release['info'].get('license_expression') or release['info'].get('license') or 'Review distribution license metadata on PyPI'
+            result.append(dict(kind='wheel',category='wheels',target=name,sha256=digest,size=match['size'],license=license,architecture=platform.machine(),source=url,sourceRef='',revision='',stripPrefix=''))
+        return result
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', type=Path, required=True)
@@ -169,7 +199,9 @@ def main():
         except (ValueError,OSError): pass
     root = args.root.resolve()
     if not (root / 'folder_paths.py').is_file(): raise ValueError('Choose the actual ComfyUI root')
-    if payload.get('action') == 'install':
+    if payload.get('action') == 'resolve-wheels':
+        result = resolve_wheels(payload.get('packages') or [])
+    elif payload.get('action') == 'install':
         result = install(root, payload['artifact'], payload['source'], args.managed)
     elif payload.get('action') == 'wheels':
         if not args.managed: raise ValueError('External runtime is read-only')

@@ -96,14 +96,49 @@ fn workflow_set(payload: &Value) -> Result<Vec<studio_contracts::Workflow>> {
     }
     Ok(workflows)
 }
+fn restart_pending(args: &Args) -> bool {
+    args.cache
+        .clone()
+        .unwrap_or(args.data.join("cache"))
+        .join("restart-required.json")
+        .exists()
+}
+fn validate_review(
+    review: &Value,
+    payload: &Value,
+    session: &str,
+    workflows: &[studio_contracts::Workflow],
+    inventory: &Value,
+) -> Result<()> {
+    if review["id"] != payload["reviewId"]
+        || review["sessionId"] != session
+        || review["workflowHash"] != provision_core::digest(&workflows)?
+        || review["profile"]["runtime"]["fingerprint"] != inventory["runtimeFingerprint"]
+    {
+        return Err("Setup review is stale; check this node and review again".into());
+    }
+    Ok(())
+}
 pub async fn control(
     args: &Args,
     comfy: &provider_comfyui::ComfyUi,
     kind: &str,
     payload: &Value,
 ) -> Result<Value> {
+    if kind == "runtime-restart" {
+        return restart(args).await;
+    }
+    let session_id = format!(
+        "{}:{}",
+        args.session_id,
+        read(&args.data.join("runtime-epoch.json")).unwrap_or(json!(0))
+    );
     let health = comfy.health().await?;
-    let saved = read(&args.data.join("profile.json"));
+    let saved = if payload["guided"] == true {
+        None
+    } else {
+        read(&args.data.join("profile.json"))
+    };
     let mut profile: Option<ProvisionProfile> = payload
         .get("profile")
         .filter(|v| !v.is_null())
@@ -111,9 +146,12 @@ pub async fn control(
         .or(saved)
         .map(serde_json::from_value)
         .transpose()?;
+    if payload["guided"] == true {
+        profile = None;
+    }
     if kind == "doctor" || kind == "bootstrap" {
         return Ok(
-            json!({"comfy":health,"ready":false,"state":"online","sessionId":args.session_id,"note":"Inspect Inventory, then review and initialize a pinned profile. Connection health does not prove readiness."}),
+            json!({"comfy":health,"ready":false,"state":"online","sessionId":session_id,"note":"Inspect Inventory, then review and initialize a pinned profile. Connection health does not prove readiness."}),
         );
     }
     let workflows = if kind == "inventory" {
@@ -147,21 +185,112 @@ pub async fn control(
     .await?;
     inventory["devices"] = health["stats"]["devices"].clone();
     if kind == "inventory" {
-        let readiness = if let Some(p) = &profile {
+        let mut readiness = if let Some(p) = &profile {
             provision_core::readiness(
                 p,
                 &inventory,
                 &reg,
                 &workflows,
-                &args.session_id,
+                &session_id,
                 read(&args.data.join("attestation.json")).as_ref(),
             )?
         } else {
             json!({"state":"unchecked","ready":false})
         };
+        if restart_pending(args) {
+            readiness["ready"] = json!(false);
+            readiness["state"] = json!("needs-restart");
+        }
         return Ok(
-            json!({"comfy":health,"inventory":inventory,"readiness":readiness,"sessionId":args.session_id}),
+            json!({"comfy":health,"inventory":inventory,"readiness":readiness,"sessionId":session_id}),
         );
+    }
+    if payload["guided"] == true {
+        if payload["apply"] == true {
+            let review = read(&args.data.join("setup-review.json"))
+                .ok_or("Check node and review setup first")?;
+            validate_review(&review, payload, &session_id, &workflows, &inventory)?;
+            profile = Some(serde_json::from_value(review["profile"].clone())?);
+            inventory = helper(
+                args,
+                json!({"artifacts":profile.as_ref().unwrap().artifacts}),
+            )
+            .await?;
+            inventory["devices"] = health["stats"]["devices"].clone();
+        } else {
+            let mut artifacts = vec![];
+            let mut packages = vec![];
+            let mut node_types = std::collections::BTreeSet::new();
+            for w in &workflows {
+                w.wrapper.validate()?;
+                packages.extend(w.wrapper.python_packages.clone());
+                for a in &w.requirements.artifacts {
+                    if let Some(existing) =
+                        artifacts
+                            .iter()
+                            .find(|e: &&studio_contracts::InstallArtifact| {
+                                e.kind == a.kind && e.category == a.category && e.target == a.target
+                            })
+                    {
+                        if provision_core::digest(existing)? != provision_core::digest(a)? {
+                            return Err("Conflicting dependency pins".into());
+                        }
+                    } else {
+                        artifacts.push(a.clone());
+                    }
+                }
+                if let Some(nodes) = w.editor_graph.as_ref().and_then(|e| e["nodes"].as_array()) {
+                    for node in nodes {
+                        if let Some(t) = node["type"].as_str() {
+                            if !["Note", "MarkdownNote", "Reroute"].contains(&t)
+                                && node["mode"] != 2
+                                && node["mode"] != 4
+                            {
+                                node_types.insert(t.to_owned());
+                            }
+                        }
+                    }
+                }
+            }
+            packages.sort();
+            packages.dedup();
+            let wheels: Vec<studio_contracts::InstallArtifact> = serde_json::from_value(
+                helper(args, json!({"action":"resolve-wheels","packages":packages})).await?,
+            )?;
+            artifacts.extend(wheels);
+            let p = ProvisionProfile {
+                schema_version: 1,
+                runtime: provision_core::RuntimeIdentity {
+                    kind: "native".into(),
+                    image: String::new(),
+                    fingerprint: inventory["runtimeFingerprint"]
+                        .as_str()
+                        .ok_or("Missing runtime fingerprint")?
+                        .into(),
+                },
+                artifacts,
+                node_types: node_types.into_iter().collect(),
+                canary: serde_json::from_str(include_str!(
+                    "../../../examples/workflows/cpu-canary_api.json"
+                ))?,
+            };
+            p.validate()?;
+            inventory = helper(args, json!({"artifacts":p.artifacts})).await?;
+            inventory["devices"] = health["stats"]["devices"].clone();
+            let plan = provision_core::readiness(
+                &p,
+                &inventory,
+                &reg,
+                &workflows,
+                &session_id,
+                read(&args.data.join("attestation.json")).as_ref(),
+            )?;
+            let review = json!({"id":project_core::id(),"sessionId":session_id,"workflowHash":provision_core::digest(&workflows)?,"profile":p});
+            atomic_json(&args.data.join("setup-review.json"), &review)?;
+            return Ok(
+                json!({"state":"review","ready":false,"reviewId":review["id"],"profile":review["profile"],"inventory":inventory,"plan":plan,"managedRuntime":args.managed_runtime,"restartSupported":args.supervisor.is_some(),"restartRequired":restart_pending(args)}),
+            );
+        }
     }
     let Some(profile) = profile else {
         let legacy = payload
@@ -179,7 +308,7 @@ pub async fn control(
         &inventory,
         &reg,
         &workflows,
-        &args.session_id,
+        &session_id,
         read(&args.data.join("attestation.json")).as_ref(),
     )?;
     if payload["apply"] != true {
@@ -190,7 +319,13 @@ pub async fn control(
     if status["runtimeMatches"] != true {
         return Err("Runtime identity changed; inspect Inventory and review a new profile".into());
     }
-    if status["ready"] == true {
+    if status["incompatible"]
+        .as_array()
+        .is_some_and(|v| !v.is_empty())
+    {
+        return Err("Selected workflows are incompatible with this node; select a compatible hardware variant before installation".into());
+    }
+    if status["ready"] == true && !restart_pending(args) {
         return Ok(status);
     }
     // The shared cache lock serializes installation across independent GPU workers.
@@ -212,7 +347,8 @@ pub async fn control(
     } else {
         vec![]
     };
-    let mut restart = false;
+    let restart_marker = cache.join("restart-required.json");
+    let mut restart = restart_marker.exists();
     for (a, row) in profile.artifacts.iter().zip(
         inventory["files"]
             .as_array()
@@ -230,7 +366,16 @@ pub async fn control(
             );
         }
         let dest = cache.join(&a.sha256);
-        let url = if !a.source_ref.is_empty() {
+        if a.source_ref == "builtin-mymovie-rembg-v1" {
+            let bundled = workflow_core::examples::rembg_artifact()?;
+            if provision_core::digest(a)? != provision_core::digest(&bundled)? {
+                return Err("Bundled plugin metadata mismatch; update the agent".into());
+            }
+            tokio::fs::write(&dest, workflow_core::examples::REMBG_ARCHIVE).await?;
+        }
+        let url = if a.source_ref == "builtin-mymovie-rembg-v1" {
+            String::new()
+        } else if !a.source_ref.is_empty() {
             sources
                 .iter()
                 .find(|o| o.name == a.source_ref && o.sha256 == a.sha256 && o.size == a.size)
@@ -244,15 +389,19 @@ pub async fn control(
         if !dest.exists() {
             storage_s3::download(&storage_s3::Object{name:a.target.clone(),sha256:a.sha256.clone(),size:a.size,url,architecture:Some(a.architecture.clone()),license:Some(a.license.clone())},&dest).await.map_err(|_|"Dependency transfer failed or integrity mismatch; inspect the source and retry")?;
         }
+        // Persist before mutation, including partially failed installs.
+        if a.kind == "plugin" || a.kind == "wheel" {
+            atomic_json(&restart_marker, &json!({"required":true}))?;
+            restart = true;
+        }
         helper(args, json!({"action":"install","artifact":a,"source":dest})).await?;
-        restart |= a.kind == "plugin" || a.kind == "wheel";
     }
     let wheels: Vec<_> = profile
         .artifacts
         .iter()
         .filter(|a| a.kind == "wheel")
         .collect();
-    if restart && !wheels.is_empty() {
+    if !wheels.is_empty() {
         helper(args, json!({"action":"wheels","artifacts":wheels})).await?;
     }
     for w in &workflows {
@@ -270,7 +419,7 @@ pub async fn control(
     )?;
     if restart {
         return Ok(
-            json!({"ready":false,"state":"needs-restart","note":"Dependencies installed and verified. Stop this managed notebook runner, start it again, inspect the new runtime fingerprint and review initialization. Existing queues are never interrupted automatically."}),
+            json!({"ready":false,"state":"needs-restart","note":"Dependencies installed and verified. Use Restart managed ComfyUI, then check and review the new runtime before preparing inputs. Existing queues are never interrupted automatically."}),
         );
     }
     if workflows
@@ -285,24 +434,11 @@ pub async fn control(
     inv["devices"] = comfy.health().await?["stats"]["devices"].clone();
     let reg = registry(args).await?;
     let mut result =
-        provision_core::readiness(&profile, &inv, &reg, &workflows, &args.session_id, None)?;
+        provision_core::readiness(&profile, &inv, &reg, &workflows, &session_id, None)?;
     if result["state"] != "unchecked" {
         return Ok(result);
     }
-    for w in &workflows {
-        let media: Vec<_> = w
-            .bindings
-            .iter()
-            .filter(|b| {
-                b.media.is_some()
-                    || b.semantic == "image"
-                    || b.semantic == "mask"
-                    || b.semantic.starts_with("characterReference")
-            })
-            .cloned()
-            .collect();
-        comfy.validate_media(&w.graph, &media).await?;
-    }
+    // Job-specific media is validated at submission, after upload. Setup runs only its weight-free canary.
     comfy.validate_job(&profile.canary).await?;
     let canary_path = args.data.join("canary-receipt.json");
     let previous = read(&canary_path);
@@ -317,7 +453,7 @@ pub async fn control(
         .filter(|r| {
             r["state"] == "unknown"
                 && r["profileHash"] == result["profileHash"]
-                && r["sessionId"] == args.session_id
+                && r["sessionId"] == session_id
         })
         .and_then(|r| r["remoteId"].as_str())
     {
@@ -331,12 +467,12 @@ pub async fn control(
         let attempt = format!("canary-{}", project_core::id());
         atomic_json(
             &canary_path,
-            &json!({"state":"unknown","attemptId":attempt,"profileHash":result["profileHash"],"sessionId":args.session_id}),
+            &json!({"state":"unknown","attemptId":attempt,"profileHash":result["profileHash"],"sessionId":session_id}),
         )?;
         let remote = comfy.submit(&attempt, &profile.canary).await?;
         atomic_json(
             &canary_path,
-            &json!({"state":"unknown","attemptId":attempt,"remoteId":remote,"profileHash":result["profileHash"],"sessionId":args.session_id}),
+            &json!({"state":"unknown","attemptId":attempt,"remoteId":remote,"profileHash":result["profileHash"],"sessionId":session_id}),
         )?;
         remote
     };
@@ -427,6 +563,38 @@ async fn comfy_compatibility(args: &Args, kind: &str) -> Result<()> {
 mod setup_tests {
     use super::*;
     #[test]
+    fn guided_review_binds_session_workflows_runtime_and_review_id() {
+        let workflows = workflow_core::examples::catalogue().unwrap();
+        let review = json!({"id":"review-1","sessionId":"session-1","workflowHash":provision_core::digest(&workflows).unwrap(),"profile":{"runtime":{"fingerprint":"runtime-1"}}});
+        let payload = json!({"reviewId":"review-1"});
+        let inventory = json!({"runtimeFingerprint":"runtime-1"});
+        assert!(validate_review(&review, &payload, "session-1", &workflows, &inventory).is_ok());
+        assert!(validate_review(&review, &payload, "session-2", &workflows, &inventory).is_err());
+        assert!(
+            validate_review(&review, &payload, "session-1", &workflows[..1], &inventory).is_err()
+        );
+        assert!(
+            validate_review(
+                &review,
+                &payload,
+                "session-1",
+                &workflows,
+                &json!({"runtimeFingerprint":"runtime-2"})
+            )
+            .is_err()
+        );
+        assert!(
+            validate_review(
+                &review,
+                &json!({"reviewId":"review-2"}),
+                "session-1",
+                &workflows,
+                &inventory
+            )
+            .is_err()
+        );
+    }
+    #[test]
     fn dependency_setup_accepts_immutable_editor_but_not_changed_source() {
         let w = workflow_core::import_source(
             "editor",
@@ -439,4 +607,50 @@ mod setup_tests {
         payload["workflows"][0]["editorGraph"]["nodes"][0]["type"] = json!("ChangedPlugin");
         assert!(workflow_set(&payload).is_err());
     }
+}
+
+/// All notebook workers share this lock: installs/restarts cannot race generation.
+pub fn execution_lock(args: &Args, exclusive: bool) -> Result<std::fs::File> {
+    let cache = args.cache.clone().unwrap_or(args.data.join("cache"));
+    std::fs::create_dir_all(&cache)?;
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(cache.join("execution.lock"))?;
+    if exclusive { fs2::FileExt::try_lock_exclusive(&file) } else { fs2::FileExt::try_lock_shared(&file) }
+        .map_err(|_| "Node is busy with generation or initialization; finish its jobs before installing/restarting")?;
+    Ok(file)
+}
+async fn restart(args: &Args) -> Result<Value> {
+    if !args.managed_runtime {
+        return Err("External ComfyUI is read-only".into());
+    }
+    let dir = args.supervisor.as_ref().ok_or(
+        "This agent has no notebook supervisor; update the agent and rerun the base notebook",
+    )?;
+    let _guard = execution_lock(args, true)?;
+    let id = project_core::id();
+    let request = dir.join(format!("{id}.request.json"));
+    let response = dir.join(format!("{id}.response.json"));
+    atomic_json(&request, &json!({"id":id,"action":"restart-comfyui"}))?;
+    for _ in 0..180 {
+        if let Some(reply) = read(&response) {
+            let _ = std::fs::remove_file(&response);
+            if reply["ok"] == true {
+                return Ok(
+                    json!({"state":"restarted","ready":false,"note":"ComfyUI restarted; check and review the new runtime, then prepare inputs and initialize again."}),
+                );
+            }
+            return Err(reply["error"]
+                .as_str()
+                .unwrap_or("Managed restart failed; inspect notebook logs")
+                .to_owned()
+                .into());
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    let _ = std::fs::remove_file(&request);
+    Err("Notebook supervisor did not acknowledge restart; check the running notebook cell".into())
 }

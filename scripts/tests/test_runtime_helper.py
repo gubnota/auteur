@@ -2,6 +2,7 @@
 import hashlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import tarfile
 import tempfile
@@ -81,5 +82,29 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'integrity'):h.install(self.root,a,source,True)
         a=self.artifact(source);a['architecture']='unavailable'
         with self.assertRaisesRegex(ValueError,'architecture'):h.install(self.root,a,source,True)
+
+class WheelResolutionTests(unittest.TestCase):
+    def test_rejects_unpinned_and_install_options(self):
+        for pins in [['numpy'], ['numpy>=2'], ['--index-url=https://other'], ['x @ https://other/x.whl']]:
+            with self.assertRaisesRegex(ValueError, 'exact'): h.resolve_wheels(pins)
+        self.assertEqual(h.resolve_wheels([]), [])
+
+    def resolve(self, urls):
+        items = [dict(download_info=dict(url=url,archive_info=dict(hashes=dict(sha256='a'*64))),metadata=dict(name='example',version='1.0')) for url in urls]
+        def run(command, **kwargs):
+            Path(command[command.index('--report')+1]).write_text(json.dumps({'install':items}))
+        def metadata(request, **kwargs):
+            return io.BytesIO(json.dumps({'info':{'license_expression':'MIT'}, 'urls':[{'filename':url.rsplit('/',1)[-1], 'url':url,'digests':{'sha256':'a'*64},'size':100} for url in urls]}).encode())
+        with patch.object(h.subprocess,'run',side_effect=run), patch('urllib.request.urlopen',side_effect=metadata):
+            return h.resolve_wheels(['example==1.0'])
+
+    def test_reports_complete_reviewable_binary_closure(self):
+        rows=self.resolve(['https://files.pythonhosted.org/example-1.0-py3-none-any.whl','https://files.pythonhosted.org/dependency-2.0-py3-none-any.whl'])
+        self.assertEqual(len(rows),2)
+        self.assertTrue(all(r['kind']=='wheel' and r['sha256']=='a'*64 and r['size']==100 and r['license']=='MIT' for r in rows))
+
+    def test_untrusted_index_and_source_builds_blocked(self):
+        for url in ['https://other.example/example.whl','https://files.pythonhosted.org/example.tar.gz']:
+            with self.assertRaisesRegex(ValueError,'binary wheels'): self.resolve([url])
 
 if __name__=='__main__':unittest.main()
