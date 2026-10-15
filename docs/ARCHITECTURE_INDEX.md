@@ -80,6 +80,7 @@
 - scripts/ci-setup.sh, check-release-version.py, gitlab-release.py: toolchains and immutable release files.
 - scripts/package-agent.py: architecture-checked Linux/macOS x86_64/ARM64 agent archives, compiler helpers, notebooks and checksums.
 - scripts/notebook-bootstrap.py / generate-notebooks.py: public release/prerelease resolution, checksum/relay preflight, verified artifact and GPU worker setup.
+- deploy/notebook-runtime.defaults.json: immutable ComfyUI commit and official cloudflared URL/SHA256 embedded into generated notebook defaults; base setup installs compiler/browser in its isolated environment.
 - deploy/colab/, deploy/kaggle/: generated notebooks; scripts/tests/: bootstrap/release regression.
 - examples/workflows/: CPU, text-to-image, masked-edit API/editor fixtures; native mask editor import/preparation/export passed.
 - playwright.config.ts / e2e/: mocked native Jobs exact-input/persistence and portable wrapper/selection acceptance.

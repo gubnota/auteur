@@ -1,6 +1,6 @@
 """Verified Linux agent deployment and two independent notebook GPU workers.
 
-Stdlib only. Optional authenticated relay tunnel; no model downloads or installers.
+Stdlib bootstrap; installs base runtime/tools, never weights or workflow plugins.
 """
 from __future__ import annotations
 
@@ -29,6 +29,107 @@ MAX_BINARY = 128 * 1024 * 1024
 
 class SetupError(RuntimeError):
     """Public messages are deliberately independent of network/secret exceptions."""
+
+
+def prepare_runtime(binary, comfy_root, revision, work_dir, *, tunnel_source=None, tunnel_sha256=None):
+    """Provision a base install; reviewed workflow dependencies belong to Studio."""
+    if platform.system() != "Linux" or platform.machine() != "x86_64":
+        raise SetupError("Automatic notebook setup requires a Linux x86_64 GPU runtime.")
+    if not re.fullmatch(r"[a-f0-9]{40}", revision or ""):
+        raise SetupError("The notebook must contain a pinned ComfyUI revision.")
+    root, work = Path(comfy_root).resolve(), Path(work_dir).resolve()
+    work.mkdir(parents=True, exist_ok=True)
+    log = work / "installation.log"
+    log.touch(mode=0o600); log.chmod(0o600)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("MYMOVIE_")}
+    env.update(GIT_TERMINAL_PROMPT="0", PIP_NO_INPUT="1", DEBIAN_FRONTEND="noninteractive")
+
+    def command(args, stage, timeout=1200):
+        print(stage, flush=True)
+        try:
+            with log.open("a") as output:
+                subprocess.run([str(a) for a in args], check=True, stdout=output,
+                               stderr=subprocess.STDOUT, env=env, timeout=timeout)
+        except Exception:
+            raise SetupError(f"{stage} failed. Inspect {log} in this runtime, then retry Run all.") from None
+
+    if not root.exists():
+        root.parent.mkdir(parents=True, exist_ok=True)
+        # Publish a complete checkout; interrupted clones cannot leave a broken target.
+        with tempfile.TemporaryDirectory(prefix=".comfy-", dir=root.parent) as directory:
+            checkout = Path(directory) / "repo"
+            command(["git", "init", checkout], "Preparing base ComfyUI")
+            command(["git", "-C", checkout, "fetch", "--depth=1",
+                     "https://github.com/Comfy-Org/ComfyUI.git", revision], "Downloading pinned ComfyUI")
+            command(["git", "-C", checkout, "checkout", "--detach", "FETCH_HEAD"], "Activating pinned ComfyUI")
+            checkout.rename(root)
+    try:
+        actual = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL, timeout=10).strip()
+        dirty = subprocess.check_output(["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"], text=True, stderr=subprocess.DEVNULL, timeout=10).strip()
+    except Exception:
+        raise SetupError(f"Cannot verify {root}. Existing files were left untouched; choose an empty COMFY_ROOT.") from None
+    if actual != revision or dirty or not (root / "main.py").is_file():
+        raise SetupError(f"Existing ComfyUI at {root} conflicts with the pinned clean revision; it was left untouched.")
+
+    requirements = Path(binary).parent / "workflow-compiler-requirements.txt"
+    if not requirements.is_file():
+        raise SetupError("The agent archive must include workflow-compiler-requirements.txt.")
+    python = work / "env/bin/python"
+    marker = work / "base-runtime.json"
+    expected = {"schema": 1, "revision": revision, "python": sys.executable,
+                "pythonVersion": sys.version, "comfyRoot": str(root),
+                "requirements": hashlib.sha256((root / "requirements.txt").read_bytes() + requirements.read_bytes()).hexdigest()}
+    try:
+        cached = python.is_file() and json.loads(marker.read_text()) == expected
+    except (OSError, ValueError):
+        cached = False
+    if not cached:
+        marker.unlink(missing_ok=True)
+        # Reuse the runtime's CUDA PyTorch without changing notebook packages.
+        # Colab may omit ensurepip; inherit its existing pip instead of requiring apt.
+        command([sys.executable, "-m", "venv", "--without-pip", "--system-site-packages", work / "env"], "Creating isolated Python environment")
+        command([python, "-m", "pip", "install", "-r", root / "requirements.txt", "-r", requirements], "Installing ComfyUI and workflow-import dependencies")
+        command([python, "-m", "playwright", "install", "--with-deps", "chromium"], "Installing workflow-import browser")
+    # A marker alone is never readiness; validate CUDA and the browser's OS libraries.
+    try:
+        command([python, "-c", "import sys; sys.path.insert(0, sys.argv[1]); sys.argv=sys.argv[:1]; import torch, aiohttp, folder_paths; "
+                 "from playwright.sync_api import sync_playwright; assert torch.cuda.is_available(), 'CUDA unavailable'; "
+                 "p=sync_playwright().start(); browser=p.chromium.launch(headless=True, args=['--no-sandbox']); browser.close(); p.stop()", root],
+                "Verifying CUDA and workflow-import browser", timeout=90)
+    except SetupError:
+        marker.unlink(missing_ok=True)
+        raise
+    temporary = marker.with_suffix(".tmp")
+    temporary.write_text(json.dumps(expected)); temporary.replace(marker)
+    tunnel = None
+    if tunnel_source:
+        private_url(tunnel_source)
+        if not re.fullmatch(r"[a-f0-9]{64}", tunnel_sha256 or ""):
+            raise SetupError("A pinned cloudflared SHA256 is required.")
+        tunnel = work / "cloudflared"
+        if not tunnel.is_file() or hashlib.sha256(tunnel.read_bytes()).hexdigest() != tunnel_sha256:
+            print("Downloading verified cloudflared", flush=True)
+            temporary = tunnel.with_suffix(".part")
+            try:
+                with urllib.request.urlopen(tunnel_source, timeout=60) as response, temporary.open("wb") as output:
+                    size, digest = 0, hashlib.sha256()
+                    while chunk := response.read(1024 * 1024):
+                        size += len(chunk)
+                        if size > MAX_BINARY:
+                            raise SetupError("cloudflared download exceeds the size limit.")
+                        digest.update(chunk); output.write(chunk)
+                if digest.hexdigest() != tunnel_sha256:
+                    raise SetupError("cloudflared checksum mismatch; executable was not installed.")
+                temporary.chmod(0o700); temporary.replace(tunnel)
+            except SetupError:
+                raise
+            except Exception:
+                raise SetupError("cloudflared download failed. Check Internet access and retry Run all.") from None
+            finally:
+                temporary.unlink(missing_ok=True)
+        tunnel.chmod(0o700)
+    print("Base runtime ready. Models and workflow plugins will be installed from Studio.", flush=True)
+    return {"python": str(python), "cloudflared": str(tunnel) if tunnel else None}
 
 
 def secret(host: str, label: str) -> str:
@@ -263,10 +364,17 @@ class NotebookRunner:
 
     def _spawn(self, args, env, cwd=None, log=None):
         # Raw subprocess logs are never copied into shared notebook outputs.
+        owned_log = None
         try:
-            child = subprocess.Popen(args, cwd=cwd, env=env, stdout=log if log is not None else subprocess.DEVNULL, stderr=log if log is not None else subprocess.DEVNULL, start_new_session=True)
+            if log is None:
+                path = self.root / f"process-{len(self.children)}.log"
+                path.touch(mode=0o600); path.chmod(0o600)
+                owned_log = path.open("a"); log = owned_log
+            child = subprocess.Popen(args, cwd=cwd, env=env, stdout=log, stderr=log, start_new_session=True)
         except Exception:
             raise SetupError("Unable to start the client. Check Linux runtime compatibility and executable permissions.") from None
+        finally:
+            if owned_log: owned_log.close()
         self.children.append(child)
         return child
 
@@ -320,7 +428,7 @@ class NotebookRunner:
             time.sleep(0.5)
         raise SetupError("Cloudflare did not return a public relay address. Retry Start or use an external relay.")
 
-    def start(self, token: str, *, comfy_root=None, expected_revision=None, attach=False, model_paths=None, timeout=120, desktop_token=None, relay_port=8787, cloudflared=None):
+    def start(self, token: str, *, comfy_root=None, expected_revision=None, attach=False, model_paths=None, timeout=120, desktop_token=None, relay_port=8787, cloudflared=None, python=None):
         if self.lock or self.children:
             raise SetupError("This runner is already started. Stop it before starting again.")
         if not isinstance(token, str) or not re.fullmatch(r"[!-~]{24,512}", token):
@@ -368,7 +476,7 @@ class NotebookRunner:
                 for w, device in zip(self.workers, devices):
                     w["gpu"] = device
                     w["root"].mkdir(parents=True, exist_ok=True)
-                    args = [sys.executable, str(repo / "main.py"), "--listen", "127.0.0.1", "--port", str(w["port"]), "--cuda-device", str(device), "--disable-auto-launch"]
+                    args = [python or sys.executable, str(repo / "main.py"), "--listen", "127.0.0.1", "--port", str(w["port"]), "--cuda-device", str(device), "--disable-auto-launch"]
                     for directory in ("input", "output", "temp", "user"):
                         path = w["root"] / directory; path.mkdir(exist_ok=True)
                         args.extend([f"--{directory}-directory", str(path)])
@@ -382,7 +490,7 @@ class NotebookRunner:
                 url = f'http://127.0.0.1:{w["port"]}'
                 while True:
                     if any(p.poll() is not None for p in self.children):
-                        raise SetupError("A ComfyUI process exited before readiness. Check its installation and GPU memory.")
+                        raise SetupError("A ComfyUI process exited before readiness. Inspect process-*.log in the session folder for the cause.")
                     try:
                         info = comfy_info(url)
                         # Managed workers have explicitly assigned physical GPU indices.
@@ -399,7 +507,7 @@ class NotebookRunner:
             for w in self.workers:
                 data = w["root"] / "agent"; data.mkdir(parents=True, exist_ok=True)
                 env = {k: v for k, v in os.environ.items() if k != "MYMOVIE_DESKTOP_TOKEN"}; env["MYMOVIE_AGENT_TOKEN"] = token
-                agent_args = [str(self.binary), "serve", "--comfy-url", f'http://127.0.0.1:{w["port"]}', "--relay", self.relay, "--node-id", w["nodeId"], "--data", str(data), "--comfy-root", str(repo), "--python", sys.executable, "--runtime-helper", str(helper), "--cache", str(self.root / "dependency-cache")]
+                agent_args = [str(self.binary), "serve", "--comfy-url", f'http://127.0.0.1:{w["port"]}', "--relay", self.relay, "--node-id", w["nodeId"], "--data", str(data), "--comfy-root", str(repo), "--python", python or sys.executable, "--runtime-helper", str(helper), "--cache", str(self.root / "dependency-cache")]
                 if not attach: agent_args.append("--managed-runtime")
                 if model_paths: agent_args.extend(["--model-paths",str(Path(model_paths).resolve())])
                 compiler = self.binary.parent / "mymovie_workflow_compiler.py"
@@ -448,3 +556,7 @@ class NotebookRunner:
         if self.lock:
             fcntl.flock(self.lock, fcntl.LOCK_UN); self.lock.close(); self.lock = None
         return self.status()
+
+
+if __name__ == "__main__":
+    print("Setup helpers loaded. Run all continues with automatic installation and startup.", flush=True)

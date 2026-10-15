@@ -1,5 +1,12 @@
 # Task Log
 
+## 2026-10-15 — Run-all notebook setup (approved node-bootstrap scope)
+
+- Goal: unmodified GPU notebook with existing shared test keys; automatically install pinned base ComfyUI, verified cloudflared, release agent/relay and browser compiler; no model or workflow-plugin downloads until app initialization.
+- Fix active Stop cell reached by Run all, make healthy-session reruns reusable, show staged progress and connection instructions; preserve unrelated ComfyUI installations. Validate fresh/cached/failing setup and full generated-cell execution with fixtures.
+- Public v0.1.15 agent archive was downloaded anonymously, hash-verified and checked for relay/runtime/compiler sidecars. Official cloudflared bytes (40,129,756) match the pinned SHA256.
+- Validation: 50 Python tests, including generated Run-all execution/reuse, missing-GPU preflight, fresh/cached/failed setup, cache repair and tunnel corruption; native bundled-notebook test; deterministic regeneration, Python 3.10 cell parsing, version parity and diff whitespace checks passed. Live Colab GPU execution was not performed; older Drive/release copies must be reopened from main.
+
 ## 2026-10-15 — Release tag/source version recovery
 
 - v0.1.13/v0.1.14 point to e2d1a8c, which declares 0.1.12; staging the notebook/CI fixes did not include them in either tag. Preserve existing tags and prepare 0.1.15 on main with matching Cargo/npm/Tauri versions and lockfiles.

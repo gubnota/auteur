@@ -210,3 +210,13 @@ Context: Empty manual artifact SHA256 blocked notebook setup; published v0.1.12 
 Decision: Resolve published GitHub releases including prereleases, validate archive metadata/checksums and require the bundled relay for local Cloudflare mode. Retain explicit source+SHA256 overrides. Both CI systems explicitly package matching relays; comment out requested matrix entries without deleting target support.
 Consequences: No token needed for public release metadata; verification stays mandatory. Old archives cannot gain relay support through notebook changes; a new version or uploaded current CI archive is required. GitHub Linux ARM64 desktop remains active; GitLab's existing disabled entry stays disabled.
 Related files: scripts/notebook-bootstrap.py, scripts/generate-notebooks.py, .github/workflows/checks.yml, .github/workflows/release.yml, .gitlab-ci.yml.
+
+# ADR-0022: Unmodified Run-all GPU notebooks
+
+Date: 2026-10-15
+Status: Accepted
+
+Context: Shared test keys were present, but fresh notebooks still required manual ComfyUI revision/tool installation; Run all reached an active Stop cell.
+Decision: Embed immutable base runtime pins from deploy/notebook-runtime.defaults.json, install in a separate session checkout/environment, verify cloudflared bytes, install the released compiler/browser, reuse healthy sessions and disable automatic shutdown cells. The agent receives the isolated interpreter.
+Consequences: Fresh setup takes minutes with visible stages and private logs. No model/workflow-plugin downloads or generation at startup; reviewed app initialization still owns those. Existing unrelated checkouts are preserved. Saved Drive/release notebook copies need reopening to receive source changes.
+Related files: scripts/notebook-bootstrap.py, scripts/generate-notebooks.py, scripts/tests/test_notebook_runtime.py.

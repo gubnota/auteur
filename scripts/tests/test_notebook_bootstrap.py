@@ -121,7 +121,9 @@ class BootstrapTests(unittest.TestCase):
             install = Mock(return_value=self.root / 'mymovie-agent')
             runner = Mock(); runner.configuration.return_value = {}
             namespace = {'secret': b.secret, 'release_artifact': resolve, 'install_artifact': install,
-                         'NotebookRunner': Mock(return_value=runner), 'SetupError': b.SetupError, 'json': json, 'print': Mock()}
+                         'NotebookRunner': Mock(return_value=runner), 'SetupError': b.SetupError, 'json': json, 'print': Mock(),
+                         'platform': types.SimpleNamespace(system=lambda: 'Linux', machine=lambda: 'x86_64'),
+                         'gpu_indices': lambda: [0, 1], 'prepare_runtime': Mock(return_value={'python': '/env/python', 'cloudflared': '/bin/cloudflared'})}
             exec(config, namespace)
             exec(setup, namespace)
             resolve.assert_called_once_with('gubnota/auteur', '', None, require_relay=True)
@@ -179,12 +181,14 @@ class BootstrapTests(unittest.TestCase):
         from unittest.mock import MagicMock
         sock = MagicMock(); sock.__enter__.return_value.connect_ex.return_value = 1
         with patch.object(b,"gpu_indices",return_value=[0,1]), patch.object(b,"comfy_info",return_value={"stats":{"devices":[{"type":"cuda","name":"T4"}]},"nodeCount":3}), patch.object(b.subprocess,"check_output",side_effect=[revision,""]), patch.object(b.socket,"socket",return_value=sock), patch.object(b.subprocess,"Popen",return_value=fake) as spawn, patch.object(b.os,"killpg"):
-            runner.start("s"*32,comfy_root=repo,expected_revision=revision)
+            runner.start("s"*32,comfy_root=repo,expected_revision=revision,python="/fixture/env/bin/python")
             self.assertEqual(spawn.call_count,4)
             calls = spawn.call_args_list
             for i in range(2):
                 server, agent = calls[i], calls[i+2]
                 args = server.args[0]
+                self.assertEqual(args[0], "/fixture/env/bin/python")
+                self.assertEqual(agent.args[0][agent.args[0].index("--python")+1], "/fixture/env/bin/python")
                 self.assertEqual(args[args.index("--port")+1],str(8190+i))
                 self.assertEqual(args[args.index("--cuda-device")+1],str(i))
                 self.assertNotIn("MYMOVIE_AGENT_TOKEN",server.kwargs["env"])
