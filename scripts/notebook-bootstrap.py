@@ -430,7 +430,7 @@ class NotebookRunner:
             time.sleep(0.5)
         raise SetupError("Cloudflare did not return a public relay address. Retry Start or use an external relay.")
 
-    def start(self, token: str, *, comfy_root=None, expected_revision=None, attach=False, model_paths=None, timeout=120, desktop_token=None, relay_port=8787, cloudflared=None, python=None):
+    def start(self, token: str, *, comfy_root=None, expected_revision=None, attach=False, model_paths=None, timeout=120, desktop_token=None, relay_port=8787, cloudflared=None, python=None, allow_console=False):
         if self.lock or self.children:
             raise SetupError("This runner is already started. Stop it before starting again.")
         if not isinstance(token, str) or not re.fullmatch(r"[!-~]{24,512}", token):
@@ -511,6 +511,7 @@ class NotebookRunner:
                 data = w["root"] / "agent"; data.mkdir(parents=True, exist_ok=True)
                 env = {k: v for k, v in os.environ.items() if k != "MYMOVIE_DESKTOP_TOKEN"}; env["MYMOVIE_AGENT_TOKEN"] = token
                 agent_args = [str(self.binary), "serve", "--comfy-url", f'http://127.0.0.1:{w["port"]}', "--relay", self.relay, "--node-id", w["nodeId"], "--data", str(data), "--comfy-root", str(repo), "--python", python or sys.executable, "--runtime-helper", str(helper), "--cache", str(self.root / "dependency-cache")]
+                if allow_console: agent_args.append("--allow-console")
                 if not attach:
                     self.supervisor.mkdir(parents=True, exist_ok=True)
                     self.supervisor.chmod(0o700)

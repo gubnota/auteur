@@ -41,6 +41,7 @@ RELAY_PORT = 8787
 RELAY_URL = f"http://127.0.0.1:{{RELAY_PORT}}"
 # External relay override: START_LOCAL_RELAY = False; RELAY_URL = "https://your-relay.example"
 ALLOW_QUICK_TUNNEL_POLLING = True
+ALLOW_REMOTE_CONSOLE = False  # custom scripts/terminal: replace BOTH shared tokens, then enable
 COMFY_ROOT = WORK_DIR / "ComfyUI"  # separate from an existing /content/ComfyUI
 COMFY_REVISION = "{RUNTIME['comfyRevision']}"  # ComfyUI {RUNTIME['comfyRelease']}
 CLOUDFLARED_SOURCE = "{RUNTIME['cloudflaredSource']}"
@@ -103,7 +104,7 @@ else:
     runner.start(MYMOVIE_AGENT_TOKEN, comfy_root=COMFY_ROOT, expected_revision=COMFY_REVISION,
                  attach=ATTACH_EXISTING, model_paths=MODEL_PATHS_YAML, python=COMFY_PYTHON, timeout=300,
                  desktop_token=MYMOVIE_DESKTOP_TOKEN if START_LOCAL_RELAY else None,
-                 relay_port=RELAY_PORT, cloudflared=CLOUDFLARED_BINARY if START_LOCAL_RELAY else None)
+                 allow_console=ALLOW_REMOTE_CONSOLE, relay_port=RELAY_PORT, cloudflared=CLOUDFLARED_BINARY if START_LOCAL_RELAY else None)
 connection = runner.status()
 print("\\nREADY — Studio → Connections → Colab / Kaggle")
 print("Relay URL:", connection["relay"])

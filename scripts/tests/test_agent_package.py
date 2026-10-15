@@ -56,6 +56,8 @@ class AgentPackageTests(unittest.TestCase):
             self.assertEqual(metadata["sha256"], hashlib.sha256(archive.read_bytes()).hexdigest())
             self.assertEqual(metadata["binarySha256"], hashlib.sha256(binary.read_bytes()).hexdigest())
             self.assertEqual(metadata['guidedSetupVersion'], 1)
+            self.assertEqual(metadata['initializationVersion'], 1)
+            self.assertEqual(metadata['consoleVersion'], 1)
             self.assertEqual(metadata['managedRestartVersion'], 1)
             for line in (dest / "SHA256SUMS-agent.txt").read_text().splitlines():
                 digest, name = line.split("  ")
