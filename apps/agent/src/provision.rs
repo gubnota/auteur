@@ -1,3 +1,4 @@
+tokio::task_local! { pub static MODEL_TOKEN: Option<String>; }
 use crate::Args;
 use job_core::ExecutionBackend;
 use project_core::{Result, atomic_json};
@@ -719,6 +720,9 @@ async fn restart(args: &Args) -> Result<Value> {
 
 /// Credentials stay on this node and are used only for the HF origin by storage-s3.
 fn huggingface_token() -> Option<String> {
+    if let Ok(Some(token)) = MODEL_TOKEN.try_with(Clone::clone) {
+        return Some(token);
+    }
     let valid = |v: &str| !v.is_empty() && v.len() < 1024 && !v.chars().any(char::is_whitespace);
     if let Ok(v) = std::env::var("HF_TOKEN")
         && valid(&v)
@@ -737,4 +741,29 @@ fn huggingface_token() -> Option<String> {
     }
     let v = std::fs::read_to_string(path).ok()?.trim().to_string();
     valid(&v).then_some(v)
+}
+
+#[cfg(test)]
+mod model_credential_tests {
+    use super::*;
+    #[tokio::test]
+    async fn credentials_are_request_scoped_and_do_not_leak_to_parallel_jobs() {
+        MODEL_TOKEN
+            .scope(Some("hf_private_fixture".into()), async {
+                assert_eq!(huggingface_token().as_deref(), Some("hf_private_fixture"));
+                MODEL_TOKEN
+                    .scope(Some("hf_second_fixture".into()), async {
+                        assert_eq!(huggingface_token().as_deref(), Some("hf_second_fixture"));
+                    })
+                    .await;
+                assert_eq!(huggingface_token().as_deref(), Some("hf_private_fixture"));
+                assert!(
+                    tokio::spawn(async { MODEL_TOKEN.try_with(Clone::clone).is_err() })
+                        .await
+                        .unwrap()
+                );
+            })
+            .await;
+        assert!(MODEL_TOKEN.try_with(Clone::clone).is_err());
+    }
 }

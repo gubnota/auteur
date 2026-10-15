@@ -2,7 +2,9 @@ mod workspace;
 pub use workspace::*;
 mod catalogue;
 mod initialization;
+mod model_credentials;
 pub use initialization::*;
+pub use model_credentials::*;
 mod jobs;
 mod runner_tokens;
 mod thumbnails;
@@ -348,6 +350,8 @@ pub async fn save_settings(state: S<'_>, mut settings: AppSettings) -> Reply<App
     let previous = i.settings.read().map_err(err)?;
     settings.notifications = previous.notifications;
     settings.logs = previous.logs;
+    settings.storage["huggingFaceTokenConfigured"] =
+        previous.storage["huggingFaceTokenConfigured"].clone();
     i.settings.save(&settings).map_err(err)?;
     i.settings.read().map_err(err)
 }

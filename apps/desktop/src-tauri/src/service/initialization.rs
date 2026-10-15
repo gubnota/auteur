@@ -6,7 +6,7 @@ pub async fn start_initialization(
     workflow_id: String,
     review_id: String,
 ) -> Reply<Value> {
-    let (c, w, pid, setup) = {
+    let (c, w, pid, setup, settings) = {
         let i = state.inner.lock().await;
         let p = store(&i).map_err(err)?.read().map_err(err)?;
         let w = p
@@ -16,9 +16,16 @@ pub async fn start_initialization(
             .ok_or("Workflow missing")?
             .clone();
         let setup = workflow_core::for_setup(&w, &connection_id).map_err(err)?;
-        (connection(&i, &connection_id).map_err(err)?, w, p.id, setup)
+        (
+            connection(&i, &connection_id).map_err(err)?,
+            w,
+            p.id,
+            setup,
+            i.settings.read().map_err(err)?,
+        )
     };
-    relay(&c).map_err(err)?.command("initialize",json!({"workflows":[setup],"sourceWorkflow":w,"workspaceId":pid,"connectionId":connection_id,"reviewId":review_id,"guided":true,"apply":true})).await.map_err(err)
+    let hf_token = model_credentials::for_install(&settings, &setup).map_err(err)?;
+    relay(&c).map_err(err)?.initialize(json!({"workflows":[setup],"sourceWorkflow":w,"workspaceId":pid,"connectionId":connection_id,"reviewId":review_id,"guided":true,"apply":true}), hf_token.as_deref()).await.map_err(err)
 }
 #[tauri::command]
 pub async fn list_initializations(

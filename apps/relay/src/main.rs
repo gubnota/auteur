@@ -1,4 +1,5 @@
 mod console;
+mod credentials;
 mod operations;
 use axum::{
     Json, Router,
@@ -21,6 +22,7 @@ struct Data {
     desktop: String,
     agent: String,
     nodes: Vec<String>,
+    credentials: Mutex<std::collections::HashMap<String, credentials::Handoff>>,
 }
 type Shared = Arc<Data>;
 fn failure(_: impl std::fmt::Display) -> (StatusCode, String) {
@@ -253,6 +255,7 @@ async fn cancel(
     .map_err(failure)?;
     event(&tx, &id, &v)?;
     tx.commit().map_err(failure)?;
+    s.credentials.lock().unwrap().remove(&id);
     Ok(Json(v))
 }
 async fn claim(State(s): State<Shared>, h: HeaderMap, Json(v): Json<Value>) -> Reply<Json<Value>> {
@@ -452,6 +455,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let s = Arc::new(Data {
         db: Mutex::new(db),
+        credentials: Mutex::new(Default::default()),
         root,
         desktop,
         agent,
@@ -461,7 +465,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?,
     });
     console::schema(&s.db.lock().unwrap())?;
-    let router=Router::new().merge(console::routes()).route("/v1/nodes/{node}/operations",get(operations::list)).route("/v1/nodes/{node}",get(health)).route("/v1/jobs",post(submit)).route("/v1/jobs/{id}",get(status)).route("/v1/jobs/{id}/cancel",post(cancel)).route("/v1/agent/claim",post(claim)).route("/v1/agent/jobs/{id}",post(report)).route("/v1/agent/heartbeat",post(heartbeat)).route("/v1/assets",post(upload)).route("/v1/assets/{id}",get(asset)).route("/v1/events",get(|State(s):State<Shared>,h:HeaderMap|async move{
+    let router=Router::new().merge(console::routes()).merge(credentials::routes()).route("/v1/nodes/{node}/operations",get(operations::list)).route("/v1/nodes/{node}",get(health)).route("/v1/jobs",post(submit)).route("/v1/jobs/{id}",get(status)).route("/v1/jobs/{id}/cancel",post(cancel)).route("/v1/agent/claim",post(claim)).route("/v1/agent/jobs/{id}",post(report)).route("/v1/agent/heartbeat",post(heartbeat)).route("/v1/assets",post(upload)).route("/v1/assets/{id}",get(asset)).route("/v1/events",get(|State(s):State<Shared>,h:HeaderMap|async move{
  auth(&s,&h,false)?;let mut cursor=h.get("last-event-id").and_then(|v|v.to_str().ok()).and_then(|v|v.parse::<i64>().ok()).unwrap_or(0);
  let stream=async_stream::stream!{loop{let rows={let db=s.db.lock().unwrap();let mut st=db.prepare("SELECT seq,json FROM events WHERE seq>?1 ORDER BY seq LIMIT 100").unwrap();st.query_map([cursor],|r|Ok((r.get::<_,i64>(0)?,r.get::<_,String>(1)?))).unwrap().collect::<Result<Vec<_>,_>>()};match rows{Ok(rows)=>for (seq,raw) in rows{cursor=seq;yield Ok::<_,std::convert::Infallible>(Event::default().id(seq.to_string()).event("job").data(raw));},Err(_)=>break}tokio::time::sleep(std::time::Duration::from_secs(1)).await;}};
  Ok::<_,(StatusCode,String)>(Sse::new(stream).keep_alive(KeepAlive::default()))
@@ -480,6 +484,7 @@ mod tests {
         console::schema(&db).unwrap();
         Arc::new(Data {
             db: Mutex::new(db),
+            credentials: Mutex::new(Default::default()),
             root: PathBuf::new(),
             desktop: "desktop".into(),
             agent: "agent".into(),

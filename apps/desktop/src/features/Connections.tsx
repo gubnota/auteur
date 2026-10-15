@@ -1,3 +1,4 @@
+import { ModelDownloadSettings } from "../components/ModelDownloadSettings";
 import { NodeMetrics } from "../components/NodeMetrics";
 import { NotebookDownload } from "../components/NotebookDownload";
 import { openConsole, openActivity } from "../components/BackgroundActivity";
@@ -787,6 +788,7 @@ export function Preferences({
           "RunPod",
           "App Runner",
           "Node access",
+          "Model downloads",
           "Language",
         ].map((name) => (
           <button
@@ -802,6 +804,7 @@ export function Preferences({
       </div>
       <div className="settings-grid">
         {tab === "Node access" && <RunnerTokenSettings notify={notify} />}
+        {tab === "Model downloads" && <ModelDownloadSettings />}
         {tab === "General" && (
           <article className="panel">
             <h2>Movie defaults</h2>

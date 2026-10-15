@@ -80,6 +80,41 @@ impl Relay {
         )
         .await
     }
+    /// Secret handoff precedes queue submission, so the agent cannot claim too early.
+    pub async fn initialize(&self, mut payload: Value, hf_token: Option<&str>) -> Result<Value> {
+        let attempt = project_core::id();
+        let path = format!("/v1/nodes/{}/credentials/{attempt}", self.node);
+        if let Some(token) = hf_token {
+            // Do not include a failed response body: a proxy must not echo a secret.
+            let response = self
+                .client
+                .post(format!("{}{path}", self.url))
+                .bearer_auth(&self.token)
+                .header("Cache-Control", "no-store")
+                .json(&json!({"hfToken":token}))
+                .send()
+                .await?;
+            if !response.status().is_success() {
+                return Err(format!("Model credential handoff refused (HTTP {}). Update agent/relay and configure a matching private token pair before retrying", response.status().as_u16()).into());
+            }
+            payload["modelCredentialRequired"] = json!(true);
+        }
+        let result = self
+            .post(
+                "/v1/jobs",
+                json!({"id":attempt,"nodeId":self.node,"kind":"initialize","payload":payload}),
+            )
+            .await;
+        if hf_token.is_some() && result.as_ref().map_or(true, |v| v["id"] != attempt) {
+            let _ = self
+                .client
+                .delete(format!("{}{path}", self.url))
+                .bearer_auth(&self.token)
+                .send()
+                .await;
+        }
+        result
+    }
     pub async fn events(&self, after: u64) -> Result<reqwest::Response> {
         Ok(self
             .client

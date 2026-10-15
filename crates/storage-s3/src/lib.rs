@@ -50,7 +50,7 @@ pub async fn download_with_progress(
 ) -> Result<()> {
     download_authenticated(o, dest, None, progress).await
 }
-/// Optional node-local Hugging Face credentials never follow a cross-origin redirect.
+/// Optional request-scoped or node-local Hugging Face credentials never follow a cross-origin redirect.
 pub async fn download_authenticated(
     o: &Object,
     dest: &Path,
@@ -106,7 +106,25 @@ pub async fn download_authenticated(
                 continue;
             }
             if matches!(response.status().as_u16(), 401 | 403) {
-                return Err("Model access denied: accept the upstream model terms and sign in with hf auth login on this node".into());
+                let page = if url.host_str() == Some("huggingface.co") {
+                    let repo = url
+                        .path()
+                        .split('/')
+                        .filter(|p| !p.is_empty())
+                        .take(2)
+                        .collect::<Vec<_>>()
+                        .join("/");
+                    format!(
+                        " Request account access at https://huggingface.co/{repo} and set HF_TOKEN in Settings > Model downloads (or on the node)."
+                    )
+                } else {
+                    String::new()
+                };
+                return Err(format!(
+                    "Model access denied: the source refused this account (HTTP {}).{page}",
+                    response.status().as_u16()
+                )
+                .into());
             }
             if !response.status().is_success() {
                 return Err(format!("Model download HTTP {}", response.status().as_u16()).into());

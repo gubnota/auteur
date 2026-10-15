@@ -153,6 +153,7 @@ async fn main() -> Result<()> {
     let token = std::env::var("MYMOVIE_AGENT_TOKEN")?;
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(60))
+        .redirect(reqwest::redirect::Policy::none())
         .build()?;
     let console_args = args.clone();
     let console_client = client.clone();
@@ -173,7 +174,7 @@ async fn main() -> Result<()> {
             let metrics = metrics::sample(&heartbeat_args).await;
             let private = initialization::private_execution(&heartbeat_args).is_ok();
             let _ = post(&heartbeat_client, &format!("{heartbeat_relay}/v1/agent/heartbeat"), &heartbeat_token,
-                json!({"nodeId":heartbeat_args.node_id,"connected":health.is_some(),"transport":"outbound HTTPS","comfy":health,"metrics":metrics,"capabilities":{"initialization":true,"console":private,"customScripts":private}})).await;
+                json!({"nodeId":heartbeat_args.node_id,"connected":health.is_some(),"transport":"outbound HTTPS","comfy":health,"metrics":metrics,"capabilities":{"initialization":true,"modelCredentials":true,"console":private,"customScripts":private}})).await;
             tokio::time::sleep(std::time::Duration::from_secs(15)).await;
         }
     });
@@ -227,7 +228,17 @@ async fn main() -> Result<()> {
             let result = {
                 let work = initialization::PROGRESS.scope(
                     progress.clone(),
-                    initialization::run(&args, &comfy, &job["payload"]),
+                    async {
+                        let hf = if job["payload"]["modelCredentialRequired"] == true {
+                            let response = client.post(format!("{relay}/v1/agent/credentials/{id}"))
+                                .bearer_auth(&token).header("Cache-Control","no-store")
+                                .json(&json!({"nodeId":args.node_id,"leaseToken":job["leaseToken"]})).send().await?;
+                            if !response.status().is_success() { return Err("Model credential unavailable or expired; restart installation from Studio".into()); }
+                            let value: Value = response.json().await?;
+                            Some(value["hfToken"].as_str().filter(|t| t.starts_with("hf_") && t.len() < 1024 && !t.chars().any(char::is_whitespace)).ok_or("Invalid model credential handoff")?.to_owned())
+                        } else { None };
+                        provision::MODEL_TOKEN.scope(hf, initialization::run(&args, &comfy, &job["payload"])).await
+                    },
                 );
                 tokio::pin!(work);
                 let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
