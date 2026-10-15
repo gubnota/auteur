@@ -1,5 +1,13 @@
 # Task Log
 
+## 2026-10-16 — HF credentials and workflow installation, 0.1.21
+
+- Implemented approved HF_WORKFLOW_SETUP_PLAN on main. Settings > Model downloads explicitly saves/replaces/removes masked HF_TOKEN in the vault; startup/status never reads the token. Matching private relay/agent handoff is bounded, memory-only, ten-minute expiry, one-use and lease/node-bound. Cancellation/dedup/refusal clean up pending values; jobs/events/packages exclude secrets. Node-local HF credentials remain supported; scripts do not inherit desktop HF secrets.
+- Install on instance opens Dependencies and the existing durable agent review/installation flow. Publish graph only is explicitly separate. Owned workflows expose Inputs/Outputs/Dependencies/Guide; immutable examples display their configuration read-only with Create editable copy. Built-ins no longer appear a second time in the ordinary workflow list.
+- Validation: all 80 Rust workspace tests, 63 Python tests and 28 frontend tests passed. Twenty targeted browser scenarios covered global mode, examples, dependency editing, form/output persistence and token actions; the stale graph-publish selector was fixed and all four catalogue cases passed on rerun. Typecheck, production/native ARM64 build, source-version parity and diff checks passed. Rust network fixtures needed localhost-listener permission; the permitted rerun passed. No real HF credential, model download or cloud generation was used.
+- Rebuilt, ad-hoc signed and installed /Applications/MyMovie Studio.app 0.1.21. Strict signature/version verified; native global-mode launch, immutable dependency view and masked Model downloads form verified without opening a Movie or prompting Keychain. Previous app preserved at /private/tmp/MyMovie Studio-0.1.20-before-0.1.21.app. Browser-fixture screenshots: screenshots/model-download-settings-0.1.21.png and screenshots/workflow-installation-0.1.21.png. EN/RU/FR READMEs and compact architecture/contracts updated.
+- Live gated-model installation requires upstream account access and matching 0.1.21 agent/relay on the target. No release/tag/push performed. Existing unrelated App.tsx edits were retained and excluded from these commits.
+
 ## 2026-10-15 — Local macOS and Linux agent build commands
 
 - README now documents an Apple Silicon `.app`/`.dmg` build and a Docker/OrbStack `cross` build for the Linux x86_64 agent, including target prerequisites, output locations, and the distinction between a bare binary and the full checksummed CI archive.

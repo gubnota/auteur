@@ -140,6 +140,9 @@ export async function openFixture(
       if (command === 'runner_operation') return setupPending ? {state:'running',report:{}} : {state:'completed',report:setupOperations[args.operationId]};
       if (command === 'get_runner_tokens') return structuredClone(runnerTokens);
       if (command === 'save_runner_tokens') { runnerTokens = structuredClone(args.tokens); return; }
+      if (command === 'model_token_status') return !!settings.storage.huggingFaceTokenConfigured;
+      if (command === 'save_model_token') { if (!/^hf_\\S{5,}$/.test(args.token)) throw new Error('Invalid Hugging Face token'); settings.storage.huggingFaceTokenConfigured = true; return; }
+      if (command === 'remove_model_token') { settings.storage.huggingFaceTokenConfigured = false; return; }
       if (command === 'save_credential') { if (args.secret !== runnerTokens.MYMOVIE_DESKTOP_TOKEN) throw new Error('Wrong desktop token'); return 'connection:' + args.connectionId; }
       if (command === 'get_settings') { if (staleSettings) { const value = staleSettings; staleSettings = null; window.fixture.staleSettingsReturned = true; return value; } return settings; }
       if (command === 'save_settings') { settings = args.settings; sessionStorage.setItem("fixture-settings", JSON.stringify(settings)); return settings; }

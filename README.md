@@ -1,6 +1,6 @@
 # MyMovie Studio
 
-Version **0.1.20** makes Workflows, Generate, Jobs, Library, Renders, Instances, Search and Settings available without opening a Movie. Movies add the storyboard and cast workspace; closing one keeps global resources and execution active. The terminal accepts direct keyboard input, and connected agents report CPU, RAM and GPU memory.
+Version **0.1.21** makes Workflows, Generate, Jobs, Library, Renders, Instances, Search and Settings available without opening a Movie. Movies add the storyboard and cast workspace; closing one keeps global resources and execution active. The terminal accepts direct keyboard input, and connected agents report CPU, RAM and GPU memory.
 
 The immutable examples now include **FLUX.3 Klein T2I and two-reference I2I**, each with T4, RTX and Apple Silicon variants inside one compressed workflow package. Choose a variant before initialization. [Example guides](docs/WORKFLOW_EXAMPLES.md) explain model access, exact downloads and hardware limits. [Local agent setup](docs/LOCAL_COMFYUI_TEST.md) covers a separate MPS or CPU instance, private terminal access and ports. Real FLUX/cloud GPU generation remains unverified.
 
@@ -12,14 +12,25 @@ The immutable examples now include **FLUX.3 Klein T2I and two-reference I2I**, e
 
 A portable film studio for macOS: Finder `.mymovie` packages, scenes and keyframes, shared characters and media, reusable ComfyUI workflows and traceable jobs.
 
-Current source/app version: **0.1.20**. [Published v0.1.15 downloads](https://github.com/gubnota/auteur/releases/tag/v0.1.15) include the Linux agent and matching relay. Commit version changes before creating a matching tag; staging alone does not update a tag. Local macOS builds use an ad-hoc signature; notarization and foreign-platform launch acceptance remain pending.
+Current source/app version: **0.1.21**. [Published v0.1.15 downloads](https://github.com/gubnota/auteur/releases/tag/v0.1.15) include the Linux agent and matching relay. Commit version changes before creating a matching tag; staging alone does not update a tag. Local macOS builds use an ad-hoc signature; notarization and foreign-platform launch acceptance remain pending.
+
+## Model downloads and workflow installation
+
+**Settings → Model downloads** saves a masked `HF_TOKEN` in the system vault. Save, replace and remove are explicit actions; browsing Settings never reads the saved token. For gated models, first request/accept access on the model's Hugging Face page using the same account. A token cannot grant access that account does not have.
+
+In **Workflows**, select the instance and choose **Install on instance → Dependencies**. Review, then **Install & prepare** installs reviewed dependencies through the agent and prepares that same workflow; it creates no extra catalogue entry. **Publish graph only** merely saves the editor JSON in ComfyUI. A direct ComfyUI connection needs an agent connection for filesystem installation.
+
+Owned workflows expose **Inputs**, **Outputs**, **Dependencies** and **Guide**. Prepare the selected instance first to discover actual literal fields. Built-in examples display these read-only; **Create editable copy** is the explicit duplication action.
+
+Desktop-managed HF downloads need matching **0.1.21 agent and relay** plus a private desktop/agent token pair. The credential is delivered in memory for one leased initialization, expires after ten minutes before consumption, and is excluded from jobs, logs and packages. Existing node-local HF credentials remain supported; custom recipe scripts do not receive the desktop token. Rebuild/update the remote client before testing this new handoff.
+
 
 ## One workflow, many jobs
 
 1. **Workflows:** import ordinary ComfyUI workflow JSON or an API graph once. Choose a saved ComfyUI node and **Prepare inputs**. Editor sources use that node's actual frontend exporter; the original graph remains immutable. Python/Playwright prerequisites are documented in [setup](docs/WORKFLOW_SETUP.md).
 2. **Inputs:** expose literal fields, name image/video/audio/text slots, mark Optional, Advanced or Hidden. An unassigned optional media slot retains the workflow default; it does not manufacture a usable file on another machine.
 3. **Outputs:** label output sinks and choose which returned files to collect. Collection does not disable the graph's output nodes.
-4. **Setup:** declare compatibility, OS, architecture and precision. Import separate Apple Silicon/CUDA/CPU graphs and group them as a family; changing a badge does not convert a graph.
+4. **Dependencies:** declare compatibility, OS, architecture and precision. Import separate Apple Silicon/CUDA/CPU graphs and group them as a family; changing a badge does not convert a graph.
 5. **Guide:** add a collection name, Markdown README and illustration. Export/import `.mymovie-workflow.json` wrappers or collections between movies. Graph hashes, forms and reviewed dependencies travel; destination profiles and credential references do not.
 6. **Generate:** select that workflow/node, drop media or use the searchable Library gallery, set exact values and review. Existing media IDs are reused. **Add to queue** stays idle; **Run now** starts immediately.
 7. **Jobs:** use task checkboxes to **Run selected** or **Remove selected from queue**. Edit unsent selected tasks/destinations in Generate and **Save queue changes**. Old canceled receipts remain. One endpoint runs FIFO; distinct nodes run concurrently.
@@ -36,7 +47,7 @@ Schema **v5** requires an explicit backed-up upgrade for older packages. Keep a 
 
 ## Nodes and first-session setup
 
-**Workflows → Setup → Complete setup script** provides Mac/Linux/SSH and Colab/Kaggle scripts. Choose the matching checksummed agent artifact from CI, configure instance paths, and review pinned model/LoRA/plugin/wheel requirements. Managed workers can install reviewed dependencies, request restart and then prepare previously uncompiled editor graphs. Readiness requires verification and a weight-free canary in the current session, rather than trusting an old marker file.
+**Workflows → Dependencies → Complete setup script** provides Mac/Linux/SSH and Colab/Kaggle scripts. Choose the matching checksummed agent artifact from CI, configure instance paths, and review pinned model/LoRA/plugin/wheel requirements. Managed workers can install reviewed dependencies, request restart and then prepare previously uncompiled editor graphs. Readiness requires verification and a weight-free canary in the current session, rather than trusting an old marker file.
 
 A private node connects outbound to an authenticated HTTPS relay. Enter its reachable origin and the allowlisted worker ID in Connections; ComfyUI itself can stay private. See [setup steps](docs/WORKFLOW_SETUP.md), [RunPod/Colab/Kaggle guide](deploy/runpod/README.md) and [real vs fixture acceptance](docs/GENERATION_ACCEPTANCE.md). Live cloud GPU/relay/S3 acceptance remains unverified. Direct ComfyUI connections do not install filesystem dependencies remotely.
 
@@ -94,7 +105,7 @@ Persistent project memory: [context](docs/PROJECT_CONTEXT.md), [architecture](do
 
 **Workflows → Examples · start here** offers illustrated connection, SD 1.5 T4 and
 tiny background-removal examples. Choose **Use**, then **Run and install on**
-inside the workflow modal, then **Setup → Initialize on [instance]**. Review downloads
+inside the workflow modal, then **Dependencies → Initialize on [instance]**. Review downloads
 and choose **Install & prepare on [instance]**: the agent installs dependencies,
 restarts managed idle ComfyUI if needed, compiles/publishes the graph and verifies
 readiness. No extra notebook commands. [Complete guide](docs/WORKFLOW_EXAMPLES.md).

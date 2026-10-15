@@ -3,6 +3,7 @@ import type { Workflow, Connection, WorkflowLayout } from "../lib/types";
 import { call, exportDestination } from "../lib/bridge";
 export function WorkflowTarget({
   workflow,
+  install,
   onBusyChange,
   locked = false,
   connection,
@@ -10,6 +11,7 @@ export function WorkflowTarget({
   notify,
 }: {
   workflow: Workflow;
+  install?: () => void;
   onBusyChange?: (busy: boolean) => void;
   locked?: boolean;
   connection?: Connection;
@@ -65,8 +67,16 @@ export function WorkflowTarget({
           : "Select a node and prepare to discover its actual inputs and outputs."}
       </p>
       <div className="jobs-toolbar">
+        {install && (
+          <button
+            className="primary"
+            disabled={locked || busy || !connection}
+            onClick={install}
+          >
+            Install on instance
+          </button>
+        )}
         <button
-          className="primary"
           disabled={locked || busy || !connection}
           onClick={() => void act(() => prepare(workflow.id, connection!.id))}
         >
@@ -86,7 +96,7 @@ export function WorkflowTarget({
             })
           }
         >
-          Install in ComfyUI
+          Publish graph only
         </button>
         <button
           disabled={locked || busy || !workflow.editorGraph}

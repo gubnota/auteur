@@ -172,6 +172,7 @@ test("guided setup hands ownership to the agent and cancellation survives closin
     .locator(".example-section")
     .getByRole("button", { name: "Use", exact: true })
     .click();
+  await page.getByRole("button", { name: "Install on instance", exact: true }).click();
   const setup = page.getByRole("region", { name: "Agent initialization" });
   await setup
     .getByRole("button", { name: "Initialize on Colab T4", exact: true })
@@ -235,7 +236,7 @@ test("the workflow modal installs and prepares on the instance selected inside i
     .getByRole("button", { name: "Second node", exact: false })
     .click();
   await page
-    .getByRole("button", { name: "Install in ComfyUI", exact: true })
+    .getByRole("button", { name: "Publish graph only", exact: true })
     .click();
   await expect
     .poll(() => page.evaluate(() => (window as any).fixture.installs))
@@ -264,7 +265,7 @@ test("setup keeps the instance fixed while checking and refuses an unmanaged run
       { state: "review", reviewId: "external", managedRuntime: false },
     ],
   });
-  await page.getByRole("tab", { name: "Setup", exact: true }).click();
+  await page.getByRole("tab", { name: "Dependencies", exact: true }).click();
   await page.evaluate(() => (window as any).fixture.holdSetup(true));
   await page
     .getByRole("button", { name: "Initialize on Colab T4", exact: true })
@@ -325,7 +326,7 @@ test("agent initialization failures remain visible without starting generation",
       { state: "needs-restart", restartRequired: true },
     ],
   });
-  await page.getByRole("tab", { name: "Setup", exact: true }).click();
+  await page.getByRole("tab", { name: "Dependencies", exact: true }).click();
   await page
     .getByRole("button", { name: "Initialize on Colab T4", exact: true })
     .click();
@@ -508,7 +509,7 @@ test("custom recipe steps can be saved, reordered and removed", async ({
   page,
 }) => {
   await openFixture(page, structuredClone(project), settings);
-  await page.getByRole("tab", { name: "Setup", exact: true }).click();
+  await page.getByRole("tab", { name: "Dependencies", exact: true }).click();
   for (const name of ["Prepare folders", "Check extras"]) {
     await page
       .getByRole("button", { name: "Add script step", exact: true })
@@ -570,6 +571,7 @@ test("trashed example restores immediately and selects another instance for loca
     .last()
     .getByRole("button", { name: "Second node" })
     .click();
+  await page.getByRole("button", { name: "Install on instance", exact: true }).click();
   await page
     .getByRole("button", { name: "Prepare workflow on Second node", exact: true })
     .click();

@@ -1,6 +1,6 @@
 # MyMovie Studio
 
-Version **0.1.20** : Workflows, Generate, Jobs, Library, Renders, Instances, Search et Settings fonctionnent sans film ouvert. Le film ajoute storyboard et personnages ; sa fermeture conserve les ressources et les tâches globales. Le terminal accepte la saisie directe ; l’agent affiche CPU, RAM et mémoire GPU.
+Version **0.1.21** : Workflows, Generate, Jobs, Library, Renders, Instances, Search et Settings fonctionnent sans film ouvert. Le film ajoute storyboard et personnages ; sa fermeture conserve les ressources et les tâches globales. Le terminal accepte la saisie directe ; l’agent affiche CPU, RAM et mémoire GPU.
 
 Nouveaux exemples immuables : **FLUX.3 Klein T2I et I2I à deux références**, avec variantes T4, RTX et Apple Silicon dans chaque paquet compressé. Choisir la variante avant l’initialisation. [Exemples et dépendances](docs/WORKFLOW_EXAMPLES.md), [installation locale de l’agent](docs/LOCAL_COMFYUI_TEST.md). L’agent télécharge les modèles ; FLUX exige l’acceptation de sa licence et une authentification Hugging Face sur le nœud. La génération FLUX et le test GPU cloud restent à valider.
 
@@ -12,14 +12,25 @@ Nouveaux exemples immuables : **FLUX.3 Klein T2I et I2I à deux références**, 
 
 Un studio de cinéma portable pour macOS : documents Finder `.mymovie`, épisodes et storyboard, personnages et médias partagés, workflows ComfyUI réutilisables et tâches traçables.
 
-Version des sources/de l’application : **0.1.20**. Les [téléchargements v0.1.15](https://github.com/gubnota/auteur/releases/tag/v0.1.15) incluent l’agent Linux et son relay correspondant. Commitez les versions avant de créer le tag correspondant ; git add prépare seulement les changements. La compilation locale macOS utilise une signature ad-hoc ; notarisation et validation sur les autres plateformes restent à faire.
+Version des sources/de l’application : **0.1.21**. Les [téléchargements v0.1.15](https://github.com/gubnota/auteur/releases/tag/v0.1.15) incluent l’agent Linux et son relay correspondant. Commitez les versions avant de créer le tag correspondant ; git add prépare seulement les changements. La compilation locale macOS utilise une signature ad-hoc ; notarisation et validation sur les autres plateformes restent à faire.
+
+## Téléchargement des modèles et installation des workflows
+
+**Settings → Model downloads** enregistre un `HF_TOKEN` masqué dans le trousseau système. Enregistrement, remplacement et suppression sont explicites ; ouvrir les réglages ne lit pas le jeton enregistré. Pour un modèle restreint, demandez/acceptez l’accès sur Hugging Face avec le même compte : le jeton ne remplace pas cette autorisation.
+
+Dans **Workflows**, choisissez l’instance puis **Install on instance → Dependencies**. Après vérification, **Install & prepare** installe les dépendances via l’agent et prépare le même workflow, sans créer de copie dans le catalogue. **Publish graph only** enregistre uniquement le graphe JSON dans ComfyUI. Une connexion directe à ComfyUI nécessite un agent pour installer des fichiers.
+
+Les workflows personnels proposent **Inputs**, **Outputs**, **Dependencies** et **Guide**. Préparez d’abord l’instance pour découvrir les champs réels. Les exemples restent en lecture seule ; **Create editable copy** crée explicitement une copie modifiable.
+
+Le transfert du jeton HF exige un agent et un relay **0.1.21**, avec une paire de jetons desktop/agent privés. Le secret reste en mémoire, réservé à une initialisation, et expire après dix minutes avant consommation ; il est exclu des tâches, journaux et paquets. Les identifiants HF locaux du nœud restent compatibles ; les scripts personnalisés ne reçoivent pas le jeton HF du bureau. Mettez à jour le client distant avant ce test.
+
 
 ## Parcours unique
 
 1. **Workflows :** importer une fois un workflow ComfyUI normal ou un graphe API. Choisir un nœud enregistré puis **Prepare inputs**. Le frontend réel du nœud compile le workflow ; la source reste immuable.
 2. **Inputs :** nommer les entrées image/vidéo/audio/texte, définir leurs rôles, Optional, Advanced et Hidden. Une entrée optionnelle non assignée conserve sa valeur initiale ; son fichier doit exister sur le nœud.
 3. **Outputs :** nommer les sorties et sélectionner les fichiers à conserver dans Library. Cela ne désactive pas les nœuds de sortie du graphe.
-4. **Setup :** déclarer compatibilité, système, architecture et précision. Importer des graphes distincts Apple Silicon/CUDA/CPU comme variantes d’une même famille ; un badge ne convertit pas le graphe.
+4. **Dependencies :** déclarer compatibilité, système, architecture et précision. Importer des graphes distincts Apple Silicon/CUDA/CPU comme variantes d’une même famille ; un badge ne convertit pas le graphe.
 5. **Guide :** README Markdown, illustration et collection. Exporter/importer `.mymovie-workflow.json` entre films avec graphes, formulaires et dépendances ; les profils locaux et références de secrets ne voyagent pas.
 6. **Generate :** choisir workflow/nœud, déposer les médias ou utiliser la galerie avec recherche, vérifier les valeurs. Les médias existants sont réutilisés par ID. **Add to queue** reste en attente ; **Run now** démarre.
 7. **Jobs :** cases de sélection, **Run selected**, **Remove selected from queue**. Modifier les tâches non envoyées et leur destination dans Generate, puis **Save queue changes** ; les anciens reçus annulés restent conservés. FIFO sur un nœud, parallélisme entre nœuds.
@@ -38,7 +49,7 @@ Schéma **v5** : mise à niveau explicite avec sauvegarde pour les anciens docum
 
 **Guide → Edit dependencies** ouvre la source et le chemin relatif des modèles/plugins. **Open source** ouvre le navigateur ; le chemin final est affiché avant l’enregistrement. Une connexion directe montre la préparation ; l’installation et ses journaux nécessitent l’agent. Les jetons de test publics n’accèdent pas au trousseau. Pour les identifiants privés enregistrés, utilisez **Load saved private tokens** ou **Check connection**.
 
-**Workflows → Setup → Complete setup script** propose Mac/Linux/SSH, Colab et Kaggle. Choisir l’archive d’agent et son checksum vérifié, les chemins du ComfyUI et les dépendances modèles/LoRA/plugins/wheels épinglées. Un runtime géré installe les dépendances vérifiées, demande un redémarrage puis prépare le graphe API. La disponibilité exige une vérification et un canary dans la session courante ; un ancien fichier marqueur ne suffit pas.
+**Workflows → Dependencies → Complete setup script** propose Mac/Linux/SSH, Colab et Kaggle. Choisir l’archive d’agent et son checksum vérifié, les chemins du ComfyUI et les dépendances modèles/LoRA/plugins/wheels épinglées. Un runtime géré installe les dépendances vérifiées, demande un redémarrage puis prépare le graphe API. La disponibilité exige une vérification et un canary dans la session courante ; un ancien fichier marqueur ne suffit pas.
 
 Le nœud privé se connecte vers un relay HTTPS authentifié. Renseigner son adresse accessible et l’ID du worker dans Connections. [Instructions](docs/WORKFLOW_SETUP.md), [Colab/RunPod/Kaggle](deploy/runpod/README.md), [preuves de validation](docs/GENERATION_ACCEPTANCE.md). Le test cloud GPU/relay/S3 réel reste à faire. Les connexions ComfyUI directes n’installent pas les dépendances à distance.
 
@@ -52,7 +63,7 @@ Commencer par le **mask canary 64 × 64**, sans poids/plugins/GPU. Le test u2net
 
 **Workflows → Examples · start here** propose des exemples illustrés : connexion,
 SD 1.5 T4 et détourage léger. Ouvrez une copie, choisissez **Run and install on**
-dans la fenêtre du workflow, puis **Setup → Initialize on [instance]**. Vérifiez les
+dans la fenêtre du workflow, puis **Dependencies → Initialize on [instance]**. Vérifiez les
 téléchargements et cliquez sur **Install & prepare on [instance]** : l’agent installe
 les dépendances, redémarre ComfyUI géré et libre si nécessaire, prépare/publie le
 workflow et vérifie la disponibilité. Aucune commande supplémentaire dans le notebook.
@@ -69,5 +80,5 @@ les workers Kaggle partagent les fichiers et sérialisent les modifications du r
 **Move to Trash / Restore** retire et restaure un workflow avec ses réglages. **Trash → Clear trash** vide la liste en conservant les graphes sources et l’historique des jobs. Le terminal occupe toute la fenêtre.
 Setup propose un **Initialization recipe** ordonné et modifiable. Le terminal agent
 et les scripts libres exigent des tokens privés et une activation explicite.
-[Guide](docs/NODE_ACTIVITY.md). Agent et relay **0.1.20** requis ; le dernier agent
+[Guide](docs/NODE_ACTIVITY.md). Agent et relay **0.1.21** requis ; le dernier agent
 publié reste v0.1.15. Mettre à jour le desktop ne met pas à jour le notebook.

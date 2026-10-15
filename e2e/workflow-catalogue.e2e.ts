@@ -128,7 +128,7 @@ test("saved catalogue prepares a two-image form, maps ratio and reuses its layou
     )
     .toBe("image-1");
   await page
-    .getByRole("button", { name: "Install in ComfyUI", exact: true })
+    .getByRole("button", { name: "Publish graph only", exact: true })
     .click();
   await expect
     .poll(() => page.evaluate(() => (window as any).fixture.installs.length))

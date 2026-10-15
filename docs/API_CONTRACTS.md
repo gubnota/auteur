@@ -203,3 +203,10 @@
 - Metrics: sampledAt, cpuPercent?, ramUsedBytes?, ramTotalBytes?, memoryKind, gpus[]. No reading is represented as an unavailable sample, never fabricated zero utilization.
 - Console lifecycle: open/reuse private session; input/resize/close ordered; detach preserves session. Input is never replayed after transport errors.
 - Local supervisor ports: ComfyUI 8191, relay 8789, agent no inbound listener. Private tokens persisted 0600; custom scripts and console opt in.
+
+## Model credential handoff (0.1.21)
+- Native model_token_status() -> bool (no vault read), save_model_token(token), remove_model_token(). settings.storage.huggingFaceTokenConfigured is non-secret status, preserved across stale Settings saves. Secret reference model:huggingface never returns to React.
+- Desktop POST /v1/nodes/{node}/credentials/{operationId} {hfToken}: private token pair, allowlisted node, fresh capability modelCredentials=true. UUID operation; 64-entry bound; memory only; expires after 600 seconds. DELETE same path discards abandoned handoff.
+- Agent POST /v1/agent/credentials/{operationId} {nodeId,leaseToken}: agent auth, matching unexpired running initialize lease, consumes value once. Expired/missing value -> 410, lease mismatch -> 409. Cancellation discards unconsumed values. No SQLite, events or job payload contains the secret.
+- Durable initialize payload adds modelCredentialRequired:true only; handoff precedes queue submission and is deleted on dedup/refusal. Agent task-local scope ends with initialization. Node-local HF_TOKEN/HF_TOKEN_PATH/HF_HOME remains fallback.
+- Shared public defaults cannot forward desktop model secrets. Matching agent/relay 0.1.21 required; release metadata modelCredentialsVersion=1. HF redirects never carry authorization across origins. Gated access must be granted to the token's account.

@@ -9,7 +9,7 @@
 
 ## Current milestone
 - Approved global Studio plan: docs/GLOBAL_STUDIO_PLAN.md, 2026-10-15. Continue on main.
-- Current source: 0.1.20. No Movie required for workflows, generation, jobs, media, instances, search or settings.
+- Current source: 0.1.21. No Movie required for workflows, generation, jobs, media, instances, search or settings.
 - App workspace SQLite owns global assets/workflows/drafts/history; Movies retain scenes/cast and reference shared media.
 - Migration is journaled by Movie identity/revision and receipt hash; historical pending jobs are quarantined, never resubmitted.
 - Opening/closing Movies leaves global dispatch, initialization and terminal sessions intact.
@@ -20,6 +20,8 @@
 - Current runtime features require matching agent/relay/helper builds; old releases do not acquire source changes automatically.
 - Installed app and verification evidence: latest TASK_LOG entry. Native signing is local ad-hoc.
 - Public node test tokens bypass Keychain; passive background work never unlocks uncached private credentials. Explicit Check unlocks a private connection for the session.
+- Settings > Model downloads stores HF_TOKEN in the vault only through explicit actions; installation uses a one-use in-memory private relay handoff. Node-local HF credentials remain supported.
+- Install on instance opens Dependencies; graph-only publication is separately named. Owned workflows expose Inputs/Outputs/Dependencies/Guide; examples stay read-only.
 - Pending: live FLUX/cloud GPU generation, Finder Quick Look extension, native SSH transport and Telegram delivery.
 - Original design exports remain ignored in drafts/.
 

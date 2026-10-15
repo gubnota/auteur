@@ -99,3 +99,9 @@
 - The local/notebook supervisor owns process restart. The agent is outbound-only; the relay is the desktop endpoint. Direct ComfyUI and native SSH are not agent capabilities.
 - MediaPicker and Renders resolve the same global asset identities. Example reference imports deduplicate across variants.
 - workflow-core owns portable ZIP integrity and family selection; storage-s3 owns bounded HTTPS redirects. Provider credentials never cross redirect origins.
+
+## Model credentials (0.1.21)
+- Native Settings owns the HF vault entry; React receives only configured status and handles newly entered values transiently.
+- provider-relay transports secrets separately from durable payloads. Relay credentials module holds expiring memory only; lease identity gates one-time consumption.
+- Agent provision owns per-initialization scope; storage-s3 attaches authorization only to the permitted HF origin. Recipe subprocesses do not inherit desktop secrets.
+- Workflow UI installation routes through agent dependency review. Graph publishing cannot imply dependency installation or duplicate catalogue identity.

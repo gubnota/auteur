@@ -280,3 +280,13 @@ Context: Passive monitoring prompted Keychain even when browsing; changing avail
 Decision: Public test tokens bypass the vault. Private credentials load only through explicit actions and are cached for the process; passive polling cannot unlock them. Runtime readiness excludes volatile free-memory measurements while retaining hardware identity and capacity.
 Consequences: Private connections need Check after relaunch to unlock monitoring. Memory consumption remains visible without invalidating setup. Dependency sources open through a validated native HTTPS command and destinations stay relative to managed roots.
 Related files: service.rs; service/runner_tokens.rs; service/jobs.rs; provision-core/src/lib.rs; SourceLink.tsx; WorkflowSetup.tsx.
+
+# ADR-0029: Explicit HF credentials and separate workflow installation
+
+Date: 2026-10-16
+Status: Accepted
+
+Context: Gated weights need account authorization; the graph-publication button looked like a dependency installer and examples concealed their bindings.
+Decision: Save HF credentials explicitly in the native vault; deliver them through bounded expiring memory, separately from durable jobs, to one authenticated lease. Require private node tokens. Keep node-local credentials as fallback. Install opens agent dependency review; publish-only remains separate. Examples show read-only authoring tabs and explicit editable-copy action.
+Consequences: Matching agent/relay upgrades are required. Public test defaults cannot forward personal secrets. Model permission is still granted by Hugging Face. Installation preserves catalogue identity; only explicit copying duplicates definitions.
+Related files: HF_WORKFLOW_SETUP_PLAN.md; service/model_credentials.rs; relay/src/credentials.rs; provider-relay/src/lib.rs; ModelDownloadSettings.tsx; WorkflowEditor.tsx.

@@ -13,7 +13,8 @@ import { Field, Picker, Toggle } from "./Controls";
 import { WorkflowTarget } from "./WorkflowTarget";
 import { WorkflowForm } from "./WorkflowForm";
 import { AgentWorkflowSetup } from "./AgentWorkflowSetup";
-import { WorkflowSetup } from "./WorkflowSetup";
+import { SourceLink } from "./SourceLink";
+import { WorkflowSetup, dependencyDestination } from "./WorkflowSetup";
 import { WorkflowReadme } from "./WorkflowReadme";
 const defaults: WorkflowWrapper = {
   familyId: "",
@@ -106,15 +107,144 @@ export function WorkflowEditor({
       notify(String(e));
     }
   };
-  if (meta.exampleId) return <div className="workflow-editor">
-    <p className="example-label">Immutable example · configure job values in Generate. Create an editable copy to change the wrapper.</p>
-    {variants.length > 1 && <Picker title="Platform variant" disabled={busy} value={w.id} options={variants.map(v => ({id:v.id,label:v.wrapper?.variantName || v.name,description:`${v.wrapper?.os} · ${v.wrapper?.architecture} · ${v.wrapper?.precision}`}))} onChange={selectVariant}/>}
-    <WorkflowReadme workflow={w}/>
-    <WorkflowTarget locked={setupBusy} onBusyChange={setTargetBusy} workflow={w} connection={connection} prepare={prepare} notify={notify}/>
-    <AgentWorkflowSetup locked={targetBusy} onBusyChange={setSetupBusy} workflow={w} connection={connection} prepare={prepare}/>
-    {!!w.wrapper?.initialization?.length && <details><summary>Initialization recipe</summary>{w.wrapper.initialization.map((step,n)=><section key={n}><h3>{step.name}</h3><pre>{`# Check\n${step.checkScript??"# No custom check"}\n# Install\n${step.script}\n# Verify\n${step.verifyScript??"# Inventory verification"}`}</pre></section>)}</details>}
-    <button onClick={()=>void exportBundle(false)}>Export workflow package</button>
-  </div>;
+  if (meta.exampleId)
+    return (
+      <div className="workflow-editor">
+        <p className="example-label">
+          Immutable example · configure job values in Generate. Create an
+          editable copy to change the wrapper.
+        </p>
+        {variants.length > 1 && (
+          <Picker
+            title="Platform variant"
+            disabled={busy}
+            value={w.id}
+            options={variants.map((v) => ({
+              id: v.id,
+              label: v.wrapper?.variantName || v.name,
+              description: `${v.wrapper?.os} · ${v.wrapper?.architecture} · ${v.wrapper?.precision}`,
+            }))}
+            onChange={selectVariant}
+          />
+        )}
+        <WorkflowTarget
+          install={() => setTab("Dependencies")}
+          locked={setupBusy}
+          onBusyChange={setTargetBusy}
+          workflow={w}
+          connection={connection}
+          prepare={prepare}
+          notify={notify}
+        />
+        <div
+          className="editor-tabs"
+          role="tablist"
+          aria-label="Workflow editor"
+        >
+          {["Inputs", "Outputs", "Dependencies", "Guide"].map((t) => (
+            <button
+              key={t}
+              role="tab"
+              disabled={busy}
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        <section role="tabpanel" aria-label={tab}>
+          {tab === "Guide" && <WorkflowReadme workflow={w} />}
+          {tab === "Inputs" && (
+            <>
+              <h3>Exposed inputs</h3>
+              <p>
+                Create an editable copy to change these slots. Set their values
+                for each job in Generate.
+              </p>
+              {effective.bindings.map((b) => (
+                <article className="panel" key={`${b.nodeId}:${b.input}`}>
+                  <strong>
+                    {w.layout?.inputs.find(
+                      (i) => i.nodeId === b.nodeId && i.input === b.input,
+                    )?.label || b.semantic}
+                  </strong>
+                  <small>
+                    {b.nodeId}.{b.input} ·{" "}
+                    {b.media?.kind || b.valueType || "value"}
+                  </small>
+                </article>
+              ))}
+              {!effective.bindings.length && (
+                <p>
+                  Prepare inputs on a compatible instance to discover available
+                  controls.
+                </p>
+              )}
+            </>
+          )}
+          {tab === "Outputs" && (
+            <>
+              <h3>Collected results</h3>
+              {outputs.map((o) => (
+                <article className="panel" key={o.nodeId}>
+                  <strong>{o.label}</strong>
+                  <small>
+                    Node {o.nodeId} · {o.selected ? "Collected" : "Excluded"}
+                  </small>
+                </article>
+              ))}
+              {!outputs.length && (
+                <p>
+                  Prepare inputs on a compatible instance to discover output
+                  sinks.
+                </p>
+              )}
+            </>
+          )}
+          {tab === "Dependencies" && (
+            <>
+              <AgentWorkflowSetup
+                locked={targetBusy}
+                onBusyChange={setSetupBusy}
+                workflow={w}
+                connection={connection}
+                prepare={prepare}
+              />
+              <h3>Included dependencies</h3>
+              {(w.requirements?.artifacts ?? []).map((a) => (
+                <article
+                  className="panel"
+                  key={`${a.kind}:${a.category}:${a.target}`}
+                >
+                  <strong>{a.target}</strong>
+                  <small>{dependencyDestination(a)}</small>
+                  <SourceLink source={a.source} />
+                </article>
+              ))}
+              {!!w.wrapper?.initialization?.length && (
+                <details>
+                  <summary>Initialization recipe</summary>
+                  {w.wrapper.initialization.map((step, n) => (
+                    <section key={n}>
+                      <h3>{step.name}</h3>
+                      <pre>{`# Check\n${step.checkScript ?? "# No custom check"}\n# Install\n${step.script}\n# Verify\n${step.verifyScript ?? "# Inventory verification"}`}</pre>
+                    </section>
+                  ))}
+                </details>
+              )}
+              <p>
+                Example dependencies are read-only. Use Create editable copy
+                above to change sources, destinations or exposed controls.
+              </p>
+            </>
+          )}
+        </section>
+        <button onClick={() => void exportBundle(false)}>
+          Export workflow package
+        </button>
+      </div>
+    );
   return (
     <div className="workflow-editor">
       {meta.exampleId && (
@@ -155,6 +285,7 @@ export function WorkflowEditor({
         />
       )}
       <WorkflowTarget
+        install={() => setTab("Dependencies")}
         locked={setupBusy}
         onBusyChange={setTargetBusy}
         workflow={w}
@@ -163,7 +294,7 @@ export function WorkflowEditor({
         notify={notify}
       />
       <div className="editor-tabs" role="tablist" aria-label="Workflow editor">
-        {["Inputs", "Outputs", "Setup", "Guide"].map((t) => (
+        {["Inputs", "Outputs", "Dependencies", "Guide"].map((t) => (
           <button
             key={t}
             role="tab"
@@ -190,7 +321,7 @@ export function WorkflowEditor({
             <p>
               Selected sinks become render-tagged Library media. ComfyUI still
               executes its output nodes; collection controls which returned
-              files this movie keeps.
+              files the global Library keeps.
             </p>
             {!outputs.length && (
               <p className="muted">
@@ -237,7 +368,7 @@ export function WorkflowEditor({
             )}
           </>
         )}
-        {tab === "Setup" && (
+        {tab === "Dependencies" && (
           <>
             <AgentWorkflowSetup
               locked={targetBusy}
@@ -308,7 +439,10 @@ export function WorkflowEditor({
                 })
               }
             />
-            <InitializationRecipe steps={meta.initialization ?? []} change={initialization => metadata({initialization})}/>
+            <InitializationRecipe
+              steps={meta.initialization ?? []}
+              change={(initialization) => metadata({ initialization })}
+            />
             <WorkflowSetup
               workflow={w}
               connectionId={connection?.id ?? ""}
@@ -323,7 +457,9 @@ export function WorkflowEditor({
         {tab === "Guide" && (
           <>
             <div className="jobs-toolbar">
-              <button onClick={() => setTab("Setup")}>Edit dependencies</button>
+              <button onClick={() => setTab("Dependencies")}>
+                Edit dependencies
+              </button>
               <button onClick={() => setEditGuide(!editGuide)}>
                 {editGuide ? "Preview guide" : "Edit guide"}
               </button>

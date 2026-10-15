@@ -154,3 +154,11 @@
 - examples/flux3/: six preserved designer graphs, exact model pins, recipes, refs and two compressed demo families.
 - workflow-core examples/export_demos.rs: rebuild family packages; bundle.rs owns bounded ZIP/hash validation.
 - e2e/global-workspace.e2e.ts: zero-Movie navigation, search and instance onboarding.
+
+## Authenticated model downloads (0.1.21)
+- apps/desktop/src/components/ModelDownloadSettings.tsx: masked global HF credential actions/status.
+- apps/desktop/src-tauri/src/service/model_credentials.rs: explicit vault ownership and installation resolution.
+- apps/relay/src/credentials.rs: bounded, expiring, lease-bound in-memory secret handoffs.
+- provider-relay::initialize: handoff before durable submission, cleanup on dedup/refusal.
+- agent/provision.rs MODEL_TOKEN: request-scoped download credential; storage-s3 owns origin restrictions.
+- e2e/model-downloads.e2e.ts: Settings and install-vs-publish acceptance fixtures.

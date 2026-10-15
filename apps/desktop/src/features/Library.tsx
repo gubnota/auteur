@@ -746,7 +746,7 @@ export function Workflows({
       ) : (
         <div className="asset-grid">
           {p.workflows
-            .filter((w) => !!w.wrapper?.archivedAt === showTrash)
+            .filter((w) => !!w.wrapper?.archivedAt === showTrash && (showTrash || !w.wrapper?.exampleId))
             .filter(
               (w) =>
                 mediaKind === "all" || (w.mediaKind ?? "other") === mediaKind,

@@ -31,6 +31,13 @@ export function WorkflowForm({
         Set these once. Every new job uses these slots. Node metadata is
         verified only after preparation on a compatible node.
       </p>
+      {!fields.length && (
+        <p role="status">
+          Select an instance above and Prepare inputs to discover editable
+          literal fields. Connected intermediate values stay controlled by the
+          graph.
+        </p>
+      )}
       <Picker
         title="Select literal input"
         value={field}
