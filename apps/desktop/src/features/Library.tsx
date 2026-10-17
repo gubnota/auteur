@@ -338,7 +338,13 @@ export function Library({
         : a.kind === filter) &&
       a.name.toLowerCase().includes(search.toLowerCase()),
   );
-  const usageSource = usageProject ? {...p, episodes: usageProject.episodes, characters: usageProject.characters} : p;
+  const usageSource = usageProject
+    ? {
+        ...p,
+        episodes: usageProject.episodes,
+        characters: usageProject.characters,
+      }
+    : p;
   const usage = usageId ? assetUsage(usageSource, usageId, jobs) : null;
   const chosen = p.assets.filter(
     (a) => selected.includes(a.id) && !!a.archivedAt === trash,
@@ -466,7 +472,8 @@ export function Library({
                 {selected.includes(a.id) ? "Selected" : "Select"}
               </button>
               <button onClick={() => setUsageId(a.id)}>
-                Usage · {assetUsage(usageSource, a.id, jobs).frames.length} keyframes
+                Usage · {assetUsage(usageSource, a.id, jobs).frames.length}{" "}
+                keyframes
               </button>
               <code title={a.sha256}>SHA256 {a.sha256.slice(0, 16)}…</code>
             </article>
@@ -598,10 +605,15 @@ export function Workflows({
 }) {
   const [selected, setSelected] = useState(""),
     [targetBusy, setTargetBusy] = useState(false),
-    [targetId, setTargetId] = useState(
-      settings.connections.find((c) => ["comfyui", "relay"].includes(c.kind))
-        ?.id ?? "",
-    ),
+    [targetId, setTargetId] = useState(() => {
+      const saved = localStorage.getItem("studio.workflowTarget");
+      const targets = settings.connections.filter((c) =>
+        ["comfyui", "relay"].includes(c.kind),
+      );
+      return saved === null
+        ? (targets[0]?.id ?? "")
+        : (targets.find((c) => c.id === saved)?.id ?? "");
+    }),
     [frameId, setFrameId] = useState(""),
     [mediaKind, setMediaKind] = useState("all");
   const [examples, setExamples] = useState<import("../lib/types").Workflow[]>(
@@ -610,6 +622,19 @@ export function Workflows({
   const [pinning, setPinning] = useState("");
   const [showTrash, setShowTrash] = useState(false);
   const [clearingTrash, setClearingTrash] = useState(false);
+  const selectTarget = (id: string) => {
+    localStorage.setItem("studio.workflowTarget", id);
+    setTargetId(id);
+  };
+  useEffect(() => {
+    if (
+      targetId &&
+      !settings.connections.some(
+        (c) => c.id === targetId && ["comfyui", "relay"].includes(c.kind),
+      )
+    )
+      setTargetId("");
+  }, [settings.connections, targetId]);
   useEffect(() => {
     void call<import("../lib/types").Workflow[]>("list_workflows")
       .then((all) => setExamples(all.filter((v) => !!v.wrapper?.exampleId)))
@@ -635,8 +660,15 @@ export function Workflows({
           value={targetId}
           options={settings.connections
             .filter((c) => ["comfyui", "relay"].includes(c.kind))
-            .map((c) => ({ id: c.id, label: c.name, description: c.kind }))}
-          onChange={setTargetId}
+            .map((c) => ({
+              id: c.id,
+              label: c.name,
+              description:
+                c.kind === "relay"
+                  ? "Agent connection · dependency installation"
+                  : "Direct ComfyUI · graph only, no downloads",
+            }))}
+          onChange={selectTarget}
         />
         <Picker
           title="Workflow category"
@@ -676,8 +708,8 @@ export function Workflows({
             {clearingTrash ? "Clearing…" : "Clear trash"}
           </button>
           <small>
-            Removes trashed workflows from Studio’s catalogue. Job history
-            and original graph files are kept.
+            Removes trashed workflows from Studio’s catalogue. Job history and
+            original graph files are kept.
           </small>
         </div>
       )}
@@ -686,13 +718,19 @@ export function Workflows({
           <h2>Examples · start here</h2>
           <p>
             Original illustrations · reusable workflows with step-by-step agent
-            setup. Use a workflow to open its guide and initialization
-            controls.
+            setup. Use a workflow to open its guide and initialization controls.
           </p>
           <div className="asset-grid">
             {examples
               .filter((v) => mediaKind === "all" || v.mediaKind === mediaKind)
-              .filter((v, n, all) => all.findIndex(x => (x.wrapper?.familyId || x.id) === (v.wrapper?.familyId || v.id)) === n)
+              .filter(
+                (v, n, all) =>
+                  all.findIndex(
+                    (x) =>
+                      (x.wrapper?.familyId || x.id) ===
+                      (v.wrapper?.familyId || v.id),
+                  ) === n,
+              )
               .map((example) => {
                 const existing = p.workflows.find((v) => v.id === example.id);
                 return (
@@ -746,12 +784,24 @@ export function Workflows({
       ) : (
         <div className="asset-grid">
           {p.workflows
-            .filter((w) => !!w.wrapper?.archivedAt === showTrash && (showTrash || !w.wrapper?.exampleId))
+            .filter(
+              (w) =>
+                !!w.wrapper?.archivedAt === showTrash &&
+                (showTrash || !w.wrapper?.exampleId),
+            )
             .filter(
               (w) =>
                 mediaKind === "all" || (w.mediaKind ?? "other") === mediaKind,
             )
-            .filter((v, n, all) => showTrash || all.findIndex(x => (x.wrapper?.familyId || x.id) === (v.wrapper?.familyId || v.id)) === n)
+            .filter(
+              (v, n, all) =>
+                showTrash ||
+                all.findIndex(
+                  (x) =>
+                    (x.wrapper?.familyId || x.id) ===
+                    (v.wrapper?.familyId || v.id),
+                ) === n,
+            )
             .map((w) => (
               <button
                 className="panel workflow-card"
@@ -793,7 +843,17 @@ export function Workflows({
       {w && (
         <Modal title={w.name} onClose={() => setSelected("")}>
           <div className="workflow-trash-actions">
-            {w.wrapper?.exampleId && <button onClick={()=>void duplicate(w.id).then(()=>setSelected("")).catch(e=>notify(String(e)))}>Create editable copy</button>}
+            {w.wrapper?.exampleId && (
+              <button
+                onClick={() =>
+                  void duplicate(w.id)
+                    .then(() => setSelected(""))
+                    .catch((e) => notify(String(e)))
+                }
+              >
+                Create editable copy
+              </button>
+            )}
             <p>
               {w.wrapper?.archivedAt
                 ? "In Trash. Restore to edit, initialize or run. Results and job history are retained."
@@ -823,9 +883,9 @@ export function Workflows({
                   .map((c) => ({
                     id: c.id,
                     label: c.name,
-                    description: `${c.url}${c.deploymentId ? ` · ${c.deploymentId}` : ""}`,
+                    description: `${c.kind === "relay" ? "Agent · dependency installation" : "Direct ComfyUI · graph only, no downloads"} · ${c.url}${c.deploymentId ? ` · ${c.deploymentId}` : ""}`,
                   }))}
-                onChange={setTargetId}
+                onChange={selectTarget}
               />
               <WorkflowEditor
                 key={`${w.id}:${targetId}`}
@@ -873,7 +933,8 @@ export function Workflows({
                   Create generation job
                 </button>
                 <p className="muted">
-                  A Movie keyframe is optional. Review the instance and exact inputs before adding the job to the queue.
+                  A Movie keyframe is optional. Review the instance and exact
+                  inputs before adding the job to the queue.
                 </p>
               </details>
             </>

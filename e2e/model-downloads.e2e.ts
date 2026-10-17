@@ -45,7 +45,7 @@ test("workflow authoring exposes dependencies and keeps installation separate fr
     () => (window as any).fixture.movie().workflows.length,
   );
   await page
-    .getByRole("button", { name: "Install on instance", exact: true })
+    .getByRole("button", { name: "Connect agent to install", exact: true })
     .click();
   await expect(
     page.getByRole("tab", { name: "Dependencies", exact: true }),

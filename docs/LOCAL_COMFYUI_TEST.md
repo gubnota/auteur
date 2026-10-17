@@ -144,6 +144,56 @@ button opens this guide. Select the relay-backed instance for **Initialize**,
 review dependencies, then **Install & prepare**. Activity retains stage/log
 progress across navigation and provides reconnect/cancel controls.
 
+## FLUX3 on localNew 8191
+
+`localNew :8191` is a direct ComfyUI connection. **Prepare inputs** and
+**Publish graph only** do not download weights. Studio remembers your selected
+target; check the destination shown above installation.
+
+To install dependencies, follow steps 2–3 above: run the same test root under
+the local supervisor with ComfyUI on **8191**, relay on **8789**, and node
+**local-mps-0**. First stop the standalone 8191 test process in its terminal
+with Ctrl+C. Keep your separate ComfyUI instance on 8188 running. Attaching
+read-only to the existing process does not enable dependency installation.
+
+Then in Studio:
+
+1. Add the local relay-backed connection described in step 3 using its private
+   desktop token. Never post this token in chat.
+2. Settings → Model downloads: save HF_TOKEN. The same Hugging Face account
+   must have access to `black-forest-labs/flux-3-image-klein-comfy`.
+3. Workflows → FLUX.3 Klein · Two-reference image → Use. Select **Apple
+   Silicon** and **Run and install on → local-mps-0** (your agent connection).
+   Select the BF16 Mac variant rather than the T4 INT8 variant.
+4. Install on instance → Initialize: review all three pinned files, then
+   Install & prepare. Verified existing files are reused. Activity shows
+   progress and permits cancellation/reconnection.
+5. Wait for readiness before creating a generation job. Publishing the graph
+   alone does not complete dependency installation.
+
+| Destination relative to `ComfyUI/models` | Purpose |
+| --- | --- |
+| `diffusion_models/flux3_image_klein_sd_bf16.safetensors` | BF16 diffusion model |
+| `text_encoders/qwen3vl_4b_bf16.safetensors` | BF16 text encoder |
+| `vae/flux2-vae.safetensors` | VAE |
+
+Dependencies shows exact sources, byte sizes and SHA256 pins. Only declared
+dependencies are installed; additional models/LoRAs need pins in an editable
+workflow. A token cannot bypass an upstream access refusal.
+
+Files with similar names are not necessarily the same weights. In the local
+acceptance check, the existing `flux3_image_klein_bf16.safetensors` did not match
+the example's `_sd_bf16` filename/size, and the existing Qwen encoder differed
+from its pinned byte size. Those files were left untouched. Verify the exact
+variant and pins rather than renaming files to satisfy the example.
+
+The 0.1.22 local acceptance test temporarily moved the matching VAE and restored
+it through the agent's SHA256-verified cache. The original remains in
+`$HOME/Downloads/mymovie-local-mps/model-backups/`. This checks installation into
+the model directory; it does not establish a successful Hugging Face network
+download or generation. The managed local relay was healthy on 8789, but must
+still be added to Studio using its private desktop token.
+
 ## OrbStack Linux CPU node
 
 Run these steps **inside** the OrbStack Linux VM, with its matching Linux agent

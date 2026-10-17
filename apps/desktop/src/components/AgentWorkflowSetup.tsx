@@ -169,6 +169,11 @@ export function AgentWorkflowSetup({
         aria-label="Local workflow initialization"
       >
         <h3>Set up on {connection.name}</h3>
+        <p role="status">
+          Dependency installation is unavailable on this direct connection. No
+          model files will be downloaded here. Choose an agent connection in Run
+          and install on, or connect a local agent below.
+        </p>
         <p>
           Check this instance’s live inputs and prepare the workflow. Original
           editor workflows are also added to its workflow library. Existing
@@ -195,7 +200,7 @@ export function AgentWorkflowSetup({
               }
               setSteps((v) => [
                 ...v,
-                "Workflow prepared. Select this instance in Generate to queue a job.",
+                "Graph prepared only; no models or plugins were downloaded. Use an agent connection to install dependencies.",
               ]);
             })
           }
@@ -261,7 +266,8 @@ export function AgentWorkflowSetup({
         Choose a ComfyUI or agent instance above to initialize this workflow.
       </aside>
     );
-  const artifacts = review?.profile?.artifacts ?? [];
+  const artifacts =
+    review?.profile?.artifacts ?? workflow.requirements?.artifacts ?? [];
   return (
     <section
       className="agent-workflow-setup panel"

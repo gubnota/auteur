@@ -116,3 +116,21 @@ changing existing workflow graphs or weakening immutable-example safeguards.
 ## Completion evidence
 
 Implemented in 0.1.21. All 80 Rust, 63 Python and 28 frontend tests passed; twenty targeted browser scenarios covered (catalogue selector rerun passed). Native ARM64 build installed and verified at /Applications/MyMovie Studio.app. EN/RU/FR guides and screenshots updated. No material plan deviation; direct ComfyUI still needs an agent for dependency mutations. Live gated model/cloud acceptance is pending account access and a matching updated remote client. See TASK_LOG.md for scope and verification limits.
+
+## Follow-up acceptance — 0.1.22
+
+- Clarified direct graph preparation versus agent dependency installation,
+  displayed declared model count/size, and persisted deliberate target selection.
+  Removed targets require a replacement rather than silently changing instances.
+- Installed the matching local client and supervised only the idle 8191 test
+  instance. Private loopback relay 8789 / local-mps-0 responds successfully;
+  Studio still needs this separate agent connection and its private token.
+- User authorized moving the smallest existing model. The matching 336 MB VAE
+  was backed up, temporarily removed, and installed by the agent from its
+  verified cache. Final SHA256 matched; the backup remains. No generation ran.
+- The other two local files differ from the example pins and were preserved.
+  Unauthenticated gated download returned 401; the saved credential required
+  macOS unlock. Network-download and full FLUX generation acceptance remain open.
+- Verification: 28 frontend / 63 Python tests, 16 targeted browser cases,
+  typecheck, production build, version parity and strict native signature passed.
+  Native screenshot and local guide record the selected target and limitations.

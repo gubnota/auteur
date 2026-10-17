@@ -20,6 +20,8 @@ Version des sources/de l’application : **0.1.21**. Les [téléchargements v0.1
 
 Dans **Workflows**, choisissez l’instance puis **Install on instance → Dependencies**. Après vérification, **Install & prepare** installe les dépendances via l’agent et prépare le même workflow, sans créer de copie dans le catalogue. **Publish graph only** enregistre uniquement le graphe JSON dans ComfyUI. Une connexion directe à ComfyUI nécessite un agent pour installer des fichiers.
 
+L’instance choisie est conservée entre les écrans et les redémarrages. Une instance supprimée doit être remplacée explicitement. Les connexions directes affichent **Connect agent to install** et précisent qu’aucun modèle n’est téléchargé. Pour le Mac sur le port 8191, suivez la [configuration locale supervisée](docs/LOCAL_COMFYUI_TEST.md#flux3-on-localnew-8191), puis choisissez la connexion de l’agent et la variante **Apple Silicon**.
+
 Les workflows personnels proposent **Inputs**, **Outputs**, **Dependencies** et **Guide**. Préparez d’abord l’instance pour découvrir les champs réels. Les exemples restent en lecture seule ; **Create editable copy** crée explicitement une copie modifiable.
 
 Le transfert du jeton HF exige un agent et un relay **0.1.21**, avec une paire de jetons desktop/agent privés. Le secret reste en mémoire, réservé à une initialisation, et expire après dix minutes avant consommation ; il est exclu des tâches, journaux et paquets. Les identifiants HF locaux du nœud restent compatibles ; les scripts personnalisés ne reçoivent pas le jeton HF du bureau. Mettez à jour le client distant avant ce test.

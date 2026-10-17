@@ -27,6 +27,10 @@ export function WorkflowTarget({
   const profile = workflow.profiles?.find(
     (p) => p.connectionId === connection?.id,
   );
+  const direct = connection?.kind === "comfyui";
+  const models = (workflow.requirements?.artifacts ?? []).filter(
+    (a) => a.kind === "model",
+  );
   const act = async (fn: () => Promise<void>) => {
     setBusy(true);
     setFailure("");
@@ -66,6 +70,16 @@ export function WorkflowTarget({
           ? `Prepared for ${connection?.name} · ${profile.inputs.length} inputs · ${profile.outputs.length} outputs`
           : "Select a node and prepare to discover its actual inputs and outputs."}
       </p>
+      {direct && (
+        <p role="status">
+          Direct ComfyUI: graph preparation only. {models.length} declared model
+          files
+          {models.length > 0 &&
+            ` · ${(models.reduce((sum, a) => sum + a.size, 0) / 1024 ** 3).toFixed(2)} GiB`}
+          . Connect an agent to download dependencies; publishing a graph does
+          not install them.
+        </p>
+      )}
       <div className="jobs-toolbar">
         {install && (
           <button
@@ -73,7 +87,7 @@ export function WorkflowTarget({
             disabled={locked || busy || !connection}
             onClick={install}
           >
-            Install on instance
+            {direct ? "Connect agent to install" : "Install on instance"}
           </button>
         )}
         <button

@@ -172,7 +172,9 @@ test("guided setup hands ownership to the agent and cancellation survives closin
     .locator(".example-section")
     .getByRole("button", { name: "Use", exact: true })
     .click();
-  await page.getByRole("button", { name: "Install on instance", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Install on instance", exact: true })
+    .click();
   const setup = page.getByRole("region", { name: "Agent initialization" });
   await setup
     .getByRole("button", { name: "Initialize on Colab T4", exact: true })
@@ -571,13 +573,18 @@ test("trashed example restores immediately and selects another instance for loca
     .last()
     .getByRole("button", { name: "Second node" })
     .click();
-  await page.getByRole("button", { name: "Install on instance", exact: true }).click();
   await page
-    .getByRole("button", { name: "Prepare workflow on Second node", exact: true })
+    .getByRole("button", { name: "Connect agent to install", exact: true })
+    .click();
+  await page
+    .getByRole("button", {
+      name: "Prepare workflow on Second node",
+      exact: true,
+    })
     .click();
   await expect(
     page.getByText(
-      "Workflow prepared. Select this instance in Generate to queue a job.",
+      "Graph prepared only; no models or plugins were downloaded. Use an agent connection to install dependencies.",
       { exact: true },
     ),
   ).toBeVisible();

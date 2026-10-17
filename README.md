@@ -20,6 +20,8 @@ Current source/app version: **0.1.21**. [Published v0.1.15 downloads](https://gi
 
 In **Workflows**, select the instance and choose **Install on instance → Dependencies**. Review, then **Install & prepare** installs reviewed dependencies through the agent and prepares that same workflow; it creates no extra catalogue entry. **Publish graph only** merely saves the editor JSON in ComfyUI. A direct ComfyUI connection needs an agent connection for filesystem installation.
 
+The workflow target is remembered across navigation and app restarts. A removed target requires a new selection. Direct connections show **Connect agent to install** and explicitly report that no models are downloaded. For your Mac on port 8191, use the managed [local agent setup](docs/LOCAL_COMFYUI_TEST.md#flux3-on-localnew-8191), then select its relay-backed instance and the **Apple Silicon** variant.
+
 Owned workflows expose **Inputs**, **Outputs**, **Dependencies** and **Guide**. Prepare the selected instance first to discover actual literal fields. Built-in examples display these read-only; **Create editable copy** is the explicit duplication action.
 
 Desktop-managed HF downloads need matching **0.1.21 agent and relay** plus a private desktop/agent token pair. The credential is delivered in memory for one leased initialization, expires after ten minutes before consumption, and is excluded from jobs, logs and packages. Existing node-local HF credentials remain supported; custom recipe scripts do not receive the desktop token. Rebuild/update the remote client before testing this new handoff.

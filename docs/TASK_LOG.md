@@ -399,3 +399,12 @@
 - Added docs/LOCAL_COMFYUI_TEST.md: isolated CPU canary on loopback port 8192 using OrbStack Docker, fresh M2 Max/MPS install on port 8191, direct workflow test steps, agent CLI workflow actions, and private relay-backed Studio initialization/console setup.
 - Clarifies that direct ComfyUI preparation/job execution does not install remote filesystem dependencies; OrbStack full dependency installation needs a Linux agent inside that runtime. Agent setup on fresh MPS can use the local macOS utility and custom HTTPS relay tunnel without exposing ComfyUI.
 - Linked from the README and architecture index. Installation commands follow the ComfyUI upstream Apple Silicon notes and OrbStack's published Docker networking instructions. No installs or model downloads performed.
+
+## 2026-10-17 — Explicit installation targets and local VAE check, 0.1.22
+
+- Direct ComfyUI setup now clearly says graph-only/no downloads and offers Connect agent to install. Declared model count/size and setup dependencies remain visible before review. Workflows remembers the selected target; a removed target requires deliberate replacement.
+- Built/signed/installed /Applications/MyMovie Studio.app 0.1.22 and matching local client; preserved the previous app. EN/RU/FR README, local setup guide and native/fixture screenshots updated.
+- User authorized moving the smallest existing model. Restarted only the idle test instance on 8191 under the local supervisor; private relay 8789/node local-mps-0 is healthy. Studio's separate private agent connection is not yet configured.
+- Backed up the 336,211,292-byte VAE, temporarily removed it, and verified agent installation from its SHA256-verified cache. Installed SHA256 matches the example; original retained in Downloads/mymovie-local-mps/model-backups. No generation or network weight download performed.
+- Existing diffusion model filename/size and text encoder size differ from the example pins; preserved both. Gated HF source returned 401 without authentication; saved credential required macOS unlock. Full network-download/FLUX acceptance remains pending.
+- Validation: 28 frontend tests, 63 Python tests, 16 targeted browser cases, typecheck, production/native ARM64 build, release-version parity, strict signature and diff checks passed. Existing unrelated App.tsx edits excluded from this commit; no tags or remote publication.
