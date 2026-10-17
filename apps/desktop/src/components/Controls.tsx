@@ -1,7 +1,7 @@
 import { AppSymbol } from "./AppSymbol";
 import * as Dialog from "@radix-ui/react-dialog";
-import { useState, type ReactNode } from "react";
-import { X, Check, ChevronDown, Search } from "lucide-react";
+import { useId, useState, type ReactNode } from "react";
+import { X, Check, ChevronDown, Search, Eye, EyeOff, Copy } from "lucide-react";
 export function Modal({
   title,
   children,
@@ -166,6 +166,68 @@ export function Field({
         />
       )}
     </label>
+  );
+}
+export function SecretField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const id = useId();
+  const [visible, setVisible] = useState(false);
+  const [copyStatus, setCopyStatus] = useState("");
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyStatus("Token copied.");
+    } catch {
+      setCopyStatus("Unable to copy token.");
+    }
+  };
+  return (
+    <div className="field secret-field">
+      <label htmlFor={id}>{label}</label>
+      <div className="secret-input">
+        <input
+          id={id}
+          type={visible ? "text" : "password"}
+          autoComplete="off"
+          spellCheck={false}
+          value={value}
+          onChange={(event) => {
+            setCopyStatus("");
+            onChange(event.target.value);
+          }}
+        />
+        <button
+          type="button"
+          className="icon-button"
+          aria-label={visible ? "Hide token" : "Show token"}
+          title={visible ? "Hide token" : "Show token"}
+          aria-pressed={visible}
+          aria-controls={id}
+          disabled={!value}
+          onClick={() => setVisible(!visible)}
+        >
+          {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Copy token"
+          title="Copy token"
+          disabled={!value}
+          onClick={() => void copy()}
+        >
+          <Copy size={18} />
+        </button>
+      </div>
+      {copyStatus && <small role="status">{copyStatus}</small>}
+    </div>
   );
 }
 export function Toggle({

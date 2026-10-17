@@ -290,3 +290,23 @@ Context: Gated weights need account authorization; the graph-publication button 
 Decision: Save HF credentials explicitly in the native vault; deliver them through bounded expiring memory, separately from durable jobs, to one authenticated lease. Require private node tokens. Keep node-local credentials as fallback. Install opens agent dependency review; publish-only remains separate. Examples show read-only authoring tabs and explicit editable-copy action.
 Consequences: Matching agent/relay upgrades are required. Public test defaults cannot forward personal secrets. Model permission is still granted by Hugging Face. Installation preserves catalogue identity; only explicit copying duplicates definitions.
 Related files: HF_WORKFLOW_SETUP_PLAN.md; service/model_credentials.rs; relay/src/credentials.rs; provider-relay/src/lib.rs; ModelDownloadSettings.tsx; WorkflowEditor.tsx.
+
+# ADR-0030: Automatic predefined agent credentials
+
+Date: 2026-10-17
+Status: Accepted
+
+Context: Only notebook connections inherited Node access tokens; other agent presets opened empty and existing unconfigured relay records failed before authentication. User explicitly requested predefined values and a higher version for every delivered rebuild.
+Decision: All new/missing-credential agent forms inherit the active Node access desktop token. Native relay records without credentialRef resolve the bundled public default without vault access; explicit references remain authoritative. Other provider types never inherit relay credentials. Keep public test markers and private vault references separate. Increment and synchronize the patch version for each delivered rebuild.
+Consequences: No credential migration or private-token rotation. Relays must use the matching token pair; public defaults retain existing restrictions on private operations.
+Related files: features/Connections.tsx; components/RunnerTokens.tsx; src-tauri/src/service.rs; e2e/node-auth.e2e.ts; docs/PROJECT_CONTEXT.md.
+
+# ADR-0031: Explicit token visibility in connection forms
+
+Date: 2026-10-17
+Status: Accepted
+
+Context: The connection token field had no reveal button, and editing a saved public-default marker opened an empty replacement field, making its configured token impossible to inspect there.
+Decision: Shared SecretField provides individual eye and Copy buttons for connection and Node access forms. Exact public-default markers populate the bundled desktop token. Private replacement inputs retain their existing empty behavior; no new vault-read command is added.
+Consequences: Users can inspect or copy form tokens explicitly. Connection dialogs reopen masked. Revealing/copying does not save credentials or make a mismatched local helper accept public defaults.
+Related files: components/Controls.tsx; components/RunnerTokens.tsx; features/Connections.tsx; styles/studio.css; e2e/node-auth.e2e.ts.

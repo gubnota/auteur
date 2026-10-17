@@ -1,7 +1,7 @@
 {
   "name": "mymovie-studio",
   "private": true,
-  "version": "0.1.22",
+  "version": "0.1.24",
   "type": "module",
   "workspaces": [
     "apps/desktop",

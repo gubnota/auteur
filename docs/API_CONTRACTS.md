@@ -55,6 +55,7 @@
 - Transfer manifest objects: name/sha256/size/url/architecture?/license?.
 - Signed manifest URL stored in Keychain; no secrets in .mymovie/settings JSON.
 - Settings allow typed connection records; only supported adapters execute generation.
+- Connection.hosting accepts local-mac/linux/orbstack/runpod/ssh/colab/kaggle only for kind=relay; absent hosting remains valid for existing connections. Loopback relay HTTP is allowed; remote relays require HTTPS.
 - Optional prompt assistants: Google, DeepSeek, OpenRouter; explicit request only.
 - Diagnostic history bounded to 300 entries; clearing does not erase job receipts.
 
@@ -78,7 +79,8 @@
 - Temporary trycloudflare.com addresses require explicit desktop polling selection; desktop uses REST polling, without SSE. Session/tunnel changes require new address/node IDs.
 - get_runner_tokens({saved?:bool}) -> {MYMOVIE_AGENT_TOKEN, MYMOVIE_DESKTOP_TOKEN}; defaults load without vault access. Only explicit saved=true retrieves the private runner-token-pair. save_runner_tokens({tokens}) writes custom pairs atomically; saving public defaults needs no vault. Distinct 24–512 printable ASCII characters, no spaces.
 - deploy/node-auth.defaults.json is the single public, user-selected test pair, embedded into UI/native and generated notebook configuration. Optional env/Secrets overrides are commented out. Custom pairs never enter settings/project JSON or logs.
-- Connections using public defaults store a connection:<id>:test-default marker, not a vault item. Custom desktop tokens use a connection vault reference and process-local cache; agents receive only the agent token. Passive health/jobs/initialization polling never unlocks an uncached credential; explicit Check/Initialize unlocks it for this session. Updating global defaults does not rotate existing connections.
+- Connections using public defaults store a connection:<id>:test-default marker, not a vault item. Existing relay connections with no credentialRef resolve the bundled desktop default without vault access; other provider types still require their own credentials. New/missing-credential agent forms inherit the active Node access pair, including explicit private selections; saving an empty new relay field selects that pair. Custom desktop tokens use a connection vault reference and process-local cache; agents receive only the agent token. Passive polling never unlocks an uncached private credential; explicit Check/Initialize unlocks it for this session. Updating node tokens does not rotate saved connection credentials.
+- Editing an exact connection:<id>:test-default marker fills the bundled desktop test token, regardless of the active Node access pair. Show/Hide and Copy operate only on the form value; they never retrieve a private connection credential. Connection fields reopen masked. Copy does not save or change credentials.
 
 ## Release artifact contract (v0.1.5)
 - Desktop targets: macOS aarch64/x86_64 DMG; Windows x64 MSI/NSIS EXE; Linux x86_64/aarch64 DEB/AppImage.

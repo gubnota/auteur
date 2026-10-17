@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import defaultTokens from "../../deploy/node-auth.defaults.json" with { type: "json" };
 import type {
   Project,
   AppSettings,
@@ -122,7 +123,7 @@ export async function openFixture(
     let settings = JSON.parse(sessionStorage.getItem("fixture-settings") ?? "null") ?? ${JSON.stringify(connections)};
     let catalogue = ${JSON.stringify(options.catalogue ?? movie.workflows)};
     let setupPending = false; let staleSettings = null; let setupReports = ${JSON.stringify(options.setupReports ?? [])}; let setupOperations = {}; let initializations = [];
-    let runnerTokens = { MYMOVIE_AGENT_TOKEN: 'fixture-agent-'.repeat(3), MYMOVIE_DESKTOP_TOKEN: 'fixture-desktop-'.repeat(3) };
+    let runnerTokens = ${JSON.stringify(defaultTokens)};
     let runs = []; let jobs = JSON.parse(sessionStorage.getItem("fixture-jobs") ?? "[]");
     let recents = Array.from({length: 12}, (_, i) => ({name: "Recent movie " + i, path: "/tmp/movie-" + i + ".mymovie", opened: "2026-10-14T10:00:00Z"}));
     window.fixture = { initializations: () => initializations, setInitializations: rows => { initializations = rows; }, setupCalls: [], holdSetup: value => { setupPending = value; }, staleSettingsReturned: false, preparations: [], staleSettings: () => structuredClone(settings), returnSettingsOnce: value => { staleSettings = value; }, movie: () => project, submissions: [], enqueued: [], installs: [], thumbnails: [], setResults: results => { jobs.forEach((job, i) => { job.results = results[i] ?? []; job.state = "completed"; }); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, setJobStates: states => { jobs.forEach((job, i) => job.state = states[i]); sessionStorage.setItem("fixture-jobs", JSON.stringify(jobs)); }, jobHistory: () => jobs };
@@ -143,7 +144,7 @@ export async function openFixture(
       if (command === 'model_token_status') return !!settings.storage.huggingFaceTokenConfigured;
       if (command === 'save_model_token') { if (!/^hf_\\S{5,}$/.test(args.token)) throw new Error('Invalid Hugging Face token'); settings.storage.huggingFaceTokenConfigured = true; return; }
       if (command === 'remove_model_token') { settings.storage.huggingFaceTokenConfigured = false; return; }
-      if (command === 'save_credential') { if (args.secret !== runnerTokens.MYMOVIE_DESKTOP_TOKEN) throw new Error('Wrong desktop token'); return 'connection:' + args.connectionId; }
+      if (command === 'save_credential') { if (args.secret !== runnerTokens.MYMOVIE_DESKTOP_TOKEN) throw new Error('Wrong desktop token'); (window.fixture.credentialWrites ??= []).push(args.connectionId); return 'connection:' + args.connectionId; }
       if (command === 'get_settings') { if (staleSettings) { const value = staleSettings; staleSettings = null; window.fixture.staleSettingsReturned = true; return value; } return settings; }
       if (command === 'save_settings') { settings = args.settings; sessionStorage.setItem("fixture-settings", JSON.stringify(settings)); return settings; }
       if (command === 'recent_projects') return recents;

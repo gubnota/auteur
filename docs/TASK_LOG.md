@@ -1,5 +1,47 @@
 # Task Log
 
+## 2026-10-17 — User-supplied token connection check
+
+- Supplied value matches the bundled predefined desktop token, not the existing local helper token. Read-only authenticated node checks returned 401 for the predefined token and 200 for the existing helper desktop token, with agent and ComfyUI connected. Ports 8191 and 8789 are listening; installed Studio points Local Mac agent at 8789 and still labels its credential predefined.
+- No credential or server changes made. Explicit approval to save the helper's existing private desktop token remains required by the earlier automatic approval review. No rebuild needed for that operational repair; installed version remains 0.1.24.
+
+## 2026-10-17 — Token eye and Copy controls, 0.1.24
+
+- Added shared masked SecretField with individual Show/Hide and Copy controls to connection and Node access token forms. Empty fields disable controls; clipboard failure is reported without token values. Closing/reopening connection settings resets masking.
+- Saved public-default markers now populate the exact bundled desktop token when edited. Private connection replacement fields stay empty and no new native vault read occurs. Copy/reveal does not save credentials. Increased synchronized workspace/package/notebook versions to 0.1.24.
+- Latest live diagnostic: helper relay on 8789 returns 200 with the existing helper token and reports connected/ComfyUI connected; predefined defaults return 401. Studio now targets 8789 but still uses its predefined token. Credential synchronization remains awaiting the approval requested earlier.
+- Validation passed: TypeScript, three token unit tests, three native credential/notebook tests, five targeted browser scenarios, six release checks, source-version parity and diff checks. Production frontend/native ARM64 build passed.
+- Ad-hoc signed and replaced /Applications/MyMovie Studio.app with 0.1.24; strict signature and all bundle file hashes verified. Native acceptance confirmed predefined-token reveal/hide, successful Copy, and masking after reopening; connection form left open masked without saving. Previous app retained at /private/tmp/mymovie-before-0.1.24-vjelurad/MyMovie Studio.app. Unrelated App.tsx and prior credential/hosting changes retained. No private credential synchronization, generation, model download, tag or publication.
+
+## 2026-10-17 — Local agent connection failure diagnosed
+
+- Installed 0.1.23 Local Mac agent points at ComfyUI :8191 rather than relay :8789. Node ID local-mps-0 is correct. Authenticated node GET returns 404 on 8191, 401 on 8789 with bundled defaults, and 200 with the existing local supervisor desktop token; ComfyUI reports connected.
+- Proposed operational repair: back up app.sqlite, use relay URL http://127.0.0.1:8789 and securely store the existing local server token for this connection. Automatic approval review rejected the write because explicit authorization to store the private server credential is required. No settings or credentials changed; Studio reopened. Awaiting user approval. No source change or rebuild needed; token values were not printed.
+
+## 2026-10-17 — Automatic agent credentials and version 0.1.23
+
+- User approved automatically applying predefined tokens to agent connections, preserving saved credentials, increasing every delivered rebuild version, and replacing the installed app.
+- All agent presets and missing-credential edit forms inherit the active Node access desktop token. Empty relay saves select that token. Native relay records without a credential reference resolve the bundled default without Keychain; explicit saved credentials and other providers retain their existing behavior. The form offers an explicit predefined-token replacement and connection cards label defaults accurately.
+- Synchronized 0.1.23 across Rust/npm/Tauri versions, lockfiles and generated Colab/Kaggle notebooks. Persistent release rule added to PROJECT_CONTEXT.
+- Verification passed: three native credential/notebook tests, three token unit tests, four browser scenarios (including all five non-notebook presets, existing credentials, active private-pair inheritance and both notebook kinds), six release checks, source-version parity, Rust formatting and diff checks. Production TypeScript/Vite/native ARM64 build passed. Browser checks used the installed Chromium 1243 through a temporary config because the current Playwright browser download was absent.
+- Signed and replaced /Applications/MyMovie Studio.app with 0.1.23; verified strict signature and hashes for every bundled file, then reopened it. Native Local Mac agent edit showed its predefined token already populated; canceled without modifying saved settings. Existing endpoint remains the user's 8191 value; relay authentication against the separately configured private local runtime was not retested in this change.
+- Previous installed app retained at /private/tmp/mymovie-before-0.1.23-q7n0va3a/MyMovie Studio.app. Existing unrelated App.tsx and prior integration-core edits preserved. No token values printed, model downloads, generation, release tags or publication.
+
+## 2026-10-17 — Requested desktop rebuild and Applications replacement
+
+- Rebuilt the current working tree as macOS ARM64 0.1.22; TypeScript, production frontend, native release build and version parity passed. Existing source edits retained.
+- Ad-hoc signed the bundle, quit the installed app, and replaced /Applications/MyMovie Studio.app. Verified its strict signature and byte equality for every built bundle file; reopened successfully in the native UI.
+- Previous installed app retained at /private/tmp/mymovie-before-rebuild-smm99i8e/MyMovie Studio.app. No settings changes, generation, model downloads, tags or publication performed in this rebuild.
+
+## 2026-10-17 — Private relay hosting validation
+
+- User approved fixing the Local Mac connection save failure, testing persistence, and rebuilding/replacing the installed app with a backup. Native settings validation accepted only notebook hosting despite the UI exposing seven private relay presets.
+- Accept local-mac/linux/orbstack/runpod/ssh/colab/kaggle for relay connections; use a hosting-neutral error. Existing no-hosting records, HTTPS/loopback restrictions and credential handling remain unchanged.
+- Regression first reproduced the exact notebook-hosting error. Added save/reopen coverage for all seven presets, rejection without replacing saved connections, and compatibility for connections without hosting. All five integration-core tests, formatting/diff checks, frontend typecheck/production bundle and native release build passed.
+- Rebuilt and installed local 0.1.22 at /Applications/MyMovie Studio.app; strict ad-hoc signature and executable hash match verified. Previous app preserved at /private/tmp/MyMovie Studio-0.1.22-before-relay-hosting-fix-20261017.app. Native UI successfully saved Local Mac agent (relay 127.0.0.1:8789, node local-mps-0). No release/tag/push.
+- User explicitly authorized using their predefined desktop token. Imported the existing local token through the native credential field and saved it in the system vault without printing its value. Restarted the stopped local supervisor using the existing token pair; native authenticated connection check passed, ComfyUI connected, initialization/console capabilities present, and hardware monitoring active. No model download or generation submitted.
+- Existing unrelated App.tsx edits retained; no secret values printed, model downloads or generation submitted.
+
 ## 2026-10-16 — HF credentials and workflow installation, 0.1.21
 
 - Implemented approved HF_WORKFLOW_SETUP_PLAN on main. Settings > Model downloads explicitly saves/replaces/removes masked HF_TOKEN in the vault; startup/status never reads the token. Matching private relay/agent handoff is bounded, memory-only, ten-minute expiry, one-use and lease/node-bound. Cancellation/dedup/refusal clean up pending values; jobs/events/packages exclude secrets. Node-local HF credentials remain supported; scripts do not inherit desktop HF secrets.

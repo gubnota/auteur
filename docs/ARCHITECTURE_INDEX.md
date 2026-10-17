@@ -18,13 +18,13 @@
 - components/JobReview.tsx / lib/job-drafts.ts: review, explicit queue/start and draft/queued-edit helpers.
 - components/WorkflowInputs.tsx / WorkflowSetup.tsx: shared media slots, hardware flags and pinned dependency editor.
 - lib/job-inputs.ts / job-inputs.test.ts: typed input resolution/readiness.
-- features/Connections.tsx: endpoint types, credentials, runtime/storage settings.
+- features/Connections.tsx: endpoint types, automatic node token defaults for agent presets, credentials, runtime/storage settings.
 - components/RunnerTokens.tsx / lib/node-auth.ts: shared token fields, notebook config copy, explicit temporary-relay URL validation.
 - src-tauri/src/service/runner_tokens.rs: vault-free public defaults; explicit private-pair load/save.
 - components/SourceLink.tsx: validated native HTTPS source opening; WorkflowSetup previews managed relative destinations.
 - deploy/node-auth.defaults.json: public test defaults shared by UI, native and notebook generation.
 - features/PromptAssistant.tsx: optional provider prompt assistance.
-- components/Controls.tsx: styled controls, modal pickers and dialogs.
+- components/Controls.tsx: styled controls, modal pickers, dialogs and masked SecretField with explicit reveal/copy.
 - components/AppSymbol.tsx / assets/app-symbol.svg: original symbol.
 - lib/types.ts: manual TS contract mirror; lib/bridge.ts: typed native boundary.
 - lib/file-drop.ts / file-drop.test.ts: Cocoa-point/physical-pixel conversion.

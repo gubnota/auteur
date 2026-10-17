@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Field, Toggle } from "./Controls";
+import { SecretField } from "./Controls";
 import {
   defaultRunnerTokens,
   loadRunnerTokens,
@@ -16,28 +16,24 @@ export function RunnerTokenFields({
   tokens: Tokens;
   change: (value: Tokens) => void;
 }) {
-  const [visible, setVisible] = useState(false);
   const [error, setError] = useState("");
   return (
     <>
-      <Field
+      <SecretField
         label="MYMOVIE_DESKTOP_TOKEN · app → relay"
-        type={visible ? "text" : "password"}
         value={tokens.MYMOVIE_DESKTOP_TOKEN}
         onChange={(value) =>
           change({ ...tokens, MYMOVIE_DESKTOP_TOKEN: value })
         }
       />
-      <Field
+      <SecretField
         label="MYMOVIE_AGENT_TOKEN · agent → relay"
-        type={visible ? "text" : "password"}
         value={tokens.MYMOVIE_AGENT_TOKEN}
         onChange={(value) => change({ ...tokens, MYMOVIE_AGENT_TOKEN: value })}
       />
-      <Toggle label="Show tokens" checked={visible} onChange={setVisible} />
       <p className="muted">
         Predefined values are shared test defaults. Use the same pair in the
-        notebook; custom values are saved in the system vault. Change both
+        agent and relay; custom values are saved in the system vault. Change both
         values for a private deployment.
       </p>
       <div className="row wrap">
@@ -91,7 +87,7 @@ export function RunnerTokenSettings({
     try {
       await saveRunnerTokens(tokens);
       notify(
-        "Node tokens saved. New notebook connections use this pair; existing connections keep their credentials.",
+        "Node tokens saved. New agent connections use this pair; saved connection credentials are preserved.",
       );
     } catch (e) {
       notify(String(e));
@@ -104,7 +100,7 @@ export function RunnerTokenSettings({
       <h2>Remote node access</h2>
       <p>
         Set the token pair used by your Colab, Kaggle or private runner relay.
-        These settings apply to new notebook connections.
+        These settings apply to new agent connections, including Colab and Kaggle.
       </p>
       <RunnerTokenFields tokens={tokens} change={setTokens} />
       {tokenError(tokens) && <p role="alert">{tokenError(tokens)}</p>}

@@ -70,6 +70,9 @@ fn credential_cache() -> &'static Mutex<std::collections::HashMap<String, String
     CACHE.get_or_init(Default::default)
 }
 fn credential_for(c: &Connection, passive: bool) -> Result<String> {
+    if c.kind == "relay" && c.credential_ref.is_none() {
+        return Ok(runner_tokens::defaults().desktop_token().into());
+    }
     let reference = c
         .credential_ref
         .as_ref()
@@ -1095,8 +1098,25 @@ mod notebook_script_tests {
         let reference = save_credential(id.clone(), token.clone()).unwrap();
         let mut c: Connection = serde_json::from_value(json!({"id":id,"name":"test","kind":"relay","url":"http://127.0.0.1:8789","credentialRef":reference,"deploymentId":"test","concurrency":1})).unwrap();
         assert!(credential_for(&c, true).is_ok_and(|v| v == token));
+        c.credential_ref = None;
+        assert!(credential_for(&c, true).is_ok_and(|v| v == token));
+        assert!(credential_for(&c, false).is_ok_and(|v| v == token));
+        c.kind = "comfyui".into();
+        assert!(credential_for(&c, true).is_err());
+        c.kind = "relay".into();
         c.credential_ref = Some(format!("connection:{}", c.id));
         assert!(credential_for(&c, true).is_err());
+        credential_cache().lock().unwrap().insert(
+            c.credential_ref.clone().unwrap(),
+            "existing-private-credential".into(),
+        );
+        assert!(credential_for(&c, true).is_ok_and(|v| v == "existing-private-credential"));
+        credential_cache()
+            .lock()
+            .unwrap()
+            .remove(c.credential_ref.as_ref().unwrap());
+        c.credential_ref = Some("connection:another-identity:test-default".into());
+        assert!(credential_for(&c, false).is_err());
         assert!(get_runner_tokens(None).is_ok());
         assert!(save_runner_tokens(runner_tokens::defaults()).is_ok());
     }

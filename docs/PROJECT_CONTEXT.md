@@ -9,7 +9,8 @@
 
 ## Current milestone
 - Approved global Studio plan: docs/GLOBAL_STUDIO_PLAN.md, 2026-10-15. Continue on main.
-- Current source: 0.1.22. No Movie required for workflows, generation, jobs, media, instances, search or settings.
+- Current source: 0.1.24. No Movie required for workflows, generation, jobs, media, instances, search or settings.
+- User release rule: increase the patch version for every delivered rebuild; synchronize workspace/package versions, lockfiles and generated notebooks before replacing the installed app.
 - App workspace SQLite owns global assets/workflows/drafts/history; Movies retain scenes/cast and reference shared media.
 - Migration is journaled by Movie identity/revision and receipt hash; historical pending jobs are quarantined, never resubmitted.
 - Opening/closing Movies leaves global dispatch, initialization and terminal sessions intact.
@@ -20,6 +21,7 @@
 - Current runtime features require matching agent/relay/helper builds; old releases do not acquire source changes automatically.
 - Installed app and verification evidence: latest TASK_LOG entry. Native signing is local ad-hoc.
 - Public node test tokens bypass Keychain; passive background work never unlocks uncached private credentials. Explicit Check unlocks a private connection for the session.
+- Connection and Node access token fields have individual Show/Hide and Copy controls; saved public-default connections populate their actual test token. Private connection replacement fields remain empty.
 - Settings > Model downloads stores HF_TOKEN in the vault only through explicit actions; installation uses a one-use in-memory private relay handoff. Node-local HF credentials remain supported.
 - Workflows retains the last explicitly selected target across navigation/restarts; a deleted target requires replacement. Direct connections explicitly prepare graphs without downloads.
 - Install on instance opens Dependencies; graph-only publication is separately named. Owned workflows expose Inputs/Outputs/Dependencies/Guide; examples stay read-only.
@@ -69,7 +71,8 @@
 
 ## Connections and jobs
 - One Connections route for ComfyUI, private relay and optional prompt/configuration APIs.
-- Multiple connection/account records; custom secrets stay in Keychain. Settings → Node access and the notebook connection dialog share editable defaults.
+- Private relay hosting presets (Local Mac/Linux/OrbStack/RunPod/SSH/Colab/Kaggle) share native settings validation; hosting metadata is not a notebook-only flag.
+- Multiple connection/account records; custom secrets stay in Keychain. All new agent connection forms inherit Node access tokens; existing relay records without credentials use predefined defaults automatically. Saved credentials are preserved.
 - Public test pair: deploy/node-auth.defaults.json, intentionally embedded in notebooks/UI; custom pairs stay out of movie/settings files.
 - Colab/Kaggle can host their own bundled relay and cloudflared tunnel on a custom port; temporary addresses use explicit REST polling mode. Live cloud acceptance remains open.
 - Execution adapters: ComfyUI and private relay; retired destinations remain archived and disabled.

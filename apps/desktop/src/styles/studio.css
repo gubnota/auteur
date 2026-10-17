@@ -604,6 +604,23 @@ nav button.active:before {
   font-size: 0.78rem;
   font-weight: 600;
 }
+.secret-field > label {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.secret-input {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.secret-input input {
+  min-width: 0;
+  flex: 1;
+}
+.secret-input button {
+  flex-shrink: 0;
+}
 .toggle-row {
   display: flex;
   align-items: center;

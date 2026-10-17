@@ -21,7 +21,7 @@ import {
   type Connection,
   type Project,
 } from "../lib/types";
-import { Field, Modal, Picker, Toggle } from "../components/Controls";
+import { Field, Modal, Picker, SecretField, Toggle } from "../components/Controls";
 import {
   RunnerTokenFields,
   RunnerTokenSettings,
@@ -154,6 +154,21 @@ export function Connections({
       null,
     ),
     [selected, setSelected] = useState<string[]>([]);
+  const openConnection = async (connection: Connection) => {
+    try {
+      const predefined = connection.kind === "relay" &&
+        connection.credentialRef === `connection:${connection.id}:test-default`;
+      const value = predefined
+        ? defaultRunnerTokens.MYMOVIE_DESKTOP_TOKEN
+        : connection.kind === "relay" && !connection.credentialRef
+          ? (await loadRunnerTokens()).MYMOVIE_DESKTOP_TOKEN
+          : "";
+      setSecret(value);
+      setEditing(connection);
+    } catch {
+      notify("Unable to load node tokens.");
+    }
+  };
   const operation = useRef(0);
   useEffect(
     () => () => {
@@ -227,10 +242,13 @@ export function Connections({
     if (!editing) return;
     try {
       let c = editing;
-      if (secret) {
+      const credential = secret || (c.kind === "relay" && !c.credentialRef
+        ? (await loadRunnerTokens()).MYMOVIE_DESKTOP_TOKEN
+        : "");
+      if (credential) {
         const ref = await call<string>("save_credential", {
           connectionId: c.id,
-          secret,
+          secret: credential,
         });
         c = { ...c, credentialRef: ref };
       }
@@ -278,8 +296,8 @@ export function Connections({
       />
       {preset && <Modal title="Connect an instance" onClose={()=>setPreset("")}>
         <p>Install the agent beside ComfyUI. The agent connects outward to a relay; it needs no public listening port. SSH keys can help install it when SSH is reachable.</p>
-        <div className="attach-grid">{["local-mac","linux","orbstack","runpod","ssh","colab","kaggle"].map(type=><button key={type} title={`Configure ${type} connection and agent access`} onClick={()=>{setPreset("");if(type==="colab"||type==="kaggle"){setHost(type);void openNotebook();return;}setSecret("");setEditing({id:uid(),name:type==="local-mac"?"Local Mac agent":`${type} agent`,kind:"relay",url:["local-mac","orbstack"].includes(type)?"http://127.0.0.1:8789":"https://",credentialRef:null,deploymentId:type==="local-mac"?"local-mps-0":"",apiFamily:null,concurrency:1,hosting:type as Connection["hosting"]});}}>{type}</button>)}<button title="Connect directly; remote installation and terminal require the agent" onClick={()=>{setPreset("");add();}}>Direct ComfyUI</button></div>
-        <p>Local setup: docs/LOCAL_COMFYUI_TEST.md. RunPod and SSH nodes use the same agent/relay protocol. For nodes behind NAT, use an accessible relay or tunnel. Paste the relay URL, node ID and desktop token below.</p>
+        <div className="attach-grid">{["local-mac","linux","orbstack","runpod","ssh","colab","kaggle"].map(type=><button key={type} title={`Configure ${type} connection and agent access`} onClick={()=>{setPreset("");if(type==="colab"||type==="kaggle"){setHost(type);void openNotebook();return;}void openConnection({id:uid(),name:type==="local-mac"?"Local Mac agent":`${type} agent`,kind:"relay",url:["local-mac","orbstack"].includes(type)?"http://127.0.0.1:8789":"https://",credentialRef:null,deploymentId:type==="local-mac"?"local-mps-0":"",apiFamily:null,concurrency:1,hosting:type as Connection["hosting"]});}}>{type}</button>)}<button title="Connect directly; remote installation and terminal require the agent" onClick={()=>{setPreset("");add();}}>Direct ComfyUI</button></div>
+        <p>Local setup: docs/LOCAL_COMFYUI_TEST.md. RunPod and SSH nodes use the same agent/relay protocol. For nodes behind NAT, use an accessible relay or tunnel. Enter the relay URL and node ID below; the predefined desktop token is filled automatically.</p>
       </Modal>}
       <div className="filters" aria-label="Filter connections">
         {["all", ...Object.keys(connectionTypes)].map((type) => (
@@ -326,7 +344,9 @@ export function Connections({
               <p className="mono">{c.url}</p>
               {["relay", "comfyui"].includes(c.kind) && <NodeMetrics connection={c}/>}
               <small>
-                {c.credentialRef
+                {c.kind === "relay" && (!c.credentialRef || c.credentialRef.endsWith(":test-default"))
+                  ? "Predefined token"
+                  : c.credentialRef
                   ? "Credential stored in system vault"
                   : "No credential configured"}{" "}
                 · {c.concurrency} concurrent job{c.concurrency !== 1 ? "s" : ""}
@@ -354,8 +374,7 @@ export function Connections({
                 )}
                 <button
                   onClick={() => {
-                    setSecret("");
-                    setEditing(c);
+                    void openConnection(c);
                   }}
                 >
                   Edit
@@ -616,7 +635,7 @@ export function Connections({
                   : "Supported execution adapter",
             }))}
             onChange={(v) =>
-              setEditing({
+              void openConnection({
                 ...editing,
                 kind: v,
                 url: connectionTypes[v].url,
@@ -651,20 +670,26 @@ export function Connections({
               })
             }
           />
-          <Field
+          <SecretField
+            key={`${editing.id}:${editing.kind}`}
             label={
               editing.credentialRef
                 ? "Replace credential (optional)"
                 : "API key / relay token"
             }
-            type="password"
             value={secret}
             onChange={setSecret}
           />
           <p className="muted">
-            Credentials are stored in the system credential vault and never
-            inside movie documents.
+            {editing.kind === "relay"
+              ? editing.credentialRef === `connection:${editing.id}:test-default`
+                ? "This connection uses the predefined test token. Show or copy it with the buttons beside the field. Your relay must use the same token."
+                : editing.credentialRef
+                  ? "Your saved credential is kept in the system vault. Enter a new token here only to replace it. Your relay must use the same token."
+                  : "The Node access desktop token is filled automatically. Show or copy it with the buttons beside the field. Your relay must use the same token."
+              : "Credentials are stored in the system credential vault and never inside movie documents."}
           </p>
+          {editing.kind === "relay" && <button onClick={() => setSecret(defaultRunnerTokens.MYMOVIE_DESKTOP_TOKEN)}>Use predefined token</button>}
           <div className="row">
             <button
               className="primary"

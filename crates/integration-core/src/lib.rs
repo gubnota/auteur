@@ -61,13 +61,20 @@ impl SettingsStore {
             {
                 return Err("Unknown connection type".into());
             }
-            if c.hosting
-                .as_deref()
-                .is_some_and(|h| !["colab", "kaggle"].contains(&h) || c.kind != "relay")
-            {
-                return Err(
-                    "Notebook hosting requires a supported private relay connection".into(),
-                );
+            if c.hosting.as_deref().is_some_and(|h| {
+                ![
+                    "local-mac",
+                    "linux",
+                    "orbstack",
+                    "runpod",
+                    "ssh",
+                    "colab",
+                    "kaggle",
+                ]
+                .contains(&h)
+                    || c.kind != "relay"
+            }) {
+                return Err("Hosting requires a supported private relay connection".into());
             }
             let url = reqwest::Url::parse(&c.url)?;
             if !url.username().is_empty()
@@ -164,6 +171,90 @@ impl SettingsStore {
 #[cfg(test)]
 mod settings_tests {
     use super::*;
+
+    fn connection(kind: &str, hosting: Option<&str>) -> studio_contracts::Connection {
+        studio_contracts::Connection {
+            id: project_core::id(),
+            name: "Test connection".into(),
+            kind: kind.into(),
+            url: "http://127.0.0.1:8789".into(),
+            credential_ref: None,
+            deployment_id: Some("local-mps-0".into()),
+            api_family: None,
+            concurrency: 1,
+            hosting: hosting.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn supported_relay_hosting_survives_save_and_reopening() {
+        let root = std::env::temp_dir().join(format!("mymovie-hosting-{}", project_core::id()));
+        let path = root.join("settings.sqlite");
+        let expected;
+        {
+            let store = SettingsStore::open(&path).unwrap();
+            let mut settings = store.read().unwrap();
+            settings.connections = [
+                "local-mac",
+                "linux",
+                "orbstack",
+                "runpod",
+                "ssh",
+                "colab",
+                "kaggle",
+            ]
+            .into_iter()
+            .map(|hosting| connection("relay", Some(hosting)))
+            .collect();
+            expected = serde_json::to_value(&settings.connections).unwrap();
+            store.save(&settings).unwrap();
+        }
+        let store = SettingsStore::open(&path).unwrap();
+        assert_eq!(
+            serde_json::to_value(store.read().unwrap().connections).unwrap(),
+            expected
+        );
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn invalid_hosting_does_not_replace_saved_connections() {
+        let root = std::env::temp_dir().join(format!("mymovie-hosting-{}", project_core::id()));
+        let store = SettingsStore::open(&root.join("settings.sqlite")).unwrap();
+        let mut original = store.read().unwrap();
+        original.connections = vec![connection("relay", Some("colab"))];
+        let expected = serde_json::to_value(&original.connections).unwrap();
+        store.save(&original).unwrap();
+        for (kind, hosting) in [
+            ("relay", "unsupported"),
+            ("comfyui", "local-mac"),
+            ("comfyui", "colab"),
+        ] {
+            let mut settings = original.clone();
+            settings.connections = vec![connection(kind, Some(hosting))];
+            assert!(store.save(&settings).is_err(), "{kind}: {hosting}");
+            assert_eq!(
+                serde_json::to_value(store.read().unwrap().connections).unwrap(),
+                expected
+            );
+        }
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn connections_without_hosting_remain_supported() {
+        let root = std::env::temp_dir().join(format!("mymovie-hosting-{}", project_core::id()));
+        let store = SettingsStore::open(&root.join("settings.sqlite")).unwrap();
+        let mut settings = store.read().unwrap();
+        settings.connections = vec![connection("relay", None), connection("comfyui", None)];
+        store.save(&settings).unwrap();
+        assert_eq!(store.read().unwrap().connections.len(), 2);
+        drop(store);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn dismissed_failures_survive_stale_settings_and_reopening() {
         let root = std::env::temp_dir().join(format!("mymovie-settings-{}", project_core::id()));
