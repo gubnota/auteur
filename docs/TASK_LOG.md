@@ -408,3 +408,9 @@
 - Backed up the 336,211,292-byte VAE, temporarily removed it, and verified agent installation from its SHA256-verified cache. Installed SHA256 matches the example; original retained in Downloads/mymovie-local-mps/model-backups. No generation or network weight download performed.
 - Existing diffusion model filename/size and text encoder size differ from the example pins; preserved both. Gated HF source returned 401 without authentication; saved credential required macOS unlock. Full network-download/FLUX acceptance remains pending.
 - Validation: 28 frontend tests, 63 Python tests, 16 targeted browser cases, typecheck, production/native ARM64 build, release-version parity, strict signature and diff checks passed. Existing unrelated App.tsx edits excluded from this commit; no tags or remote publication.
+
+## 2026-10-17 — Local FLUX.3 weighted smoke test
+
+- Ran one non-explicit 512x512 T2I test on isolated MPS ComfyUI :8191 with existing flux3_image_klein_bf16, Qwen3VL BF16 and Flux2 VAE. Direct API validation succeeded; 16 Euler/simple steps, seed 172026, CFG 1.0.
+- Execution succeeded in 42.870 seconds including cold loading; inspected the saved PNG. Reusable ordinary editor JSON, exact API graph, submission/history and result summary are in ignored artifacts/local-mac/acceptance/flux3-live/. Output remains in the test ComfyUI output/MyMovie_acceptance folder.
+- No downloads, paid compute or changes to immutable examples. This verifies the local weighted backend; Studio dispatch, global Library ingestion, agent-mediated generation, two-reference I2I and cloud acceptance remain separate checks.

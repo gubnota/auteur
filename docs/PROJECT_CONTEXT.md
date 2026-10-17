@@ -23,7 +23,7 @@
 - Settings > Model downloads stores HF_TOKEN in the vault only through explicit actions; installation uses a one-use in-memory private relay handoff. Node-local HF credentials remain supported.
 - Workflows retains the last explicitly selected target across navigation/restarts; a deleted target requires replacement. Direct connections explicitly prepare graphs without downloads.
 - Install on instance opens Dependencies; graph-only publication is separately named. Owned workflows expose Inputs/Outputs/Dependencies/Guide; examples stay read-only.
-- Pending: live FLUX/cloud GPU generation, Finder Quick Look extension, native SSH transport and Telegram delivery.
+- Local FLUX.3 512px T2I passed via direct MPS ComfyUI API; app-managed FLUX/cloud generation, Finder Quick Look, native SSH transport and Telegram remain pending.
 - Original design exports remain ignored in drafts/.
 
 ## Implemented stack
